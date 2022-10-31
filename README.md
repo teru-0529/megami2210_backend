@@ -1,2 +1,2 @@
-# megami2210_backend
+# MEGUMI2210(TODO Application)
 todo管理システム（FastAPIバックエンド）
