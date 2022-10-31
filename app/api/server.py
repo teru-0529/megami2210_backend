@@ -1,11 +1,25 @@
 #!/usr/bin/python3
 # server.py
 
+from app.api.routes import router as api_router
+from app.core.config import API_PREFIX, PROJECT_NAME, VERSION
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+
+def get_application():
+    app = FastAPI(title=PROJECT_NAME, version=VERSION)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    app.include_router(api_router, prefix=API_PREFIX)
+    return app
 
 
-@app.get("/")
-async def hello():
-    return {"message": "Hello World!"}
+app = get_application()
