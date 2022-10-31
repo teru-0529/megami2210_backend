@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# __init__.py
+# config.py
 
 from starlette.config import Config
 from starlette.datastructures import Secret
