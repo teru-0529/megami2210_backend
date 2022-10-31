@@ -5,7 +5,7 @@ WORKDIR /src
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONBUFFERED 1
 
-RUN pip install poetry alembic
+RUN pip install poetry alembic starlette psycopg2
 
 COPY pyproject.toml* poetry.lock* ./
 

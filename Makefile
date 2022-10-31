@@ -1,4 +1,4 @@
-.PHONY: up down bash head base
+.PHONY: up down build bash head base
 
 DOCKER_TAG := latest
 up: ## do docker compose up with hot release
@@ -7,14 +7,17 @@ up: ## do docker compose up with hot release
 down: ## do docker compose down
 	docker compose down
 
+build:
+	docker compose build
+
 bash: ## login api shell
 	docker exec -it api bash
 
 head:
-	docker compose run --rm api alembic upgrade head
+	docker exec -it api alembic upgrade head
 
 base:
-	docker compose --rm api alembic downgrade base
+	docker exec -it api alembic downgrade base
 
 # test: ## execute tests
 # 	go test -v ./...
