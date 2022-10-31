@@ -21,7 +21,7 @@ async def create_task(
     # task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
 ) -> TaskPublic:
     """
-    タスクの新規作成。
+    タスクの新規作成。</br>
     登録時、**id**は自動採番、**status**は`TODO`固定。:
 
     - **title**: タスクの名称[Reqired]

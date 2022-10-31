@@ -2,25 +2,12 @@
 # tasks.py
 
 from datetime import date, datetime
-from enum import Enum
 from typing import Optional
 
 from app.api.schemas.base import CoreModel, IDModelMixin
+from app.services.segment_values import TaskStatus
 from pydantic import Field, validator
 
-
-class TaskStatus(str, Enum):
-    todo = "TODO"
-    doing = "DOING"
-    done = "DONE"
-
-
-task_status_description: str = """
-タスク状況:
-  * `TODO` - 未対応
-  * `DOING` - 対応中
-  * `DONE` - 完了
-"""
 
 f_title: Field = Field(
     title="TaskTitle", max_length=30, description="タスクの名称", example="create db model"
@@ -32,7 +19,7 @@ f_asagnee_id: Field = Field(
     title="AsaigneeId", description="タスクの担当者", min_length=3, max_length=3, example="000"
 )
 f_status: Field = Field(
-    title="TaskStatus", description=task_status_description, example="DOING"
+    title="TaskStatus", description=TaskStatus.description(), example="DOING"
 )
 f_is_significant: Field = Field(
     default=False, title="IsSignificant", description="重要タスクの場合にTrue", example=True
@@ -62,7 +49,7 @@ class TaskCreate(CoreModel):
 
     @validator("deadline")
     def is_after_today(cls, val: date):
-        """今日以降の日付であるチェック"""
+        """今日以降の日付であること"""
         if val < datetime.today().date():
             raise ValueError("deadline must after today.")
         return val
