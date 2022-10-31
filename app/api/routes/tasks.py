@@ -2,7 +2,10 @@
 # tasks.py
 
 from app.api.schemas.tasks import TaskCreate, TaskPublic
-from fastapi import APIRouter, Body
+from app.db.database import get_db
+from app.services.tasks import TaskService
+from fastapi import APIRouter, Body, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_201_CREATED
 
 router = APIRouter()
@@ -16,9 +19,8 @@ router = APIRouter()
     status_code=HTTP_201_CREATED,
 )
 async def create_task(
-    # db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     new_task: TaskCreate = Body(...),
-    # task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
 ) -> TaskPublic:
     """
     タスクの新規作成。</br>
@@ -30,5 +32,6 @@ async def create_task(
     - **is_significant**: 重要タスクの場合にTrue[Default=False]
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
-    # created_task = await task_repo.create(db=db, new_task=new_task)
-    return None
+    service = TaskService()
+    created_task = await service.create(db=db, new_task=new_task)
+    return created_task
