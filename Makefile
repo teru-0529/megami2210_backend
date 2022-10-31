@@ -1,4 +1,4 @@
-.PHONY: up down shell migrate_head migrate_base
+.PHONY: up down bash head base
 
 DOCKER_TAG := latest
 up: ## do docker compose up with hot release
@@ -7,16 +7,13 @@ up: ## do docker compose up with hot release
 down: ## do docker compose down
 	docker compose down
 
-ps: ## check container status
-	docker compose ps
+bash: ## login api shell
+	docker exec -it api bash
 
-shell: ## login api shell
-	docker exec -it api /bin/sh
-
-migrate_head:
+head:
 	docker compose run --rm api alembic upgrade head
 
-migrate_base:
+base:
 	docker compose --rm api alembic downgrade base
 
 # test: ## execute tests
