@@ -17,14 +17,16 @@ POSTGRES_SERVER = config("POSTGRES_SERVER", cast=str, default="db")
 POSTGRES_PORT = config("POSTGRES_PORT", cast=str, default="5432")
 POSTGRES_DB = config("POSTGRES_DB", cast=str)
 
+db_param_piece = f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}"
+
 DB_SYNC_URL = config(
     "DB_SYNC_URL",
     cast=str,
-    default=f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}",
+    default=f"postgresql+psycopg2://{db_param_piece}",
 )
 
 DB_ASYNC_URL = config(
     "DB_ASYNC_URL",
     cast=str,
-    default=f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}",
+    default=f"postgresql+asyncpg://{db_param_piece}",
 )

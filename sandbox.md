@@ -16,3 +16,6 @@ from pg_type pt
    join pg_enum pe on pt.oid = pe.enumtypid
    join pg_catalog.pg_namespace pn ON pn.oid = pt.typnamespace
 ```
+
+#### バージョン 0.19 から asyncio_mode のデフォルトが auto から strict に変わっていました。
+https://www.beex-inc.com/blog/rejoin-nasu

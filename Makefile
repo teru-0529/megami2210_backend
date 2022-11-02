@@ -1,4 +1,4 @@
-.PHONY: up down build bash head base
+.PHONY: up down build bash head base test
 
 DOCKER_TAG := latest
 up: ## do docker compose up with hot release
@@ -19,5 +19,5 @@ head:
 base:
 	docker exec -it api alembic downgrade base
 
-# test: ## execute tests
-# 	go test -v ./...
+test: ## execute tests
+	docker-compose run --rm --entrypoint "poetry run pytest -vv" api
