@@ -1,12 +1,16 @@
 #!/usr/bin/python3
 # tasks.py
 
+import logging
+
 from app.api.schemas.tasks import TaskCreate, TaskPublic
 from app.db.database import get_db
 from app.services.tasks import TaskService
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_201_CREATED
+
+logger = logging.getLogger(__file__)
 
 router = APIRouter()
 

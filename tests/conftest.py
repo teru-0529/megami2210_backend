@@ -2,31 +2,35 @@
 # conftest.py
 
 
-import logging
 import os
 
+import asyncio
 import alembic
 import pytest
 import pytest_asyncio
 from alembic.config import Config
 from app.api.server import app as api_app
+from app.core.config import TEST_DB_ASYNC_URL, TEST_DB_SYNC_URL
 from app.db.database import get_db
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-logger = logging.getLogger(__file__)
-
-ASYNC_DB_URL = "sqlite+aiosqlite:///:memory:"
-SYNC_DB_URL = "sqlite:///:memory:"
-
-
 config = Config("alembic.ini")
 
 
+# TODO:https://github.com/pytest-dev/pytest-asyncio/issues/38
+@pytest.yield_fixture(scope="session")
+def event_loop(request):
+    """Create an instance of the default event loop for each test case."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
 @pytest.fixture
-def app() -> FastAPI:
+def app(event_loop) -> FastAPI:
     from app.api.server import get_application
 
     return get_application()
@@ -36,14 +40,15 @@ def app() -> FastAPI:
 async def client(app: FastAPI) -> AsyncClient:
 
     # Async用のengineとsessionを作成
-    async_engine = create_async_engine(ASYNC_DB_URL, echo=True)
+    async_engine = create_async_engine(TEST_DB_ASYNC_URL, echo=True)
     async_session = sessionmaker(
         autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
     )
 
     # テスト用にオンメモリのSQLiteテーブルを初期化（関数ごとにリセット）FIXME:
-    # os.environ["CONTAINER_DSN"] = SYNC_DB_URL
-    # alembic.command.upgrade(config, "head")
+    os.environ["CONTAINER_DSN"] = TEST_DB_SYNC_URL
+    alembic.command.downgrade(config, "base")
+    alembic.command.upgrade(config, "head")
 
     # DIを使ってFastAPIのDBの向き先をテスト用DBに変更
     async def get_test_db():

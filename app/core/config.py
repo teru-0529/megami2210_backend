@@ -18,6 +18,9 @@ POSTGRES_PORT = config("POSTGRES_PORT", cast=str, default="5432")
 POSTGRES_DB = config("POSTGRES_DB", cast=str)
 
 db_param_piece = f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}"
+test_db_param_piece = (
+    f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@testDB:{POSTGRES_PORT}/{POSTGRES_DB}"
+)
 
 DB_SYNC_URL = config(
     "DB_SYNC_URL",
@@ -29,4 +32,16 @@ DB_ASYNC_URL = config(
     "DB_ASYNC_URL",
     cast=str,
     default=f"postgresql+asyncpg://{db_param_piece}",
+)
+
+TEST_DB_SYNC_URL = config(
+    "TEST_DB_SYNC_URL",
+    cast=str,
+    default=f"postgresql+psycopg2://{test_db_param_piece}",
+)
+
+TEST_DB_ASYNC_URL = config(
+    "TEST_DB_ASYNC_URL",
+    cast=str,
+    default=f"postgresql+asyncpg://{test_db_param_piece}",
 )
