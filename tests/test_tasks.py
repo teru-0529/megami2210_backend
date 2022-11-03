@@ -12,16 +12,18 @@ from starlette.status import (
 from app.api.schemas.tasks import TaskCreate
 from datetime import date
 
-pytestmark = pytest.mark.asyncio
+# pytestmark = pytest.mark.asyncio
 
 
 class TestTasksRoutes:
+    @pytest.mark.asyncio
     async def test_create_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
         """ルートの存在チェック"""
         res = await client.post(app.url_path_for("tasks:create"), json={})
         assert res.status_code != HTTP_404_NOT_FOUND
 
     @pytest.mark.skip
+    @pytest.mark.asyncio
     async def test_invalid_input_raises_error(
         self, app: FastAPI, client: AsyncClient
     ) -> None:
@@ -64,11 +66,9 @@ class TestCreateTask:
     @pytest.mark.parametrize(
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
+    @pytest.mark.asyncio
     async def test_valid_input(
-        self,
-        app: FastAPI,
-        client: AsyncClient,
-        new_task: TaskCreate,
+        self, app: FastAPI, client: AsyncClient, new_task: TaskCreate
     ) -> None:
 
         res = await client.post(
@@ -111,6 +111,7 @@ class TestCreateTask:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
+    @pytest.mark.asyncio
     async def test_invalid_input(
         self,
         app: FastAPI,
