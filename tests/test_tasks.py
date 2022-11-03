@@ -30,37 +30,6 @@ class TestTasksRoutes:
         assert res.status_code == HTTP_422_UNPROCESSABLE_ENTITY
 
 
-@pytest.fixture
-def new_task_full():
-    return TaskCreate(
-        title="test task",
-        description="test description",
-        asaignee_id="100",
-        is_significant=True,
-        deadline=date(2050, 12, 31),
-    )
-
-
-@pytest.fixture
-def new_task_ext_is_significant():
-    return TaskCreate(
-        title="test task",
-        description="test description",
-        asaignee_id="100",
-        deadline=date(2050, 12, 31),
-    )
-
-
-@pytest.fixture
-def new_task_ext_deadline():
-    return TaskCreate(
-        title="test task",
-        description="test description",
-        asaignee_id="100",
-        is_significant=False,
-    )
-
-
 class TestCreateTask:
 
     # 正常ケースパラメータ
