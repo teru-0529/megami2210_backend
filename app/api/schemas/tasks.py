@@ -49,8 +49,8 @@ class TaskCreate(CoreModel):
 
     @validator("deadline")
     def is_after_today(cls, val: date):
-        """今日以降の日付であること"""
-        if val < datetime.today().date():
+        """値が設定されている場合は、今日以降の日付であること"""
+        if val and val < datetime.today().date():
             raise ValueError("deadline must after today.")
         return val
 

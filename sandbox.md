@@ -16,3 +16,16 @@ from pg_type pt
    join pg_enum pe on pt.oid = pe.enumtypid
    join pg_catalog.pg_namespace pn ON pn.oid = pt.typnamespace
 ```
+
+#### バージョン 0.19 から asyncio_mode のデフォルトが auto から strict に変わっていました。
+https://www.beex-inc.com/blog/rejoin-nasu
+
+#### asyncioとpytestでテスト用fixtureを作るときにgot Future <Future pending> attached to a different loopが出る話
+https://blog.hirokiky.org/entry/2019/01/04/183048
+https://github.com/pytest-dev/pytest-asyncio/issues/38
+
+#### pytestのmark.parametrizeでサブテストに簡単に名前をつける方法
+https://dev.classmethod.jp/articles/pytest-mark-parametrize-name/
+
+#### pytestのtest IDに日本語を使う方法
+https://qiita.com/gimKondo/items/d7a874a97af1ad93052a
