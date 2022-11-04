@@ -4,10 +4,10 @@
 from datetime import date, datetime
 from typing import Optional
 
-from app.api.schemas.base import CoreModel, IDModelMixin
-from app.services.segment_values import TaskStatus
 from pydantic import Field, validator
 
+from app.api.schemas.base import CoreModel, IDModelMixin
+from app.services.segment_values import TaskStatus
 
 f_title: Field = Field(
     title="TaskTitle", max_length=30, description="タスクの名称", example="create db model"
