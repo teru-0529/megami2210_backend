@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 # __init__.py
 
-from app.api.routes.tasks import router as task_router
 from fastapi import APIRouter
+
+from app.api.routes.tasks import router as task_router
+from app.api.schemas.base import Message
 
 router = APIRouter()
 
@@ -12,8 +14,11 @@ router = APIRouter()
     name="health:check",
     responses={
         200: {
+            "model": Message,
             "description": "check result",
-            "content": {"application/json": {"example": {"health": "ok"}}},
+            "content": {
+                "application/json": {"example": {"message": "APIサーバーは正常に稼働しています。"}}
+            },
         },
     },
 )
@@ -22,7 +27,7 @@ async def health_check() -> dict:
     APIサーバーのヘルスチェック。:
 
     """
-    ok = {"health": "ok"}
+    ok = {"message": "APIサーバーは正常に稼働しています。"}
     return ok
 
 

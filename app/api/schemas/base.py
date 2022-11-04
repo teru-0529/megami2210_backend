@@ -10,3 +10,7 @@ class CoreModel(BaseModel):
 
 class IDModelMixin(BaseModel):
     id: int = Field(title="Id", description="リソースのユニーク性を担保するID", ge=1, example=10)
+
+
+class Message(BaseModel):
+    message: str = Field(title="message", description="エラーメッセージ", example="サーバーエラーです。")

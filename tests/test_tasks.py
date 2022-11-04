@@ -40,7 +40,6 @@ class TestTasksRoutes:
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    @pytest.mark.skip
     async def test_get_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:get-by-id", id=1))
@@ -79,6 +78,7 @@ class TestCreateTask:
         ),
     }
 
+    # @pytest.mark.skip
     @pytest.mark.parametrize(
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
@@ -96,7 +96,6 @@ class TestCreateTask:
         created_task = TaskCreate(**res.json())
         assert created_task == new_task
 
-    # 異常ケースパラメータ
     invalid_params = {
         "ペイロードなし": ("{}", HTTP_422_UNPROCESSABLE_ENTITY),
         "<名称>：必須": ('{"description":"dummy"}', HTTP_422_UNPROCESSABLE_ENTITY),
@@ -140,7 +139,7 @@ class TestCreateTask:
 
 
 class TestGetTask:
-    @pytest.mark.skip
+    # @pytest.mark.skip
     async def test_valid_input(
         self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
     ) -> None:
@@ -162,6 +161,7 @@ class TestGetTask:
         "<ID>None": (None, HTTP_422_UNPROCESSABLE_ENTITY),
     }
 
+    # @pytest.mark.skip
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
