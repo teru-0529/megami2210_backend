@@ -8,12 +8,13 @@ import alembic
 import pytest
 import pytest_asyncio
 from alembic.config import Config
-from app.core.config import TEST_DB_ASYNC_URL, TEST_DB_SYNC_URL
-from app.db.database import get_db
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+
+from app.core.config import TEST_DB_ASYNC_URL, TEST_DB_SYNC_URL
+from app.db.database import get_db
 
 config = Config("alembic.ini")
 

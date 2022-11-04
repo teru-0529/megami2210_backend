@@ -1,22 +1,23 @@
 #!/usr/bin/python3
 # test_tasks.py
 
+from datetime import date
+
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.routing import NoMatchFound
 from starlette.status import (
+    HTTP_200_OK,
+    HTTP_201_CREATED,
     HTTP_404_NOT_FOUND,
     HTTP_422_UNPROCESSABLE_ENTITY,
-    HTTP_201_CREATED,
-    HTTP_200_OK,
 )
-from app.api.schemas.tasks import TaskCreate, TaskInDB
-from datetime import date
-from starlette.routing import NoMatchFound
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.tasks import TaskService
 
+from app.api.schemas.tasks import TaskCreate, TaskInDB
+from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
 
