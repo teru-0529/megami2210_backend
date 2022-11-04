@@ -19,6 +19,16 @@ config = Config("alembic.ini")
 
 
 @pytest.fixture
+def db() -> AsyncSession:
+    # test用非同期engineとsessionを作成
+    async_engine = create_async_engine(TEST_DB_ASYNC_URL, echo=True)
+    async_session = sessionmaker(
+        autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
+    )
+    return async_session()
+
+
+@pytest.fixture
 def app() -> FastAPI:
     from app.api.server import get_application
 
@@ -26,22 +36,16 @@ def app() -> FastAPI:
 
 
 @pytest_asyncio.fixture
-async def client(app: FastAPI) -> AsyncClient:
+async def client(app: FastAPI, db: AsyncSession) -> AsyncClient:
 
     # テスト用にオンメモリのSQLiteテーブルを初期化（関数ごとにリセット）
     os.environ["CONTAINER_DSN"] = TEST_DB_SYNC_URL
     alembic.command.downgrade(config, "base")
     alembic.command.upgrade(config, "head")
 
-    # Async用のengineとsessionを作成
-    async_engine = create_async_engine(TEST_DB_ASYNC_URL, echo=True)
-    async_session = sessionmaker(
-        autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
-    )
-
     # DIを使ってFastAPIのDBの向き先をテスト用DBに変更
     async def get_test_db():
-        async with async_session() as session:
+        async with db as session:
             yield session
 
     app.dependency_overrides[get_db] = get_test_db
