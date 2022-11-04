@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 # server.py
 
-from app.api.routes import router as api_router
-from app.core.config import API_PREFIX, PROJECT_NAME, VERSION
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes import router as api_router
+from app.core.config import API_PREFIX, PROJECT_NAME, VERSION
 
 
 def get_application():

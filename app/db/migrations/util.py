@@ -2,6 +2,7 @@
 # util.py
 
 from typing import Tuple
+
 import sqlalchemy as sa
 
 
