@@ -13,5 +13,5 @@ async_session = sessionmaker(
 
 
 async def get_db():
-    async with async_session() as session:
+    async with async_session() as session:  # pragma: no cover
         yield session
