@@ -35,4 +35,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP FUNCTION set_modified_at;")
-    op.execute("DROP SCHEMA todo;")
+    op.execute("DROP SCHEMA todo CASCADE;")

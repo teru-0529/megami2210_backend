@@ -29,3 +29,11 @@ https://dev.classmethod.jp/articles/pytest-mark-parametrize-name/
 
 #### pytestのtest IDに日本語を使う方法
 https://qiita.com/gimKondo/items/d7a874a97af1ad93052a
+
+#### Location Header に登録後のURLを入れる（request.url_for()）
+https://stackoverflow.com/questions/63682956/fastapi-retrieve-url-from-view-name-route-name
+
+#### sql文
+https://www.m3tech.blog/entry/sqlalchemy-tutorial
+https://docs.sqlalchemy.org/en/20/core/expression_api.html
+https://docs.sqlalchemy.org/en/20/core/selectable.html

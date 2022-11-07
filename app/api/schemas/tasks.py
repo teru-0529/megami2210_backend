@@ -2,12 +2,23 @@
 # tasks.py
 
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 
+from fastapi import Path, Query
 from pydantic import Field, validator
 
-from app.api.schemas.base import CoreModel, IDModelMixin
+from app.api.schemas.base import CoreModel, IDModelMixin, f_count
 from app.services.segment_values import TaskStatus
+
+p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
+
+q_exclude_asaignee: bool = Query(
+    default=False,
+    title="ExcludeAsaignee",
+    description="担当者情報の詳細情報をレスポンスから除外する場合にTrue",
+    example=True,
+)
+
 
 f_title: Field = Field(
     title="TaskTitle", max_length=30, description="タスクの名称", example="create db model"
@@ -72,3 +83,8 @@ class TaskInDB(IDModelMixin, TaskBase):
 
 class TaskPublic(IDModelMixin, TaskBase):
     pass
+
+
+class TasksQuery(CoreModel):
+    tasks: List[TaskPublic]
+    count: int = f_count
