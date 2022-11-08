@@ -8,6 +8,7 @@ from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Task as task_model
+from app.db.query_conf import QueryConf
 
 
 class TaskRepository:
@@ -26,9 +27,14 @@ class TaskRepository:
         result: Result = await db.execute(query)
         return result.scalar()
 
-    async def query(self, *, db: AsyncSession) -> List[task_model]:
+    async def query(self, *, db: AsyncSession, q_conf: QueryConf) -> List[task_model]:
         """タスク照会"""
-        query = select(task_model)
+        query = (
+            select(task_model)
+            .offset(q_conf.offset)
+            .limit(q_conf.limit)
+            .order_by(*q_conf.order_by)
+        )
         result: Result = await db.execute(query)
         tasks: List[Tuple[task_model]] = result.all()
         return [tp_task[0] for tp_task in tasks]

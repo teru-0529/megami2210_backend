@@ -63,9 +63,9 @@ async def create_task(
 async def quert_tasks(
     request: Request,  # TODO:
     response: Response,  # TODO:
-    offset: int = q_offset,  # TODO:
-    limit: int = q_limit,  # TODO:
-    sort: str = q_sort,  # TODO:
+    offset: int = q_offset,
+    limit: int = q_limit,
+    sort: str = q_sort,
     execute_assaignee: bool = q_exclude_asaignee,  # TODO:
     # new_task: TaskCreate = Body(...),# TODO:
     db: AsyncSession = Depends(get_db),
@@ -86,7 +86,7 @@ async def quert_tasks(
     - **query**: 検索条件 ※TODO:
     """
     service = TaskService()
-    query_task = await service.query(db=db)
+    query_task = await service.query(offset, limit, sort, execute_assaignee, db=db)
     return query_task
 
 

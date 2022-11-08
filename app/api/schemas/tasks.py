@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import Path, Query
 from pydantic import Field, validator
 
-from app.api.schemas.base import CoreModel, IDModelMixin, f_count
+from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
 from app.services.segment_values import TaskStatus
 
 p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
@@ -85,6 +85,5 @@ class TaskPublic(IDModelMixin, TaskBase):
     pass
 
 
-class TasksQuery(CoreModel):
+class TasksQuery(QueryModel):
     tasks: List[TaskPublic]
-    count: int = f_count

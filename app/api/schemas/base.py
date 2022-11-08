@@ -30,10 +30,6 @@ q_sort: str = Query(
     example="+deadline,-id",
 )
 
-f_count: int = Field(
-    title="Record count", description="検索条件に合致するレコード件数", ge=0, example=1
-)
-
 
 class CoreModel(BaseModel):
     pass
@@ -45,3 +41,9 @@ class IDModelMixin(BaseModel):
 
 class Message(BaseModel):
     message: str = Field(title="message", description="エラーメッセージ", example="サーバーエラーです。")
+
+
+class QueryModel(BaseModel):
+    count: int = Field(
+        title="Record count", description="検索条件に合致するレコード件数", ge=0, example=1
+    )
