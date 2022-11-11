@@ -9,6 +9,7 @@ from app.api.schemas.base import Message, q_limit, q_offset, q_sort
 from app.api.schemas.tasks import (
     TaskCreate,
     TaskPublic,
+    TasksQParam,
     TasksQuery,
     p_id,
     q_exclude_asaignee,
@@ -61,13 +62,11 @@ async def create_task(
     status_code=HTTP_200_OK,
 )
 async def quert_tasks(
-    request: Request,  # TODO:
-    response: Response,  # TODO:
     offset: int = q_offset,
     limit: int = q_limit,
     sort: str = q_sort,
     execute_assaignee: bool = q_exclude_asaignee,  # TODO:
-    # new_task: TaskCreate = Body(...),# TODO:
+    query: TasksQParam = Body(...),
     db: AsyncSession = Depends(get_db),
 ) -> TaskPublic:
     """
@@ -78,15 +77,24 @@ async def quert_tasks(
 
     - **offset**: 結果抽出時のオフセット値[Default=0]
     - **limit**: 結果抽出時の最大件数[Default=10]
-    - **sort**: ソートキー[Default=+id] ※[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
+    - **sort**: ソートキー[Default=+id] ※1[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
     - **exclude_asaignee**: 担当者情報の詳細情報をレスポンスから除外する場合にTrue[Default=false]
 
     [BODY]
 
-    - **query**: 検索条件 ※TODO:
+    - **title_cn**: <クエリ条件> タスクの名称[CONTAINS]
+    - **descriotion_cn**: <クエリ条件> タスク詳細[CONTAINS]
+    - **asaignee_id_in**: <クエリ条件> タスク担当者[IN] ※2「asaignee_id_in」「asaignee_id_ex」はいずれか一方のみ指定可能
+    - **asaignee_id_ex**: <クエリ条件> タスク担当者[EXIST] ※2
+    - **status_in**: <クエリ条件> タスクステータス[IN]
+    - **is_significant_eq**: <クエリ条件> 重要フラグ[EQUAL]
+    - **deadline_from**: <クエリ条件> タスク期限[FROM] ※3「deadline_from」<=「deadline_to」
+    - **deadline_to**: <クエリ条件> タスク期限[TO] ※3
     """
     service = TaskService()
-    query_task = await service.query(offset, limit, sort, execute_assaignee, db=db)
+    query_task = await service.query(
+        offset, limit, sort, execute_assaignee, db=db, qp=query
+    )
     return query_task
 
 

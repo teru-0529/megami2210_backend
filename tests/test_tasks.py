@@ -3,11 +3,11 @@
 
 from datetime import date
 
-from pandas import read_csv, DataFrame
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pandas import DataFrame, read_csv
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import NoMatchFound

@@ -7,7 +7,13 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB, TaskPublic, TasksQuery
+from app.api.schemas.tasks import (
+    TaskCreate,
+    TaskInDB,
+    TaskPublic,
+    TasksQParam,
+    TasksQuery,
+)
 from app.db.models import Task as task_model
 from app.db.query_conf import QueryConf
 from app.db.repositry.tasks import TaskRepository
@@ -26,22 +32,23 @@ class TaskService:
         offset: int,
         limit: int,
         sort: str,
-        execute_assaignee: bool,
+        execute_assaignee: bool,  # TODO:
         *,
-        db: AsyncSession
+        db: AsyncSession,
+        qp: TasksQParam
     ) -> TasksQuery:
         """タスク照会"""
         try:
-            q_conf = QueryConf(task_model.__table__.columns, offset, limit, sort)
+            qc = QueryConf(task_model.__table__.columns, offset, limit, sort)
         except ValueError as e:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
             )
 
         task_repo = TaskRepository()
-        query_tasks: List[task_model] = await task_repo.query(db=db, q_conf=q_conf)
+        query_tasks: List[task_model] = await task_repo.query(db=db, qp=qp, qc=qc)
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
-        count: int = await task_repo.count(db=db)
+        count: int = await task_repo.count(db=db, qp=qp)
         return TasksQuery(tasks=tasks, count=count)
 
     async def get_by_id(self, *, db: AsyncSession, id: int) -> TaskPublic:

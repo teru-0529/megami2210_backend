@@ -37,3 +37,10 @@ https://stackoverflow.com/questions/63682956/fastapi-retrieve-url-from-view-name
 https://www.m3tech.blog/entry/sqlalchemy-tutorial
 https://docs.sqlalchemy.org/en/20/core/expression_api.html
 https://docs.sqlalchemy.org/en/20/core/selectable.html
+
+#### pydantic
+https://qiita.com/uenosy/items/2f6b1aa258018d3db76c
+https://qiita.com/0622okakyo/items/d1dcb896621907f9002b#validate-always
+
+#### OpenAPI
+https://future-architect.github.io/articles/20200409/
