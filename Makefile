@@ -20,4 +20,4 @@ base:
 	docker exec -it api alembic downgrade base
 
 test: ## execute tests
-	docker-compose run --rm --entrypoint "poetry run pytest -vv" api
+	docker-compose run --rm --entrypoint "poetry run pytest -vv --cov=app --cov-report=html" api

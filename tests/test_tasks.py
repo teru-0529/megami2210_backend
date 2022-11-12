@@ -2,12 +2,16 @@
 # test_tasks.py
 
 from datetime import date
+from typing import List
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pandas import DataFrame, read_csv
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import DATE
 from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
@@ -16,23 +20,39 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB
+from app.api.schemas.tasks import TaskCreate, TaskInDB, TasksQuery
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def tmp_task(db: AsyncSession) -> TaskInDB:
-
+async def tmp_task(async_db: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="tmp task",
     )
     service = TaskService()
-    created_task = await service.create(db=db, new_task=new_task)
+    created_task = await service.create(db=async_db, new_task=new_task)
     return created_task
 
 
+@pytest.fixture
+def import_task(sync_engine: Engine) -> DataFrame:
+    datas: DataFrame = read_csv(
+        "tests/data/test_task_data.csv", encoding="utf-8", dtype={3: str}
+    )
+    datas.to_sql(
+        name="tasks",
+        con=sync_engine,
+        schema="todo",
+        if_exists="replace",
+        index=False,
+        dtype={"deadline": DATE},
+    )
+    return datas
+
+
+# @pytest.mark.skip
 class TestTasksRoutes:
     async def test_create_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
         try:
@@ -46,31 +66,38 @@ class TestTasksRoutes:
         except NoMatchFound:
             pytest.fail("route not exist")
 
+    async def test_query_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+        try:
+            await client.get(app.url_path_for("tasks:query"))
+        except NoMatchFound:
+            pytest.fail("route not exist")
 
+
+# @pytest.mark.skip
 class TestCreateTask:
 
     # 正常ケースパラメータ
     valid_params = {
-        "全項目": TaskCreate(
+        "<body:full>": TaskCreate(
             title="test task",
             description="test description",
             asaignee_id="100",
             is_significant=True,
             deadline=date(2050, 12, 31),
         ),
-        "<担当者>除く": TaskCreate(
+        "<body:asaignee_id>:任意入力": TaskCreate(
             title="test task",
             description="テストタスク",
             is_significant=True,
             deadline=date(2050, 12, 31),
         ),
-        "<重要タスク>除く": TaskCreate(
+        "<body:is_significant>デフォルト値": TaskCreate(
             title="test task",
             description="test description",
             asaignee_id="100",
             deadline=date(2050, 12, 31),
         ),
-        "<期限>除く": TaskCreate(
+        "<body:deadline>:任意入力": TaskCreate(
             title="test task",
             description="test description",
             asaignee_id="100",
@@ -78,7 +105,6 @@ class TestCreateTask:
         ),
     }
 
-    # @pytest.mark.skip
     @pytest.mark.parametrize(
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
@@ -90,33 +116,34 @@ class TestCreateTask:
             app.url_path_for("tasks:create"),
             data=new_task.json(exclude_unset=True),
         )
-        print(new_task.json(exclude_unset=True))
         assert res.status_code == HTTP_201_CREATED
-        print(res.json())
         created_task = TaskCreate(**res.json())
         assert created_task == new_task
 
     invalid_params = {
-        "ペイロードなし": ("{}", HTTP_422_UNPROCESSABLE_ENTITY),
-        "<名称>：必須": ('{"description":"dummy"}', HTTP_422_UNPROCESSABLE_ENTITY),
-        "<名称>：桁数超過": (
+        "<body:None>": ("{}", HTTP_422_UNPROCESSABLE_ENTITY),
+        "<body:title>:必須": ('{"description":"dummy"}', HTTP_422_UNPROCESSABLE_ENTITY),
+        "<body:description>:桁数超過": (
             '{"description":"000000000100000000010000000001000000001"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
-        "<担当者>：桁数不足": (
+        "<body:asaignee_id>:桁数不足": (
             '{"title":"dummy","asaignee_id":"10"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
-        "<担当者>：桁数超過": (
+        "<body:asaignee_id>:桁数超過": (
             '{"title":"dummy","asaignee_id":"0000"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
-        "<重要タスク>：型違い": (
+        "<body:is_significant>:型不正": (
             '{"title":"dummy","is_significant":10}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
-        "<期限>：型違い": ('{"title":"dummy","deadline":10}', HTTP_422_UNPROCESSABLE_ENTITY),
-        "<期限>：過去日付": (
+        "<body:deadline>:型不正": (
+            '{"title":"dummy","deadline":10}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:deadline>:過去日付": (
             '{"title":"dummy","deadline": "2000-12-31"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
@@ -138,30 +165,31 @@ class TestCreateTask:
         assert res.status_code == param[1]
 
 
+# @pytest.mark.skip
 class TestGetTask:
-    # @pytest.mark.skip
     async def test_valid_input(
         self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
     ) -> None:
 
         res = await client.get(app.url_path_for("tasks:get-by-id", id=tmp_task.id))
         assert res.status_code == HTTP_200_OK
-        print(res.json())
         get_task = TaskInDB(**res.json())
         assert get_task == tmp_task
 
     # 異常ケースパラメータ
     invalid_params = {
-        "<ID>範囲外（500）": (500, HTTP_404_NOT_FOUND),
-        "<ID>範囲外（-1）": (-1, HTTP_404_NOT_FOUND),
-        "<ID>型違い": (
+        "<path:id>:範囲外(500)": (500, HTTP_404_NOT_FOUND),
+        "<path:id>:範囲外(-1)": (
+            -1,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:型不正": (
             "ABC",
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
-        "<ID>None": (None, HTTP_422_UNPROCESSABLE_ENTITY),
+        "<path:id>:None": (None, HTTP_422_UNPROCESSABLE_ENTITY),
     }
 
-    # @pytest.mark.skip
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
@@ -173,3 +201,296 @@ class TestGetTask:
     ) -> None:
         res = await client.get(app.url_path_for("tasks:get-by-id", id=param[0]))
         assert res.status_code == param[1]
+
+
+# @pytest.mark.skip
+class TestQueryTask:
+
+    # 正常ケースパラメータ
+    valid_params = {
+        "パラメータ無し": ("{}", "{}", 20, 10, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "<query:limit>:(100)": (
+            {"limit": 100},
+            "{}",
+            20,
+            20,
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        ),
+        "<query:limit>:(3)": (
+            {"limit": 3},
+            "{}",
+            20,
+            3,
+            [1, 2, 3],
+        ),
+        "<query:offset>:(5)": (
+            {"offset": 5},
+            "{}",
+            20,
+            10,
+            [6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        ),
+        "<query:offset>:(30)": (
+            {"offset": 30},
+            "{}",
+            20,
+            0,
+            [],
+        ),
+        "<query:sort>:(-id)": (
+            {"sort": "-id"},
+            "{}",
+            20,
+            10,
+            [20, 19, 18, 17, 16, 15, 14, 13, 12, 11],
+        ),
+        "<query:sort>:(+deadline)": (
+            {"sort": "+deadline"},
+            "{}",
+            20,
+            10,
+            [1, 2, 5, 10, 14, 3, 4, 18, 7, 11],
+        ),
+        "<body:title_cn>:(掃除)": (
+            {},
+            '{"title_cn": "掃除"}',
+            3,
+            3,
+            [5, 7, 18],
+        ),
+        "<body:descriotion_cn>:(買ってくる)": (
+            {},
+            '{"descriotion_cn": "買ってくる"}',
+            2,
+            2,
+            [6, 15],
+        ),
+        "<body:asaignee_id_in>:(200,300)": (
+            {},
+            '{"asaignee_id_in": ["200","300"]}',
+            8,
+            8,
+            [8, 9, 10, 11, 12, 16, 18, 19],
+        ),
+        "<body:asaignee_id_ex>:(true)": (
+            {},
+            '{"asaignee_id_ex": true}',
+            16,
+            10,
+            [1, 2, 3, 4, 5, 6, 8, 9, 10, 11],
+        ),
+        "<body:asaignee_id_ex>:(false)": (
+            {},
+            '{"asaignee_id_ex": false}',
+            4,
+            4,
+            [7, 15, 17, 20],
+        ),
+        "<body:status_in>:(DOING,DONE)": (
+            {},
+            '{"status_in": ["DOING","DONE"]}',
+            8,
+            8,
+            [2, 3, 6, 8, 10, 11, 12, 18],
+        ),
+        "<body:is_significant_eq>:(true)": (
+            {},
+            '{"is_significant_eq": true}',
+            5,
+            5,
+            [1, 2, 12, 13, 15],
+        ),
+        "<body:deadline_from>:(2022-12-20)": (
+            {},
+            '{"deadline_from": "2022-12-20"}',
+            3,
+            3,
+            [12, 15, 20],
+        ),
+        "<body:deadline_to>:(2022-12-02)": (
+            {},
+            '{"deadline_to": "2022-12-02"}',
+            8,
+            8,
+            [1, 2, 3, 4, 5, 10, 14, 18],
+        ),
+        "<body:deadline>:(2022-12-04/2022-12-20)": (
+            {},
+            '{"deadline_from": "2022-12-04","deadline_to": "2022-12-20"}',
+            4,
+            4,
+            [6, 9, 15, 17],
+        ),
+        "複合ケース": (
+            {"sort": "-status,+deadline"},
+            '{"status_in": ["DOING","DONE"]}',
+            8,
+            8,
+            [11, 6, 12, 2, 10, 3, 18, 8],
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(valid_params.values()), ids=list(valid_params.keys())
+    )
+    async def test_valid_input(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        import_task: DataFrame,
+        param: tuple[any, str, int, int, List[int]],
+    ) -> None:
+
+        res = await client.post(
+            app.url_path_for("tasks:query"), params=param[0], data=param[1]
+        )
+        assert res.status_code == HTTP_200_OK
+        result = TasksQuery(**res.json())
+        # 取得件数
+        assert result.count == param[2]
+        assert len(result.tasks) == param[3]
+        ids = [task.id for task in result.tasks]
+        assert ids == param[4]
+
+    # 異常ケースパラメータ
+    invalid_params = {
+        "<query:limit>:範囲外(2000)": (
+            {"limit": 2000},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:limit>:範囲外(-1)": (
+            {"limit": -1},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:limit>:型不正": (
+            {"limit": "AAA"},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:limit>:None": (
+            {"limit": None},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:offset>:範囲外(-1)": (
+            {"offset": -1},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:offset>:型不正": (
+            {"offset": "AAA"},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:offset>:None": (
+            {"offset": None},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:sort>:フォーマット不正(符号なし)": (
+            {"sort": "id"},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:sort>:フォーマット不正(カンマなし)": (
+            {"sort": "+id-status"},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<query:sort>:項目不正(存在しないカラム)": (
+            {"sort": "+name"},
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:title_cn>:文字列長超過": (
+            {},
+            '{"title_cn":"AAAAAAAAAABBBBBBBBBBCCCCCCCCCDDDDDDDDD"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id_in>:要素数不足": (
+            {},
+            '{"asaignee_id_in": []}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id_in>:要素数超過": (
+            {},
+            '{"asaignee_id_in": ["100","200","300","400"]}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id_in>:項目長不足": (
+            {},
+            '{"asaignee_id_in": ["10","200"]}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id_in>:項目長超過": (
+            {},
+            '{"asaignee_id_in": ["1000","200"]}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id_in>:型不正": (
+            {},
+            '{"asaignee_id_in": 200}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id_ex>:型不正": (
+            {},
+            '{"asaignee_id_ex": "AAA"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id>:同時指定不正([IN][EXIST])": (
+            {},
+            '{"asaignee_id_in": ["100","200"],"asaignee_id_ex": true}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:status_in>:要素数不足": (
+            {},
+            '{"status_in": []}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:status_in>:型不正": (
+            {},
+            '{"status_in": "AAA"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:status_in>:型不正(要素)": (
+            {},
+            '{"status_in": ["DOING","AAA"]}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:is_significant_eq>:型不正": (
+            {},
+            '{"is_significant_eq": 200}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:deadline_from>:型不正": (
+            {},
+            '{"deadline_from": "AAA"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:deadline_to>:型不正": (
+            {},
+            '{"deadline_to": "AAA"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:deadline>:順序不正": (
+            {},
+            '{"deadline_from": "2022-11-01","deadline_to": "2021-11-01"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_params.values()), ids=list(invalid_params.keys())
+    )
+    async def test_invalid_input(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        param: tuple[any, str, int],
+    ) -> None:
+        res = await client.post(
+            app.url_path_for("tasks:query"), params=param[0], data=param[1]
+        )
+        assert res.status_code == param[2]

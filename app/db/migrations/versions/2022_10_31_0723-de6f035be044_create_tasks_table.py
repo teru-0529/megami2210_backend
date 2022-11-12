@@ -66,4 +66,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("tasks", schema="todo")
-    op.execute("DROP TYPE todo.status;")
+    op.execute("DROP TYPE IF EXISTS todo.status;")

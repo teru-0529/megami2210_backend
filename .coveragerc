@@ -1,0 +1,7 @@
+[run]
+concurrency =
+    multiprocessing
+    greenlet
+    thread
+omit =
+    api/*

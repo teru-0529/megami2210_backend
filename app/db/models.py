@@ -17,7 +17,7 @@ Base.prepare(sync_engine, reflect=True, schema="todo")
 Task = Base.classes.tasks
 
 
-def printTaskList() -> None:
+def printTaskList() -> None:  # pragma: no cover
     q = sync_session.query(Task).order_by(Task.id.desc())
 
     for t in q:

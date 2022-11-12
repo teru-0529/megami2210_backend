@@ -3,3 +3,5 @@
 
 # venv関連
 /venv
+/htmlcov
+/.coverage
