@@ -22,7 +22,7 @@ router = APIRouter()
         },
     },
 )
-async def health_check() -> dict:
+async def health_check() -> dict:  # pragma: no cover
     """
     APIサーバーのヘルスチェック。:
 

@@ -194,8 +194,13 @@ class TestQueryTask:
         self, app: FastAPI, client: AsyncClient, import_task: DataFrame
     ) -> None:
 
-        res = await client.post(app.url_path_for("tasks:query"), data="{}")
+        res = await client.post(
+            app.url_path_for("tasks:query"), params={"limit": 10}, data="{}"
+        )
         assert res.status_code == HTTP_200_OK
         result = TasksQuery(**res.json())
         # 取得件数
         assert result.count == len(import_task)
+        assert len(result.tasks) == 10
+        ids = [task.id for task in result.tasks]
+        assert ids == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

@@ -44,3 +44,7 @@ https://qiita.com/0622okakyo/items/d1dcb896621907f9002b#validate-always
 
 #### OpenAPI
 https://future-architect.github.io/articles/20200409/
+
+
+#### FastAPI + SQLAlchemy でpytestのcoverageが100%いかない件
+https://zenn.dev/rhosoi/scraps/7225a0e89cdb57
