@@ -13,6 +13,9 @@ class QueryConf:
 
     def __init__(self, columns: List[str], offset: int, limit: int, sort: str) -> None:
         ls = sort.split(",")
+        if "+id" not in ls:
+            ls.append("+id")  # デフォルトのソート条件を追加 TODO:
+
         ls = [(v.strip()[0], v.strip()[1:]) for v in ls]  # 符号/値、のタプルに分割
 
         err_ls = [v[1] for v in ls if v[1] not in columns]  # 許容されないカラムを抽出

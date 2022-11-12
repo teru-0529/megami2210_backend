@@ -13,7 +13,7 @@ from app.services.segment_values import TaskStatus
 
 p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
 
-q_exclude_asaignee: bool = Query(
+q_exclude_asaignee: bool = Query(  # TODO:
     default=False,
     title="ExcludeAsaignee",
     description="担当者情報の詳細情報をレスポンスから除外する場合にTrue",
