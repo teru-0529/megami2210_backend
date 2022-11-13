@@ -20,7 +20,8 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB, TasksQuery
+from app.api.schemas.tasks import TaskCreate, TaskInDB, TasksQuery, TaskUpdate
+from app.services.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
@@ -30,6 +31,9 @@ pytestmark = pytest.mark.asyncio
 async def tmp_task(async_db: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="tmp task",
+        description="tmp task",
+        asaignee_id="000",
+        deadline=date(2022, 12, 31),
     )
     service = TaskService()
     created_task = await service.create(db=async_db, new_task=new_task)
@@ -72,6 +76,18 @@ class TestTasksRoutes:
         except NoMatchFound:
             pytest.fail("route not exist")
 
+    async def test_patch_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+        try:
+            await client.get(app.url_path_for("tasks:patch", id=1))
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
+    async def test_delete_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+        try:
+            await client.get(app.url_path_for("tasks:delete", id=1))
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
 
 # @pytest.mark.skip
 class TestCreateTask:
@@ -108,7 +124,7 @@ class TestCreateTask:
     @pytest.mark.parametrize(
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_valid_input(
+    async def test_ok_case(
         self, app: FastAPI, client: AsyncClient, new_task: TaskCreate
     ) -> None:
 
@@ -117,14 +133,16 @@ class TestCreateTask:
             data=new_task.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_201_CREATED
-        created_task = TaskCreate(**res.json())
+        dict = res.json()
+        del dict["id"], dict["status"]
+        created_task = TaskCreate(**dict)
         assert created_task == new_task
 
     invalid_params = {
         "<body:None>": ("{}", HTTP_422_UNPROCESSABLE_ENTITY),
         "<body:title>:必須": ('{"description":"dummy"}', HTTP_422_UNPROCESSABLE_ENTITY),
-        "<body:description>:桁数超過": (
-            '{"description":"000000000100000000010000000001000000001"}',
+        "<body:title>:桁数超過": (
+            '{"title":"000000000100000000010000000001000000001"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id>:桁数不足": (
@@ -147,12 +165,16 @@ class TestCreateTask:
             '{"title":"dummy","deadline": "2000-12-31"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
+        "<body>:未定義フィールド": (
+            '{"title":"dummy","dummy":"dummy"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
     }
 
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_invalid_input(
+    async def test_ng_case(
         self,
         app: FastAPI,
         client: AsyncClient,
@@ -167,7 +189,7 @@ class TestCreateTask:
 
 # @pytest.mark.skip
 class TestGetTask:
-    async def test_valid_input(
+    async def test_ok_case(
         self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
     ) -> None:
 
@@ -193,7 +215,7 @@ class TestGetTask:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_invalid_input(
+    async def test_ng_case(
         self,
         app: FastAPI,
         client: AsyncClient,
@@ -208,7 +230,7 @@ class TestQueryTask:
 
     # 正常ケースパラメータ
     valid_params = {
-        "パラメータ無し": ("{}", "{}", 20, 10, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "パラメータ無し": ({}, "{}", 20, 10, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         "<query:limit>:(100)": (
             {"limit": 100},
             "{}",
@@ -258,9 +280,9 @@ class TestQueryTask:
             3,
             [5, 7, 18],
         ),
-        "<body:descriotion_cn>:(買ってくる)": (
+        "<body:description_cn>:(買ってくる)": (
             {},
-            '{"descriotion_cn": "買ってくる"}',
+            '{"description_cn": "買ってくる"}',
             2,
             2,
             [6, 15],
@@ -333,7 +355,7 @@ class TestQueryTask:
     @pytest.mark.parametrize(
         "param", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_valid_input(
+    async def test_ok_case(
         self,
         app: FastAPI,
         client: AsyncClient,
@@ -479,12 +501,17 @@ class TestQueryTask:
             '{"deadline_from": "2022-11-01","deadline_to": "2021-11-01"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
+        "<body>:未定義フィールド": (
+            {},
+            '{"dummy":"dummy"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
     }
 
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_invalid_input(
+    async def test_ng_case(
         self,
         app: FastAPI,
         client: AsyncClient,
@@ -494,3 +521,145 @@ class TestQueryTask:
             app.url_path_for("tasks:query"), params=param[0], data=param[1]
         )
         assert res.status_code == param[2]
+
+
+# @pytest.mark.skip
+class TestPatchTask:
+
+    # 正常ケースパラメータ
+    valid_params = {
+        "<body:description>": TaskUpdate(description="test_description"),
+        "<body:description>:null": TaskUpdate(description=None),
+        "<body:asaignee_id>": TaskUpdate(asaignee_id="500"),
+        "<body:asaignee_id>:null": TaskUpdate(asaignee_id=None),
+        "<body:status>": TaskUpdate(status=TaskStatus.done),
+        "<body:deadline>": TaskUpdate(deadline=date(2023, 12, 31)),
+        "<body:deadline>:null": TaskUpdate(deadline=None),
+        "複合ケース": TaskUpdate(
+            asaignee_id="300", status=TaskStatus.doing, deadline=date(2023, 8, 20)
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "update_params", list(valid_params.values()), ids=list(valid_params.keys())
+    )
+    async def test_ok_case(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        tmp_task: TaskInDB,
+        update_params: TaskUpdate,
+    ) -> None:
+        res = await client.patch(
+            app.url_path_for("tasks:patch", id=tmp_task.id),
+            data=update_params.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_200_OK
+        updated_task = TaskInDB(**res.json())
+
+        update_dict = update_params.dict(exclude_unset=True)
+        expected = tmp_task.copy(update=update_dict)
+        assert updated_task == expected
+
+    # 異常ケースパラメータ
+    invalid_params = {
+        "<path:id>:範囲外(500)": (500, "{}", HTTP_404_NOT_FOUND),
+        "<path:id>:範囲外(-1)": (
+            -1,
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:型不正": (
+            "ABC",
+            "{}",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:None": (None, "{}", HTTP_422_UNPROCESSABLE_ENTITY),
+        "<body:asaignee_id>:桁数不足": (
+            1,
+            '{"asaignee_id":"10"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:asaignee_id>:桁数超過": (
+            1,
+            '{"asaignee_id":"0000"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:deadline>:型不正": (
+            1,
+            '{"deadline":10}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:deadline>:過去日付": (
+            1,
+            '{"deadline": "2000-12-31"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body>:変更不可フィールド(title)": (
+            1,
+            '{"title":"dummy"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body>:変更不可フィールド(is_significant)": (
+            1,
+            '{"is_significant":true}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_params.values()), ids=list(invalid_params.keys())
+    )
+    async def test_ng_case(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        param: tuple[any, str, int],
+    ) -> None:
+        res = await client.patch(
+            app.url_path_for("tasks:patch", id=param[0]),
+            data=param[1],
+        )
+        assert res.status_code == param[2]
+
+
+# @pytest.mark.skip
+class TestDeleteTask:
+    async def test_ok_case(
+        self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
+    ) -> None:
+
+        res = await client.delete(app.url_path_for("tasks:delete", id=tmp_task.id))
+        assert res.status_code == HTTP_200_OK
+        get_task = TaskInDB(**res.json())
+        assert get_task == tmp_task
+
+        # 再検索して存在しないこと
+        res = await client.get(app.url_path_for("tasks:get-by-id", id=tmp_task.id))
+        assert res.status_code == HTTP_404_NOT_FOUND
+
+    # 異常ケースパラメータ
+    invalid_params = {
+        "<path:id>:範囲外(500)": (500, HTTP_404_NOT_FOUND),
+        "<path:id>:範囲外(-1)": (
+            -1,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:型不正": (
+            "ABC",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:None": (None, HTTP_422_UNPROCESSABLE_ENTITY),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_params.values()), ids=list(invalid_params.keys())
+    )
+    async def test_ng_case(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        param: tuple[any, int],
+    ) -> None:
+        res = await client.delete(app.url_path_for("tasks:delete", id=param[0]))
+        assert res.status_code == param[1]

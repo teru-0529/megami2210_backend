@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import Path, Query
-from pydantic import Field, validator
+from pydantic import Extra, Field, validator
 
 from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
 from app.db.models import Task as task_model
@@ -28,10 +28,10 @@ f_description: Field = Field(
     title="Description", description="タスクの詳細内容", example="データベースモデルを作成する。"
 )
 f_asagnee_id: Field = Field(
-    title="AsaigneeId", description="タスクの担当者", min_length=3, max_length=3, example="000"
+    title="AsaigneeId", description="タスクの担当者", min_length=3, max_length=3, example="100"
 )
 f_status: Field = Field(
-    title="TaskStatus", description=TaskStatus.description(), example="DOING"
+    title="TaskStatus", description=TaskStatus.description(), example="TODO"
 )
 f_is_significant: Field = Field(
     default=False, title="IsSignificant", description="重要タスクの場合にTrue", example=True
@@ -91,7 +91,7 @@ class TaskBase(CoreModel):
     deadline: Optional[date] = f_deadline
 
 
-class TaskCreate(CoreModel):
+class TaskCreate(CoreModel, extra=Extra.forbid):
     title: str = f_title
     description: Optional[str] = f_description
     asaignee_id: Optional[str] = f_asagnee_id
@@ -106,17 +106,21 @@ class TaskCreate(CoreModel):
         return val
 
 
-class TaskUpdate(TaskBase):
-    desctiption: str = f_description
-    asaignee_id: str = f_asagnee_id
-    status: TaskStatus = f_status
+class TaskUpdate(CoreModel, extra=Extra.forbid):
+    description: Optional[str] = f_description
+    asaignee_id: Optional[str] = f_asagnee_id
+    status: Optional[TaskStatus] = f_status
+    deadline: Optional[date] = f_deadline
+
+    @validator("deadline")
+    def is_after_today(cls, val: date):
+        """値が設定されている場合は、今日以降の日付であること"""
+        if val and val < datetime.today().date():
+            raise ValueError("deadline must after today.")
+        return val
 
 
 class TaskInDB(IDModelMixin, TaskBase):
-    title: str = f_title
-    status: TaskStatus = f_status
-    is_significant: bool = f_is_significant
-
     class Config:
         orm_mode = True
 
@@ -129,9 +133,9 @@ class TasksQuery(QueryModel):
     tasks: List[TaskPublic]
 
 
-class TasksQParam(CoreModel):
+class TasksQParam(CoreModel, extra=Extra.forbid):
     title_cn: Optional[str] = q_title_cn
-    descriotion_cn: Optional[str] = q_description_cn
+    description_cn: Optional[str] = q_description_cn
     asaignee_id_in: Optional[List[str]] = q_asagnee_id_in
     asaignee_id_ex: Optional[bool] = q_asagnee_id_ex
     status_in: Optional[List[TaskStatus]] = q_status_in
@@ -159,8 +163,8 @@ class TasksQParam(CoreModel):
         ls = []
         if self.title_cn is not None:
             ls.append(task_model.title.contains(self.title_cn))
-        if self.descriotion_cn is not None:
-            ls.append(task_model.description.contains(self.descriotion_cn))
+        if self.description_cn is not None:
+            ls.append(task_model.description.contains(self.description_cn))
         if self.asaignee_id_in is not None:
             ls.append(task_model.asaignee_id.in_(self.asaignee_id_in))
         if self.asaignee_id_ex is True:

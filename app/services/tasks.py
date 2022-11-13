@@ -13,6 +13,7 @@ from app.api.schemas.tasks import (
     TaskPublic,
     TasksQParam,
     TasksQuery,
+    TaskUpdate,
 )
 from app.db.models import Task as task_model
 from app.db.query_conf import QueryConf
@@ -25,6 +26,9 @@ class TaskService:
         task = task_model(**new_task.dict())
         task_repo = TaskRepository()
         created_task: task_model = await task_repo.create(db=db, task=task)
+
+        await db.commit()
+        await db.refresh(created_task)
         return TaskInDB.from_orm(created_task)
 
     async def query(
@@ -55,8 +59,36 @@ class TaskService:
         """タスク取得"""
         task_repo = TaskRepository()
         get_task: task_model = await task_repo.get_by_id(db=db, id=id)
-        if not get_task:
+
+        self._ck_not_found(get_task)
+        return TaskInDB.from_orm(get_task)
+
+    async def patch(
+        self, *, db: AsyncSession, id: int, patch_params: TaskUpdate
+    ) -> TaskPublic:
+        """タスク更新"""
+        update_dict = patch_params.dict(exclude_unset=True)
+        task_repo = TaskRepository()
+        updated_task: task_model = await task_repo.update(
+            db=db, id=id, patch_params=update_dict
+        )
+        self._ck_not_found(updated_task)
+
+        await db.commit()
+        await db.refresh(updated_task)
+        return TaskInDB.from_orm(updated_task)
+
+    async def delete(self, *, db: AsyncSession, id: int) -> TaskPublic:
+        """タスク削除"""
+        task_repo = TaskRepository()
+        deleted_task: task_model = await task_repo.delete(db=db, id=id)
+        self._ck_not_found(deleted_task)
+
+        await db.commit()
+        return TaskInDB.from_orm(deleted_task)
+
+    def _ck_not_found(self, task: task_model):
+        if task is None:
             raise HTTPException(
                 status_code=HTTP_404_NOT_FOUND, detail="指定されたidのタスクは見つかりませんでした。"
             )
-        return TaskInDB.from_orm(get_task)

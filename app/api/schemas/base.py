@@ -27,7 +27,7 @@ q_sort: str = Query(
     title="Sort condition",
     description="ソートキー ※[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC",
     regex="^[\+\-][a-z\_]+(?:,[\+\-][a-z\_]+)*$",  # noqa: W605
-    example="+deadline,-id",
+    example='"+deadline,-id"',
 )
 
 
@@ -40,7 +40,7 @@ class IDModelMixin(BaseModel):
 
 
 class Message(BaseModel):
-    message: str = Field(title="message", description="エラーメッセージ", example="サーバーエラーです。")
+    message: str = Field(title="message", description="メッセージ", example="サーバーエラーです。")
 
 
 class QueryModel(BaseModel):
