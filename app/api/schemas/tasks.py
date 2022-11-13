@@ -107,7 +107,7 @@ class TaskCreate(CoreModel, extra=Extra.forbid):
 
 
 class TaskUpdate(CoreModel, extra=Extra.forbid):
-    desctiption: Optional[str] = f_description
+    description: Optional[str] = f_description
     asaignee_id: Optional[str] = f_asagnee_id
     status: Optional[TaskStatus] = f_status
     deadline: Optional[date] = f_deadline
@@ -135,7 +135,7 @@ class TasksQuery(QueryModel):
 
 class TasksQParam(CoreModel, extra=Extra.forbid):
     title_cn: Optional[str] = q_title_cn
-    descriotion_cn: Optional[str] = q_description_cn
+    description_cn: Optional[str] = q_description_cn
     asaignee_id_in: Optional[List[str]] = q_asagnee_id_in
     asaignee_id_ex: Optional[bool] = q_asagnee_id_ex
     status_in: Optional[List[TaskStatus]] = q_status_in
@@ -163,8 +163,8 @@ class TasksQParam(CoreModel, extra=Extra.forbid):
         ls = []
         if self.title_cn is not None:
             ls.append(task_model.title.contains(self.title_cn))
-        if self.descriotion_cn is not None:
-            ls.append(task_model.description.contains(self.descriotion_cn))
+        if self.description_cn is not None:
+            ls.append(task_model.description.contains(self.description_cn))
         if self.asaignee_id_in is not None:
             ls.append(task_model.asaignee_id.in_(self.asaignee_id_in))
         if self.asaignee_id_ex is True:

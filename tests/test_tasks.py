@@ -280,9 +280,9 @@ class TestQueryTask:
             3,
             [5, 7, 18],
         ),
-        "<body:descriotion_cn>:(買ってくる)": (
+        "<body:description_cn>:(買ってくる)": (
             {},
-            '{"descriotion_cn": "買ってくる"}',
+            '{"description_cn": "買ってくる"}',
             2,
             2,
             [6, 15],
@@ -528,8 +528,8 @@ class TestPatchTask:
 
     # 正常ケースパラメータ
     valid_params = {
-        "<body:description>": TaskUpdate(desctiption="test_description"),
-        "<body:description>:null": TaskUpdate(desctiption=None),
+        "<body:description>": TaskUpdate(description="test_description"),
+        "<body:description>:null": TaskUpdate(description=None),
         "<body:asaignee_id>": TaskUpdate(asaignee_id="500"),
         "<body:asaignee_id>:null": TaskUpdate(asaignee_id=None),
         "<body:status>": TaskUpdate(status=TaskStatus.done),
@@ -558,8 +558,8 @@ class TestPatchTask:
         updated_task = TaskInDB(**res.json())
 
         update_dict = update_params.dict(exclude_unset=True)
-        b = tmp_task.copy(update=update_dict)
-        assert updated_task == b
+        expected = tmp_task.copy(update=update_dict)
+        assert updated_task == expected
 
     # 異常ケースパラメータ
     invalid_params = {

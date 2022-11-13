@@ -85,7 +85,7 @@ async def quert_tasks(
     [BODY]
 
     - **title_cn**: <クエリ条件> タスクの名称[CONTAINS]
-    - **descriotion_cn**: <クエリ条件> タスク詳細[CONTAINS]
+    - **description_cn**: <クエリ条件> タスク詳細[CONTAINS]
     - **asaignee_id_in**: <クエリ条件> タスク担当者[IN] ※3「asaignee_id_in」「asaignee_id_ex」はいずれか一方のみ指定可能
     - **asaignee_id_ex**: <クエリ条件> タスク担当者[EXIST] ※3
     - **status_in**: <クエリ条件> タスクステータス[IN]
@@ -146,7 +146,7 @@ async def get_task_by_id(
 )
 async def patch_task_by_id(
     id: int = p_id,
-    patched_fields: TaskUpdate = Body(...),
+    patch_params: TaskUpdate = Body(...),
     db: AsyncSession = Depends(get_db),
 ) -> TaskPublic:
     """
@@ -165,7 +165,7 @@ async def patch_task_by_id(
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
     service = TaskService()
-    task = await service.patch(db=db, id=id, patched_fields=patched_fields)
+    task = await service.patch(db=db, id=id, patch_params=patch_params)
     return task
 
 
