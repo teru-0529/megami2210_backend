@@ -16,8 +16,7 @@ class TaskRepository:
     async def create(self, *, db: AsyncSession, task: task_model) -> task_model:
         """タスク登録"""
         db.add(task)
-        await db.commit()
-        await db.refresh(task)
+        await db.flush()
         return task
 
     async def count(self, *, db: AsyncSession, qp: TasksQParam) -> int:

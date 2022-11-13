@@ -15,7 +15,7 @@ router = APIRouter()
     responses={
         200: {
             "model": Message,
-            "description": "check result",
+            "description": "state of api server",
             "content": {
                 "application/json": {"example": {"message": "APIサーバーは正常に稼働しています。"}}
             },

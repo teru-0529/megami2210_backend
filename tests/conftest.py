@@ -34,7 +34,10 @@ def async_db(schema) -> AsyncSession:
     # test用非同期engineとsessionを作成
     async_engine = create_async_engine(TEST_DB_ASYNC_URL, echo=True)
     async_session = sessionmaker(
-        autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
+        autocommit=False,
+        autoflush=False,
+        bind=async_engine,
+        class_=AsyncSession,
     )
     return async_session()
 

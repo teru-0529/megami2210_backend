@@ -11,6 +11,7 @@ from app.api.schemas.tasks import (
     TaskPublic,
     TasksQParam,
     TasksQuery,
+    TaskUpdate,
     p_id,
     q_exclude_asaignee,
 )
@@ -24,7 +25,7 @@ router = APIRouter()
     "/",
     response_model=TaskPublic,
     name="tasks:create",
-    response_description="Creat New Task",
+    response_description="New task created",
     status_code=HTTP_201_CREATED,
 )
 async def create_task(
@@ -58,7 +59,7 @@ async def create_task(
     "/be-queried",
     response_model=TasksQuery,
     name="tasks:query",
-    response_description="query Tasks",
+    response_description="Tasks filtered by query params",
     status_code=HTTP_200_OK,
 )
 async def quert_tasks(
@@ -76,20 +77,21 @@ async def quert_tasks(
     [QUERY]
 
     - **offset**: 結果抽出時のオフセット値[Default=0]
-    - **limit**: 結果抽出時の最大件数[Default=10]
-    - **sort**: ソートキー[Default=+id] ※1[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
+    - **limit**: 結果抽出時の最大件数[Default=10] ※1システム制限として最大1000件まで指定可能
+    - **sort**: ソートキー[Default=+id] ※2[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
+        - 指定可能キー: `id`, `title`, `description`, `asaignee_id`, `status`, `is_significant`, `deadline`
     - **exclude_asaignee**: 担当者情報の詳細情報をレスポンスから除外する場合にTrue[Default=false]
 
     [BODY]
 
     - **title_cn**: <クエリ条件> タスクの名称[CONTAINS]
     - **descriotion_cn**: <クエリ条件> タスク詳細[CONTAINS]
-    - **asaignee_id_in**: <クエリ条件> タスク担当者[IN] ※2「asaignee_id_in」「asaignee_id_ex」はいずれか一方のみ指定可能
-    - **asaignee_id_ex**: <クエリ条件> タスク担当者[EXIST] ※2
+    - **asaignee_id_in**: <クエリ条件> タスク担当者[IN] ※3「asaignee_id_in」「asaignee_id_ex」はいずれか一方のみ指定可能
+    - **asaignee_id_ex**: <クエリ条件> タスク担当者[EXIST] ※3
     - **status_in**: <クエリ条件> タスクステータス[IN]
     - **is_significant_eq**: <クエリ条件> 重要フラグ[EQUAL]
-    - **deadline_from**: <クエリ条件> タスク期限[FROM] ※3「deadline_from」<=「deadline_to」
-    - **deadline_to**: <クエリ条件> タスク期限[TO] ※3
+    - **deadline_from**: <クエリ条件> タスク期限[FROM] ※4「deadline_from」<=「deadline_to」を保つ必要がある
+    - **deadline_to**: <クエリ条件> タスク期限[TO] ※4
     """
     service = TaskService()
     query_task = await service.query(
@@ -109,7 +111,7 @@ async def quert_tasks(
             "description": "The task was not found",
             "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
         },
-        200: {"description": "Task requested by ID", "model": TaskPublic},
+        200: {"model": TaskPublic, "description": "Task requested by ID"},
     },
 )
 async def get_task_by_id(
@@ -125,4 +127,74 @@ async def get_task_by_id(
     """
     service = TaskService()
     task = await service.get_by_id(db=db, id=id)
+    return task
+
+
+@router.patch(
+    "/{id}/",
+    response_model=TaskPublic,
+    name="tasks:patch",
+    status_code=HTTP_200_OK,
+    responses={
+        404: {
+            "model": Message,
+            "description": "The task was not found",
+            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+        },
+        200: {"model": TaskPublic, "description": "Task patched by ID"},
+    },
+)
+async def patch_task_by_id(
+    id: int = p_id,
+    patched_fields: TaskUpdate = Body(...),
+    db: AsyncSession = Depends(get_db),
+) -> TaskPublic:
+    """
+    タスクの1件更新。</br>
+    **title**、**is_significant** は変更不可:
+
+    [PATH]
+
+    - **id**: タスクID[Reqired]
+
+    [BODY]
+
+    - **description**: タスクの詳細内容
+    - **asaignee_id**: タスクの担当者
+    - **status**: タスクステータス
+    - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
+    """
+    service = TaskService()
+    task = await service.patch(db=db, id=id, patched_fields=patched_fields)
+    return task
+
+
+@router.delete(
+    "/{id}/",
+    response_model=TaskPublic,
+    name="tasks:delete",
+    status_code=HTTP_200_OK,
+    responses={
+        404: {
+            "model": Message,
+            "description": "The task was not found",
+            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+        },
+        200: {"model": TaskPublic, "description": "Task deleted by ID"},
+    },
+)
+async def delete_task_by_id(
+    id: int = p_id,
+    db: AsyncSession = Depends(get_db),
+) -> TaskPublic:
+    """
+    タスクの1件削除。
+
+    [PATH]
+
+    - **id**: タスクID[Reqired]
+
+    """
+    service = TaskService()
+    task = await service.delete(db=db, id=id)
     return task
