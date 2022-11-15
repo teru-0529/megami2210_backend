@@ -15,8 +15,12 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import TEST_DB_ASYNC_URL, TEST_DB_SYNC_URL
-from app.db.database import get_db
+from app.core.config import ASYNC_DIALECT, SYNC_DIALECT, db_url
+from app.core.database import get_db
+
+SETVER = "testDB"
+SYNC_URL = db_url(dialect=SYNC_DIALECT, server=SETVER)
+ASYNC_URL = db_url(dialect=ASYNC_DIALECT, server=SETVER)
 
 config = Config("alembic.ini")
 
@@ -24,7 +28,7 @@ config = Config("alembic.ini")
 @pytest.fixture
 def schema() -> None:
     # test用DBにスキーマ作成
-    os.environ["CONTAINER_DSN"] = TEST_DB_SYNC_URL
+    os.environ["CONTAINER_DSN"] = SYNC_URL
     alembic.command.downgrade(config, "base")
     alembic.command.upgrade(config, "head")
 
@@ -32,7 +36,7 @@ def schema() -> None:
 @pytest.fixture
 def async_db(schema) -> AsyncSession:
     # test用非同期engineとsessionを作成
-    async_engine = create_async_engine(TEST_DB_ASYNC_URL, echo=True)
+    async_engine = create_async_engine(ASYNC_URL, echo=True)
     async_session = sessionmaker(
         autocommit=False,
         autoflush=False,
@@ -45,7 +49,7 @@ def async_db(schema) -> AsyncSession:
 @pytest.fixture
 def sync_engine(schema) -> Engine:
     # test用同期engineを作成
-    sync_engine = create_engine(TEST_DB_SYNC_URL, echo=True)
+    sync_engine = create_engine(SYNC_URL, echo=True)
     return sync_engine
 
 

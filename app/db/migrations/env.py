@@ -8,7 +8,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[3]))
-from app.core.config import DB_SYNC_URL  # noqa:E402
+from app.core.config import SYNC_URL  # noqa:E402
 
 config = context.config
 fileConfig(config.config_file_name)
@@ -17,7 +17,7 @@ logger = logging.getLogger("alembic.env")
 
 def run_migrations_online() -> None:
     CONTAINER_DSN = os.environ.get("CONTAINER_DSN", "")
-    DB_URL = CONTAINER_DSN if CONTAINER_DSN else DB_SYNC_URL
+    DB_URL = CONTAINER_DSN if CONTAINER_DSN else SYNC_URL
 
     logger.info("Run migrate on {0}".format(str(DB_URL)))
 

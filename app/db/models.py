@@ -5,9 +5,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
 
-from app.core.config import DB_SYNC_URL
+from app.core.config import SYNC_URL
 
-sync_engine = create_engine(DB_SYNC_URL, echo=False)
+sync_engine = create_engine(SYNC_URL, echo=False)
 sync_session = Session(sync_engine)
 
 Base = automap_base()

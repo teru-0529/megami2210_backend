@@ -15,7 +15,7 @@ from app.api.schemas.tasks import (
     p_id,
     q_exclude_asaignee,
 )
-from app.db.database import get_db
+from app.core.database import get_db
 from app.services.tasks import TaskService
 
 router = APIRouter()
