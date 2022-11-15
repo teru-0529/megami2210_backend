@@ -17,7 +17,7 @@ from app.api.schemas.tasks import (
 )
 from app.db.models import Task as task_model
 from app.db.query_conf import QueryConf
-from app.db.repositry.tasks import TaskRepository
+from app.db.repositries.tasks import TaskRepository
 
 
 class TaskService:
