@@ -8,7 +8,7 @@ from fastapi import Path, Query
 from pydantic import Extra, Field, validator
 
 from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
-from app.db.models import Task as task_model
+from app.models import m_Task  # FIXME:
 from app.models.segment_values import TaskStatus
 
 p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
@@ -162,21 +162,21 @@ class TasksQParam(CoreModel, extra=Extra.forbid):
     def sql(self) -> List:
         ls = []
         if self.title_cn is not None:
-            ls.append(task_model.title.contains(self.title_cn))
+            ls.append(m_Task.title.contains(self.title_cn))
         if self.description_cn is not None:
-            ls.append(task_model.description.contains(self.description_cn))
+            ls.append(m_Task.description.contains(self.description_cn))
         if self.asaignee_id_in is not None:
-            ls.append(task_model.asaignee_id.in_(self.asaignee_id_in))
+            ls.append(m_Task.asaignee_id.in_(self.asaignee_id_in))
         if self.asaignee_id_ex is True:
-            ls.append(task_model.asaignee_id.is_not(None))
+            ls.append(m_Task.asaignee_id.is_not(None))
         if self.asaignee_id_ex is False:
-            ls.append(task_model.asaignee_id.is_(None))
+            ls.append(m_Task.asaignee_id.is_(None))
         if self.status_in is not None:
-            ls.append(task_model.status.in_(self.status_in))
+            ls.append(m_Task.status.in_(self.status_in))
         if self.is_significant_eq is not None:
-            ls.append(task_model.is_significant.is_(self.is_significant_eq))
+            ls.append(m_Task.is_significant.is_(self.is_significant_eq))
         if self.deadline_from is not None:
-            ls.append(task_model.deadline >= self.deadline_from)
+            ls.append(m_Task.deadline >= self.deadline_from)
         if self.deadline_to is not None:
-            ls.append(task_model.deadline <= self.deadline_to)
+            ls.append(m_Task.deadline <= self.deadline_to)
         return ls

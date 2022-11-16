@@ -15,9 +15,9 @@ from app.api.schemas.tasks import (
     TasksQuery,
     TaskUpdate,
 )
-from app.db.models import Task as task_model
 from app.db.query_conf import QueryConf
 from app.db.repositries.tasks import TaskRepository
+from app.models import m_Task
 
 
 class TaskService:
@@ -25,9 +25,9 @@ class TaskService:
         self, *, session: AsyncSession, new_task: TaskCreate
     ) -> TaskPublic:
         """タスク登録"""
-        task = task_model(**new_task.dict())
+        task = m_Task(**new_task.dict())
         task_repo = TaskRepository()
-        created_task: task_model = await task_repo.create(session=session, task=task)
+        created_task: m_Task = await task_repo.create(session=session, task=task)
 
         await session.commit()
         await session.refresh(created_task)
@@ -45,16 +45,14 @@ class TaskService:
     ) -> TasksQuery:
         """タスク照会"""
         try:
-            qc = QueryConf(task_model.__table__.columns, offset, limit, sort)
+            qc = QueryConf(m_Task.__table__.columns, offset, limit, sort)
         except ValueError as e:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
             )
 
         task_repo = TaskRepository()
-        query_tasks: List[task_model] = await task_repo.query(
-            session=session, qp=qp, qc=qc
-        )
+        query_tasks: List[m_Task] = await task_repo.query(session=session, qp=qp, qc=qc)
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
         count: int = await task_repo.count(session=session, qp=qp)
         return TasksQuery(tasks=tasks, count=count)
@@ -62,7 +60,7 @@ class TaskService:
     async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク取得"""
         task_repo = TaskRepository()
-        get_task: task_model = await task_repo.get_by_id(session=session, id=id)
+        get_task: m_Task = await task_repo.get_by_id(session=session, id=id)
 
         self._ck_not_found(get_task)
         return TaskInDB.from_orm(get_task)
@@ -73,7 +71,7 @@ class TaskService:
         """タスク更新"""
         update_dict = patch_params.dict(exclude_unset=True)
         task_repo = TaskRepository()
-        updated_task: task_model = await task_repo.update(
+        updated_task: m_Task = await task_repo.update(
             session=session, id=id, patch_params=update_dict
         )
         self._ck_not_found(updated_task)
@@ -85,13 +83,13 @@ class TaskService:
     async def delete(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク削除"""
         task_repo = TaskRepository()
-        deleted_task: task_model = await task_repo.delete(session=session, id=id)
+        deleted_task: m_Task = await task_repo.delete(session=session, id=id)
         self._ck_not_found(deleted_task)
 
         await session.commit()
         return TaskInDB.from_orm(deleted_task)
 
-    def _ck_not_found(self, task: task_model):
+    def _ck_not_found(self, task: m_Task):
         if task is None:
             raise HTTPException(
                 status_code=HTTP_404_NOT_FOUND, detail="指定されたidのタスクは見つかりませんでした。"
