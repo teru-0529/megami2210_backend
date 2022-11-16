@@ -7,9 +7,8 @@ from sqlalchemy import func, select, table
 from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.tasks import TasksQParam
 from app.models import m_Task
-from app.db.query_conf import QueryConf
+from app.repositries import QueryParam
 
 
 class TaskRepository:
@@ -51,26 +50,26 @@ class TaskRepository:
         await session.flush()
         return base_task
 
-    async def count(self, *, session: AsyncSession, qp: TasksQParam) -> int:
+    async def count(self, *, session: AsyncSession, query_param: QueryParam) -> int:
         """タスク件数取得"""
         query = select(func.count())
-        if qp.sql():
-            query = query.where(*qp.sql())
+        if query_param.filter:
+            query = query.where(*query_param.filter)
         else:
             query = query.select_from(table("tasks", schema="todo"))
         result: Result = await session.execute(query)
         return result.scalar()
 
     async def query(
-        self, *, session: AsyncSession, qp: TasksQParam, qc: QueryConf
+        self, *, session: AsyncSession, query_param: QueryParam
     ) -> List[m_Task]:
         """タスク照会"""
         query = (
             select(m_Task)
-            .where(*qp.sql())
-            .offset(qc.offset)
-            .limit(qc.limit)
-            .order_by(*qc.order_by)
+            .where(*query_param.filter)
+            .offset(query_param.offset)
+            .limit(query_param.limit)
+            .order_by(*query_param.sort)
         )
         result: Result = await session.execute(query)
         tasks: List[Tuple[m_Task]] = result.all()
