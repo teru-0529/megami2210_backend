@@ -21,14 +21,16 @@ from app.db.repositries.tasks import TaskRepository
 
 
 class TaskService:
-    async def create(self, *, db: AsyncSession, new_task: TaskCreate) -> TaskPublic:
+    async def create(
+        self, *, session: AsyncSession, new_task: TaskCreate
+    ) -> TaskPublic:
         """タスク登録"""
         task = task_model(**new_task.dict())
         task_repo = TaskRepository()
-        created_task: task_model = await task_repo.create(db=db, task=task)
+        created_task: task_model = await task_repo.create(session=session, task=task)
 
-        await db.commit()
-        await db.refresh(created_task)
+        await session.commit()
+        await session.refresh(created_task)
         return TaskInDB.from_orm(created_task)
 
     async def query(
@@ -38,7 +40,7 @@ class TaskService:
         sort: str,
         execute_assaignee: bool,  # TODO:
         *,
-        db: AsyncSession,
+        session: AsyncSession,
         qp: TasksQParam
     ) -> TasksQuery:
         """タスク照会"""
@@ -50,41 +52,43 @@ class TaskService:
             )
 
         task_repo = TaskRepository()
-        query_tasks: List[task_model] = await task_repo.query(db=db, qp=qp, qc=qc)
+        query_tasks: List[task_model] = await task_repo.query(
+            session=session, qp=qp, qc=qc
+        )
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
-        count: int = await task_repo.count(db=db, qp=qp)
+        count: int = await task_repo.count(session=session, qp=qp)
         return TasksQuery(tasks=tasks, count=count)
 
-    async def get_by_id(self, *, db: AsyncSession, id: int) -> TaskPublic:
+    async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク取得"""
         task_repo = TaskRepository()
-        get_task: task_model = await task_repo.get_by_id(db=db, id=id)
+        get_task: task_model = await task_repo.get_by_id(session=session, id=id)
 
         self._ck_not_found(get_task)
         return TaskInDB.from_orm(get_task)
 
     async def patch(
-        self, *, db: AsyncSession, id: int, patch_params: TaskUpdate
+        self, *, session: AsyncSession, id: int, patch_params: TaskUpdate
     ) -> TaskPublic:
         """タスク更新"""
         update_dict = patch_params.dict(exclude_unset=True)
         task_repo = TaskRepository()
         updated_task: task_model = await task_repo.update(
-            db=db, id=id, patch_params=update_dict
+            session=session, id=id, patch_params=update_dict
         )
         self._ck_not_found(updated_task)
 
-        await db.commit()
-        await db.refresh(updated_task)
+        await session.commit()
+        await session.refresh(updated_task)
         return TaskInDB.from_orm(updated_task)
 
-    async def delete(self, *, db: AsyncSession, id: int) -> TaskPublic:
+    async def delete(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク削除"""
         task_repo = TaskRepository()
-        deleted_task: task_model = await task_repo.delete(db=db, id=id)
+        deleted_task: task_model = await task_repo.delete(session=session, id=id)
         self._ck_not_found(deleted_task)
 
-        await db.commit()
+        await session.commit()
         return TaskInDB.from_orm(deleted_task)
 
     def _ck_not_found(self, task: task_model):

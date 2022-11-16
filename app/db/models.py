@@ -6,10 +6,10 @@ from sqlalchemy.ext.automap import automap_base
 from app.core.database import SyncCon
 
 con = SyncCon()
-engine = con.engine()
+s_engine = con.engine()
 
 Base = automap_base()
-Base.prepare(engine, reflect=True, schema="todo")
+Base.prepare(s_engine, reflect=True, schema="todo")
 
-# Taskテーブル
+# Taskモデル
 Task = Base.classes.tasks

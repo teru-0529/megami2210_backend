@@ -14,7 +14,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import ASYNC_DIALECT, SYNC_DIALECT, db_url
-from app.core.database import AsyncCon, SyncCon, get_db
+from app.core.database import AsyncCon, SyncCon, get_session
 
 SERVER = "testDB"
 SYNC_URL = db_url(dialect=SYNC_DIALECT, server=SERVER)
@@ -32,14 +32,14 @@ def schema() -> None:
 
 
 @pytest.fixture
-def async_db(schema) -> AsyncSession:
+def session(schema) -> AsyncSession:
     # test用非同期sessionを作成
     con = AsyncCon(url=ASYNC_URL)
     return con.session()()
 
 
 @pytest.fixture
-def sync_engine(schema) -> Engine:
+def s_engine(schema) -> Engine:
     # test用同期engineを作成
     con = SyncCon(url=SYNC_URL)
     return con.engine()
@@ -53,14 +53,14 @@ def app() -> FastAPI:
 
 
 @pytest_asyncio.fixture
-async def client(app: FastAPI, async_db: AsyncSession) -> AsyncClient:
+async def client(app: FastAPI, session: AsyncSession) -> AsyncClient:
 
     # DIを使ってFastAPIのDBの向き先をテスト用DBに変更
-    async def get_test_db():
-        async with async_db as session:
+    async def get_test_session():
+        async with session:
             yield session
 
-    app.dependency_overrides[get_db] = get_test_db
+    app.dependency_overrides[get_session] = get_test_session
 
     # テスト用に非同期HTTPクライアントを返却
     async with AsyncClient(

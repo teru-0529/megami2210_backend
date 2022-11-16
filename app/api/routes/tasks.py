@@ -15,7 +15,7 @@ from app.api.schemas.tasks import (
     p_id,
     q_exclude_asaignee,
 )
-from app.core.database import get_db
+from app.core.database import get_session
 from app.services.tasks import TaskService
 
 router = APIRouter()
@@ -32,7 +32,7 @@ async def create_task(
     request: Request,
     response: Response,
     new_task: TaskCreate = Body(...),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
     タスクの新規作成。</br>
@@ -48,7 +48,7 @@ async def create_task(
     """
 
     service = TaskService()
-    created_task = await service.create(db=db, new_task=new_task)
+    created_task = await service.create(session=session, new_task=new_task)
     response.headers["Location"] = request.url_for(
         "tasks:get-by-id", id=created_task.id
     )
@@ -68,7 +68,7 @@ async def quert_tasks(
     sort: str = q_sort,
     execute_assaignee: bool = q_exclude_asaignee,  # TODO:
     query: TasksQParam = Body(...),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
     タスク検索。</br>
@@ -95,7 +95,7 @@ async def quert_tasks(
     """
     service = TaskService()
     query_task = await service.query(
-        offset, limit, sort, execute_assaignee, db=db, qp=query
+        offset, limit, sort, execute_assaignee, session=session, qp=query
     )
     return query_task
 
@@ -116,7 +116,7 @@ async def quert_tasks(
 )
 async def get_task_by_id(
     id: int = p_id,
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
     タスクの1件取得。</br>
@@ -126,7 +126,7 @@ async def get_task_by_id(
     - **id**: タスクID[Reqired]
     """
     service = TaskService()
-    task = await service.get_by_id(db=db, id=id)
+    task = await service.get_by_id(session=session, id=id)
     return task
 
 
@@ -147,7 +147,7 @@ async def get_task_by_id(
 async def patch_task_by_id(
     id: int = p_id,
     patch_params: TaskUpdate = Body(...),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
     タスクの1件更新。</br>
@@ -165,7 +165,7 @@ async def patch_task_by_id(
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
     service = TaskService()
-    task = await service.patch(db=db, id=id, patch_params=patch_params)
+    task = await service.patch(session=session, id=id, patch_params=patch_params)
     return task
 
 
@@ -185,7 +185,7 @@ async def patch_task_by_id(
 )
 async def delete_task_by_id(
     id: int = p_id,
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
     タスクの1件削除。
@@ -196,5 +196,5 @@ async def delete_task_by_id(
 
     """
     service = TaskService()
-    task = await service.delete(db=db, id=id)
+    task = await service.delete(session=session, id=id)
     return task
