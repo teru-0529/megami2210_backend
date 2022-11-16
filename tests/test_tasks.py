@@ -21,7 +21,7 @@ from starlette.status import (
 )
 
 from app.api.schemas.tasks import TaskCreate, TaskInDB, TasksQuery, TaskUpdate
-from app.services.segment_values import TaskStatus
+from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio

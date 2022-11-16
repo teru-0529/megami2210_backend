@@ -37,7 +37,7 @@ class SyncCon:
         return create_engine(self.url, echo=echo)
 
 
-async def get_session():
+async def get_session():  # pragma: no cover
     con = AsyncCon()
-    async with con.session()() as session:  # pragma: no cover
+    async with con.session()() as session:
         yield session

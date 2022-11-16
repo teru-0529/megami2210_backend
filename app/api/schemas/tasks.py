@@ -9,7 +9,7 @@ from pydantic import Extra, Field, validator
 
 from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
 from app.db.models import Task as task_model
-from app.services.segment_values import TaskStatus
+from app.models.segment_values import TaskStatus
 
 p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
 
