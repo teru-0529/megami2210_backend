@@ -10,17 +10,15 @@ import pytest_asyncio
 from alembic.config import Config
 from fastapi import FastAPI
 from httpx import AsyncClient
-from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import ASYNC_DIALECT, SYNC_DIALECT, db_url
-from app.core.database import get_db
+from app.core.database import AsyncCon, SyncCon, get_db
 
-SETVER = "testDB"
-SYNC_URL = db_url(dialect=SYNC_DIALECT, server=SETVER)
-ASYNC_URL = db_url(dialect=ASYNC_DIALECT, server=SETVER)
+SERVER = "testDB"
+SYNC_URL = db_url(dialect=SYNC_DIALECT, server=SERVER)
+ASYNC_URL = db_url(dialect=ASYNC_DIALECT, server=SERVER)
 
 config = Config("alembic.ini")
 
@@ -35,22 +33,16 @@ def schema() -> None:
 
 @pytest.fixture
 def async_db(schema) -> AsyncSession:
-    # test用非同期engineとsessionを作成
-    async_engine = create_async_engine(ASYNC_URL, echo=True)
-    async_session = sessionmaker(
-        autocommit=False,
-        autoflush=False,
-        bind=async_engine,
-        class_=AsyncSession,
-    )
-    return async_session()
+    # test用非同期sessionを作成
+    con = AsyncCon(url=ASYNC_URL)
+    return con.session()()
 
 
 @pytest.fixture
 def sync_engine(schema) -> Engine:
     # test用同期engineを作成
-    sync_engine = create_engine(SYNC_URL, echo=True)
-    return sync_engine
+    con = SyncCon(url=SYNC_URL)
+    return con.engine()
 
 
 @pytest.fixture

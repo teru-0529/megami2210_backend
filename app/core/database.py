@@ -1,18 +1,43 @@
 #!/usr/bin/python3
 # database.py
 
-from sqlalchemy.ext.asyncio import AsyncSession  # AsyncEngine,  # FIXME:
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import ASYNC_URL
+from app.core.config import ASYNC_URL, SYNC_URL
 
-async_engine = create_async_engine(ASYNC_URL, echo=True)
-async_session = sessionmaker(
-    autocommit=False, autoflush=False, bind=async_engine, class_=AsyncSession
-)
+
+class AsyncCon:
+    url: str
+
+    def __init__(self, url: str = ASYNC_URL) -> None:
+        self.url = url
+
+    def engine(self, echo: bool = True) -> AsyncEngine:
+        return create_async_engine(self.url, echo=echo)
+
+    def session(self, echo: bool = True) -> AsyncSession:
+        return sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=self.engine(echo),
+            class_=AsyncSession,
+        )
+
+
+class SyncCon:
+    url: str
+
+    def __init__(self, url: str = SYNC_URL) -> None:
+        self.url = url
+
+    def engine(self, echo: bool = True) -> Engine:
+        return create_engine(self.url, echo=echo)
 
 
 async def get_db():
-    async with async_session() as session:  # pragma: no cover
+    con = AsyncCon()
+    async with con.session()() as session:  # pragma: no cover
         yield session
