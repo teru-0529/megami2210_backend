@@ -8,8 +8,8 @@ Create Date: 2022-10-31 07:23:41.753128
 import sqlalchemy as sa
 from alembic import op
 
-from app.db.migrations.util import timestamps
-from app.services.segment_values import TaskStatus
+from app.models.migrations.util import timestamps
+from app.models.segment_values import TaskStatus
 
 # revision identifiers, used by Alembic.
 revision = "de6f035be044"

@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 # base.py
 
-from pydantic import BaseModel, Field
 from fastapi import Query
-
+from pydantic import BaseModel, Field
 
 q_offset: int = Query(
     default=0,

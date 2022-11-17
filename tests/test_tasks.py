@@ -20,15 +20,15 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB, TasksQuery, TaskUpdate
-from app.services.segment_values import TaskStatus
+from app.api.schemas.tasks import TaskCreate, TaskInDB, TaskPublicList, TaskUpdate
+from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def tmp_task(async_db: AsyncSession) -> TaskInDB:
+async def tmp_task(session: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="tmp task",
         description="tmp task",
@@ -36,18 +36,18 @@ async def tmp_task(async_db: AsyncSession) -> TaskInDB:
         deadline=date(2022, 12, 31),
     )
     service = TaskService()
-    created_task = await service.create(db=async_db, new_task=new_task)
+    created_task = await service.create(session=session, new_task=new_task)
     return created_task
 
 
 @pytest.fixture
-def import_task(sync_engine: Engine) -> DataFrame:
+def import_task(s_engine: Engine) -> DataFrame:
     datas: DataFrame = read_csv(
         "tests/data/test_task_data.csv", encoding="utf-8", dtype={3: str}
     )
     datas.to_sql(
         name="tasks",
-        con=sync_engine,
+        con=s_engine,
         schema="todo",
         if_exists="replace",
         index=False,
@@ -367,7 +367,7 @@ class TestQueryTask:
             app.url_path_for("tasks:query"), params=param[0], data=param[1]
         )
         assert res.status_code == HTTP_200_OK
-        result = TasksQuery(**res.json())
+        result = TaskPublicList(**res.json())
         # 取得件数
         assert result.count == param[2]
         assert len(result.tasks) == param[3]

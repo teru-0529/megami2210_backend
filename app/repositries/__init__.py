@@ -1,17 +1,21 @@
 #!/usr/bin/python3
-# tasks.py
+# __init__.py
 
 from typing import List
 
 from sqlalchemy import asc, desc
+from sqlalchemy.sql.functions import FunctionElement
 
 
-class QueryConf:
+class QueryParam:
     offset: int = 0
     limit: int = 10
-    order_by: List
+    sort: List[FunctionElement]
+    filter: List[FunctionElement]
 
-    def __init__(self, columns: List[str], offset: int, limit: int, sort: str) -> None:
+    def __init__(
+        self, *, columns: List[str], offset: int, limit: int, sort: str
+    ) -> None:
         ls = sort.split(",")
         if "+id" not in ls:
             ls.append("+id")  # デフォルトのソート条件を追加 TODO:
@@ -25,6 +29,10 @@ class QueryConf:
             )
 
         ls = [(desc(v[1]) if v[0] == "-" else asc(v[1])) for v in ls]  # 符号をasc/descに変換
-        self.order_by = ls
+        self.sort = ls
         self.limit = limit
         self.offset = offset
+        self.filter = []
+
+    def append_filter(self, elem: FunctionElement) -> None:
+        self.filter.append(elem)

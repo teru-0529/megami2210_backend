@@ -9,26 +9,28 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from app.api.schemas.tasks import (
     TaskCreate,
+    TaskFilter,
     TaskInDB,
     TaskPublic,
-    TasksQParam,
-    TasksQuery,
+    TaskPublicList,
     TaskUpdate,
 )
-from app.db.models import Task as task_model
-from app.db.query_conf import QueryConf
-from app.db.repositry.tasks import TaskRepository
+from app.models import m_Task
+from app.repositries import QueryParam
+from app.repositries.tasks import TaskRepository
 
 
 class TaskService:
-    async def create(self, *, db: AsyncSession, new_task: TaskCreate) -> TaskPublic:
+    async def create(
+        self, *, session: AsyncSession, new_task: TaskCreate
+    ) -> TaskPublic:
         """タスク登録"""
-        task = task_model(**new_task.dict())
-        task_repo = TaskRepository()
-        created_task: task_model = await task_repo.create(db=db, task=task)
+        task = m_Task(**new_task.dict())
+        repo = TaskRepository()
+        created_task: m_Task = await repo.create(session=session, task=task)
 
-        await db.commit()
-        await db.refresh(created_task)
+        await session.commit()
+        await session.refresh(created_task)
         return TaskInDB.from_orm(created_task)
 
     async def query(
@@ -38,57 +40,86 @@ class TaskService:
         sort: str,
         execute_assaignee: bool,  # TODO:
         *,
-        db: AsyncSession,
-        qp: TasksQParam
-    ) -> TasksQuery:
+        session: AsyncSession,
+        filter: TaskFilter
+    ) -> TaskPublicList:
         """タスク照会"""
-        try:
-            qc = QueryConf(task_model.__table__.columns, offset, limit, sort)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
-            )
-
-        task_repo = TaskRepository()
-        query_tasks: List[task_model] = await task_repo.query(db=db, qp=qp, qc=qc)
+        query_param = self.New_QueryParam(
+            offset=offset, limit=limit, sort=sort, filter=filter
+        )
+        repo = TaskRepository()
+        query_tasks: List[m_Task] = await repo.query(
+            session=session, query_param=query_param
+        )
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
-        count: int = await task_repo.count(db=db, qp=qp)
-        return TasksQuery(tasks=tasks, count=count)
+        count: int = await repo.count(session=session, query_param=query_param)
+        return TaskPublicList(tasks=tasks, count=count)
 
-    async def get_by_id(self, *, db: AsyncSession, id: int) -> TaskPublic:
+    async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク取得"""
-        task_repo = TaskRepository()
-        get_task: task_model = await task_repo.get_by_id(db=db, id=id)
+        repo = TaskRepository()
+        task: m_Task = await repo.get_by_id(session=session, id=id)
 
-        self._ck_not_found(get_task)
-        return TaskInDB.from_orm(get_task)
+        self._ck_not_found(task)
+        return TaskInDB.from_orm(task)
 
     async def patch(
-        self, *, db: AsyncSession, id: int, patch_params: TaskUpdate
+        self, *, session: AsyncSession, id: int, patch_params: TaskUpdate
     ) -> TaskPublic:
         """タスク更新"""
         update_dict = patch_params.dict(exclude_unset=True)
-        task_repo = TaskRepository()
-        updated_task: task_model = await task_repo.update(
-            db=db, id=id, patch_params=update_dict
+        repo = TaskRepository()
+        updated_task: m_Task = await repo.update(
+            session=session, id=id, patch_params=update_dict
         )
         self._ck_not_found(updated_task)
 
-        await db.commit()
-        await db.refresh(updated_task)
+        await session.commit()
+        await session.refresh(updated_task)
         return TaskInDB.from_orm(updated_task)
 
-    async def delete(self, *, db: AsyncSession, id: int) -> TaskPublic:
+    async def delete(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク削除"""
-        task_repo = TaskRepository()
-        deleted_task: task_model = await task_repo.delete(db=db, id=id)
+        repo = TaskRepository()
+        deleted_task: m_Task = await repo.delete(session=session, id=id)
         self._ck_not_found(deleted_task)
 
-        await db.commit()
+        await session.commit()
         return TaskInDB.from_orm(deleted_task)
 
-    def _ck_not_found(self, task: task_model):
+    def _ck_not_found(self, task: m_Task):
         if task is None:
             raise HTTPException(
                 status_code=HTTP_404_NOT_FOUND, detail="指定されたidのタスクは見つかりませんでした。"
             )
+
+    def New_QueryParam(
+        self, *, offset: int, limit: int, sort: str, filter: TaskFilter
+    ) -> QueryParam:
+        try:
+            queryParm = QueryParam(
+                columns=m_Task.__table__.columns, offset=offset, limit=limit, sort=sort
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
+            )
+        if filter.title_cn is not None:
+            queryParm.append_filter(m_Task.title.contains(filter.title_cn))
+        if filter.description_cn is not None:
+            queryParm.append_filter(m_Task.description.contains(filter.description_cn))
+        if filter.asaignee_id_in is not None:
+            queryParm.append_filter(m_Task.asaignee_id.in_(filter.asaignee_id_in))
+        if filter.asaignee_id_ex is True:
+            queryParm.append_filter(m_Task.asaignee_id.is_not(None))
+        if filter.asaignee_id_ex is False:
+            queryParm.append_filter(m_Task.asaignee_id.is_(None))
+        if filter.status_in is not None:
+            queryParm.append_filter(m_Task.status.in_(filter.status_in))
+        if filter.is_significant_eq is not None:
+            queryParm.append_filter(m_Task.is_significant.is_(filter.is_significant_eq))
+        if filter.deadline_from is not None:
+            queryParm.append_filter(m_Task.deadline >= filter.deadline_from)
+        if filter.deadline_to is not None:
+            queryParm.append_filter(m_Task.deadline <= filter.deadline_to)
+        return queryParm
