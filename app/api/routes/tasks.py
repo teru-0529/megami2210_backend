@@ -8,9 +8,9 @@ from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 from app.api.schemas.base import Message, q_limit, q_offset, q_sort
 from app.api.schemas.tasks import (
     TaskCreate,
+    TaskFilter,
     TaskPublic,
-    TasksQParam,
-    TasksQuery,
+    TaskPublicList,
     TaskUpdate,
     p_id,
     q_exclude_asaignee,
@@ -57,19 +57,19 @@ async def create_task(
 
 @router.post(
     "/be-queried",
-    response_model=TasksQuery,
+    response_model=TaskPublicList,
     name="tasks:query",
     response_description="Tasks filtered by query params",
     status_code=HTTP_200_OK,
 )
-async def quert_tasks(
+async def query_tasks(
     offset: int = q_offset,
     limit: int = q_limit,
     sort: str = q_sort,
     execute_assaignee: bool = q_exclude_asaignee,  # TODO:
-    query: TasksQParam = Body(...),
+    filter: TaskFilter = Body(...),
     session: AsyncSession = Depends(get_session),
-) -> TaskPublic:
+) -> TaskPublicList:
     """
     タスク検索。</br>
     ※QUERYメソッドが提案されているが現状未実装のため、POSTメソッド、サブリソースを利用した対応
@@ -94,10 +94,10 @@ async def quert_tasks(
     - **deadline_to**: <クエリ条件> タスク期限[TO] ※4
     """
     service = TaskService()
-    query_task = await service.query(
-        offset, limit, sort, execute_assaignee, session=session, qp=query
+    tasks = await service.query(
+        offset, limit, sort, execute_assaignee, session=session, filter=filter
     )
-    return query_task
+    return tasks
 
 
 @router.get(

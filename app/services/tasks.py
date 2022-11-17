@@ -9,10 +9,10 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from app.api.schemas.tasks import (
     TaskCreate,
+    TaskFilter,
     TaskInDB,
     TaskPublic,
-    TasksQParam,
-    TasksQuery,
+    TaskPublicList,
     TaskUpdate,
 )
 from app.models import m_Task
@@ -41,11 +41,11 @@ class TaskService:
         execute_assaignee: bool,  # TODO:
         *,
         session: AsyncSession,
-        qp: TasksQParam
-    ) -> TasksQuery:
+        filter: TaskFilter
+    ) -> TaskPublicList:
         """タスク照会"""
         query_param = self.New_QueryParam(
-            offset=offset, limit=limit, sort=sort, filter=qp
+            offset=offset, limit=limit, sort=sort, filter=filter
         )
         repo = TaskRepository()
         query_tasks: List[m_Task] = await repo.query(
@@ -53,7 +53,7 @@ class TaskService:
         )
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
         count: int = await repo.count(session=session, query_param=query_param)
-        return TasksQuery(tasks=tasks, count=count)
+        return TaskPublicList(tasks=tasks, count=count)
 
     async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク取得"""
@@ -94,7 +94,7 @@ class TaskService:
             )
 
     def New_QueryParam(
-        self, *, offset: int, limit: int, sort: str, filter: TasksQParam
+        self, *, offset: int, limit: int, sort: str, filter: TaskFilter
     ) -> QueryParam:
         try:
             queryParm = QueryParam(

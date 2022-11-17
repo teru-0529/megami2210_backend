@@ -8,7 +8,6 @@ from fastapi import Path, Query
 from pydantic import Extra, Field, validator
 
 from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
-from app.models import m_Task  # FIXME:
 from app.models.segment_values import TaskStatus
 
 p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
@@ -129,11 +128,11 @@ class TaskPublic(IDModelMixin, TaskBase):
     pass
 
 
-class TasksQuery(QueryModel):
+class TaskPublicList(QueryModel):
     tasks: List[TaskPublic]
 
 
-class TasksQParam(CoreModel, extra=Extra.forbid):
+class TaskFilter(CoreModel, extra=Extra.forbid):
     title_cn: Optional[str] = q_title_cn
     description_cn: Optional[str] = q_description_cn
     asaignee_id_in: Optional[List[str]] = q_asagnee_id_in
@@ -158,25 +157,3 @@ class TasksQParam(CoreModel, extra=Extra.forbid):
         ):
             raise ValueError("[deadline_from] must faster than [deadline_to].")
         return to
-
-    def sql(self) -> List:
-        ls = []
-        if self.title_cn is not None:
-            ls.append(m_Task.title.contains(self.title_cn))
-        if self.description_cn is not None:
-            ls.append(m_Task.description.contains(self.description_cn))
-        if self.asaignee_id_in is not None:
-            ls.append(m_Task.asaignee_id.in_(self.asaignee_id_in))
-        if self.asaignee_id_ex is True:
-            ls.append(m_Task.asaignee_id.is_not(None))
-        if self.asaignee_id_ex is False:
-            ls.append(m_Task.asaignee_id.is_(None))
-        if self.status_in is not None:
-            ls.append(m_Task.status.in_(self.status_in))
-        if self.is_significant_eq is not None:
-            ls.append(m_Task.is_significant.is_(self.is_significant_eq))
-        if self.deadline_from is not None:
-            ls.append(m_Task.deadline >= self.deadline_from)
-        if self.deadline_to is not None:
-            ls.append(m_Task.deadline <= self.deadline_to)
-        return ls

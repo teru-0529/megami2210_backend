@@ -20,7 +20,7 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB, TasksQuery, TaskUpdate
+from app.api.schemas.tasks import TaskCreate, TaskInDB, TaskPublicList, TaskUpdate
 from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
@@ -367,7 +367,7 @@ class TestQueryTask:
             app.url_path_for("tasks:query"), params=param[0], data=param[1]
         )
         assert res.status_code == HTTP_200_OK
-        result = TasksQuery(**res.json())
+        result = TaskPublicList(**res.json())
         # 取得件数
         assert result.count == param[2]
         assert len(result.tasks) == param[3]
