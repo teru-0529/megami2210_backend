@@ -32,7 +32,7 @@ async def tmp_task(session: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="tmp task",
         description="tmp task",
-        asaignee_id="000",
+        asaignee_id="T-001",
         deadline=date(2022, 12, 31),
     )
     service = TaskService()
@@ -49,7 +49,7 @@ def import_task(s_engine: Engine) -> DataFrame:
         name="tasks",
         con=s_engine,
         schema="todo",
-        if_exists="replace",
+        if_exists="append",
         index=False,
         dtype={"deadline": DATE},
     )
@@ -97,7 +97,7 @@ class TestCreateTask:
         "<body:full>": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="100",
+            asaignee_id="T-001",
             is_significant=True,
             deadline=date(2050, 12, 31),
         ),
@@ -110,13 +110,13 @@ class TestCreateTask:
         "<body:is_significant>デフォルト値": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="100",
+            asaignee_id="T-001",
             deadline=date(2050, 12, 31),
         ),
         "<body:deadline>:任意入力": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="100",
+            asaignee_id="T-001",
             is_significant=False,
         ),
     }
@@ -150,7 +150,7 @@ class TestCreateTask:
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id>:桁数超過": (
-            '{"title":"dummy","asaignee_id":"0000"}',
+            '{"title":"dummy","asaignee_id":"000000"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:is_significant>:型不正": (
@@ -287,9 +287,9 @@ class TestQueryTask:
             2,
             [6, 15],
         ),
-        "<body:asaignee_id_in>:(200,300)": (
+        "<body:asaignee_id_in>:(T-002,T-001)": (
             {},
-            '{"asaignee_id_in": ["200","300"]}',
+            '{"asaignee_id_in": ["T-002","T-001"]}',
             8,
             8,
             [8, 9, 10, 11, 12, 16, 18, 19],
@@ -438,17 +438,17 @@ class TestQueryTask:
         ),
         "<body:asaignee_id_in>:要素数超過": (
             {},
-            '{"asaignee_id_in": ["100","200","300","400"]}',
+            '{"asaignee_id_in": ["T-001","T-002","T-003","T-004"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:項目長不足": (
             {},
-            '{"asaignee_id_in": ["10","200"]}',
+            '{"asaignee_id_in": ["10","T-002"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:項目長超過": (
             {},
-            '{"asaignee_id_in": ["1000","200"]}',
+            '{"asaignee_id_in": ["100000","T-002"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:型不正": (
@@ -463,7 +463,7 @@ class TestQueryTask:
         ),
         "<body:asaignee_id>:同時指定不正([IN][EXIST])": (
             {},
-            '{"asaignee_id_in": ["100","200"],"asaignee_id_ex": true}',
+            '{"asaignee_id_in": ["T-001","T-002"],"asaignee_id_ex": true}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:status_in>:要素数不足": (
@@ -530,13 +530,13 @@ class TestPatchTask:
     valid_params = {
         "<body:description>": TaskUpdate(description="test_description"),
         "<body:description>:null": TaskUpdate(description=None),
-        "<body:asaignee_id>": TaskUpdate(asaignee_id="500"),
+        "<body:asaignee_id>": TaskUpdate(asaignee_id="T-005"),
         "<body:asaignee_id>:null": TaskUpdate(asaignee_id=None),
         "<body:status>": TaskUpdate(status=TaskStatus.done),
         "<body:deadline>": TaskUpdate(deadline=date(2023, 12, 31)),
         "<body:deadline>:null": TaskUpdate(deadline=None),
         "複合ケース": TaskUpdate(
-            asaignee_id="300", status=TaskStatus.doing, deadline=date(2023, 8, 20)
+            asaignee_id="T-003", status=TaskStatus.doing, deadline=date(2023, 8, 20)
         ),
     }
 
@@ -582,7 +582,7 @@ class TestPatchTask:
         ),
         "<body:asaignee_id>:桁数超過": (
             1,
-            '{"asaignee_id":"0000"}',
+            '{"asaignee_id":"000000"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:deadline>:型不正": (

@@ -30,9 +30,11 @@ def create_updated_at_trigger() -> None:
 
 def upgrade() -> None:
     op.execute("CREATE SCHEMA todo;")
+    op.execute("CREATE SCHEMA account;")
     create_updated_at_trigger()
 
 
 def downgrade() -> None:
-    op.execute("DROP FUNCTION set_modified_at;")
-    op.execute("DROP SCHEMA todo CASCADE;")
+    op.execute("DROP FUNCTION IF EXISTS set_modified_at;")
+    op.execute("DROP SCHEMA IF EXISTS todo CASCADE;")
+    op.execute("DROP SCHEMA IF EXISTS account CASCADE;")

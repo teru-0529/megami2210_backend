@@ -24,3 +24,17 @@ class TaskStatus(Base):
   * `DOING` - 対応中
   * `DONE` - 完了
     """
+
+
+class AccountTypes(Base):
+    administrator = "ADMINISTRATOR"
+    general = "GENERAL"
+    provisional = "PROVISIONAL"
+
+    def description() -> str:
+        return """
+アカウント種類:
+  * `ADMINISTRATOR` - 管理ユーザー
+  * `GENERAL` - 一般ユーザー
+  * `PROVISIONAL` - 仮発行ユーザー
+    """

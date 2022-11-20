@@ -50,3 +50,6 @@ https://zenn.dev/rhosoi/scraps/7225a0e89cdb57
 
 #### 【pydantic】未定義フィールドの動作
 https://www.mathkuro.com/python/%E3%80%90pydantic%E3%80%91%E6%9C%AA%E5%AE%9A%E7%BE%A9%E3%83%95%E3%82%A3%E3%83%BC%E3%83%AB%E3%83%89%E3%81%AE%E5%8B%95%E4%BD%9C/
+
+#### WEBAPIのベストプラクティス
+https://qiita.com/mserizawa/items/b833e407d89abd21ee72

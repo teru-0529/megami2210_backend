@@ -27,7 +27,11 @@ f_description: Field = Field(
     title="Description", description="タスクの詳細内容", example="データベースモデルを作成する。"
 )
 f_asagnee_id: Field = Field(
-    title="AsaigneeId", description="タスクの担当者", min_length=3, max_length=3, example="100"
+    title="AsaigneeId",
+    description="タスクの担当者",
+    min_length=5,
+    max_length=5,
+    example="T-001",
 )
 f_status: Field = Field(
     title="TaskStatus", description=TaskStatus.description(), example="TODO"
@@ -53,11 +57,11 @@ q_description_cn: Field = Field(
 q_asagnee_id_in: Field = Field(
     title="AsagneeId-[IN]",
     description="<クエリ条件> タスク担当者(いずれか)",
-    example=["100", "200"],
+    example=["T-001", "T-002"],
     min_items=1,
     max_items=3,
-    min_length=3,
-    max_length=3,
+    min_length=5,
+    max_length=5,
 )
 q_asagnee_id_ex: Field = Field(
     title="AsagneeId-[EXIST]",

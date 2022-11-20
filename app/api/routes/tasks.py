@@ -56,11 +56,12 @@ async def create_task(
 
 
 @router.post(
-    "/be-queried",
+    "/queried",
     response_model=TaskPublicList,
     name="tasks:query",
     response_description="Tasks filtered by query params",
     status_code=HTTP_200_OK,
+    tags=["query"],
 )
 async def query_tasks(
     offset: int = q_offset,

@@ -15,7 +15,7 @@ from app.api.schemas.tasks import (
     TaskPublicList,
     TaskUpdate,
 )
-from app.models import m_Task
+from app.models.table_models import td_Task
 from app.repositries import QueryParam
 from app.repositries.tasks import TaskRepository
 
@@ -25,9 +25,9 @@ class TaskService:
         self, *, session: AsyncSession, new_task: TaskCreate
     ) -> TaskPublic:
         """タスク登録"""
-        task = m_Task(**new_task.dict())
+        task = td_Task(**new_task.dict())
         repo = TaskRepository()
-        created_task: m_Task = await repo.create(session=session, task=task)
+        created_task: td_Task = await repo.create(session=session, task=task)
 
         await session.commit()
         await session.refresh(created_task)
@@ -48,7 +48,7 @@ class TaskService:
             offset=offset, limit=limit, sort=sort, filter=filter
         )
         repo = TaskRepository()
-        query_tasks: List[m_Task] = await repo.query(
+        query_tasks: List[td_Task] = await repo.query(
             session=session, query_param=query_param
         )
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
@@ -58,7 +58,7 @@ class TaskService:
     async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク取得"""
         repo = TaskRepository()
-        task: m_Task = await repo.get_by_id(session=session, id=id)
+        task: td_Task = await repo.get_by_id(session=session, id=id)
 
         self._ck_not_found(task)
         return TaskInDB.from_orm(task)
@@ -69,7 +69,7 @@ class TaskService:
         """タスク更新"""
         update_dict = patch_params.dict(exclude_unset=True)
         repo = TaskRepository()
-        updated_task: m_Task = await repo.update(
+        updated_task: td_Task = await repo.update(
             session=session, id=id, patch_params=update_dict
         )
         self._ck_not_found(updated_task)
@@ -81,13 +81,13 @@ class TaskService:
     async def delete(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク削除"""
         repo = TaskRepository()
-        deleted_task: m_Task = await repo.delete(session=session, id=id)
+        deleted_task: td_Task = await repo.delete(session=session, id=id)
         self._ck_not_found(deleted_task)
 
         await session.commit()
         return TaskInDB.from_orm(deleted_task)
 
-    def _ck_not_found(self, task: m_Task):
+    def _ck_not_found(self, task: td_Task):
         if task is None:
             raise HTTPException(
                 status_code=HTTP_404_NOT_FOUND, detail="指定されたidのタスクは見つかりませんでした。"
@@ -98,28 +98,30 @@ class TaskService:
     ) -> QueryParam:
         try:
             queryParm = QueryParam(
-                columns=m_Task.__table__.columns, offset=offset, limit=limit, sort=sort
+                columns=td_Task.__table__.columns, offset=offset, limit=limit, sort=sort
             )
         except ValueError as e:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
             )
         if filter.title_cn is not None:
-            queryParm.append_filter(m_Task.title.contains(filter.title_cn))
+            queryParm.append_filter(td_Task.title.contains(filter.title_cn))
         if filter.description_cn is not None:
-            queryParm.append_filter(m_Task.description.contains(filter.description_cn))
+            queryParm.append_filter(td_Task.description.contains(filter.description_cn))
         if filter.asaignee_id_in is not None:
-            queryParm.append_filter(m_Task.asaignee_id.in_(filter.asaignee_id_in))
+            queryParm.append_filter(td_Task.asaignee_id.in_(filter.asaignee_id_in))
         if filter.asaignee_id_ex is True:
-            queryParm.append_filter(m_Task.asaignee_id.is_not(None))
+            queryParm.append_filter(td_Task.asaignee_id.is_not(None))
         if filter.asaignee_id_ex is False:
-            queryParm.append_filter(m_Task.asaignee_id.is_(None))
+            queryParm.append_filter(td_Task.asaignee_id.is_(None))
         if filter.status_in is not None:
-            queryParm.append_filter(m_Task.status.in_(filter.status_in))
+            queryParm.append_filter(td_Task.status.in_(filter.status_in))
         if filter.is_significant_eq is not None:
-            queryParm.append_filter(m_Task.is_significant.is_(filter.is_significant_eq))
+            queryParm.append_filter(
+                td_Task.is_significant.is_(filter.is_significant_eq)
+            )
         if filter.deadline_from is not None:
-            queryParm.append_filter(m_Task.deadline >= filter.deadline_from)
+            queryParm.append_filter(td_Task.deadline >= filter.deadline_from)
         if filter.deadline_to is not None:
-            queryParm.append_filter(m_Task.deadline <= filter.deadline_to)
+            queryParm.append_filter(td_Task.deadline <= filter.deadline_to)
         return queryParm

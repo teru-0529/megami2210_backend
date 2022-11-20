@@ -7,12 +7,12 @@ from sqlalchemy import func, select, table
 from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import m_Task
+from app.models.table_models import td_Task
 from app.repositries import QueryParam
 
 
 class TaskRepository:
-    async def create(self, *, session: AsyncSession, task: m_Task) -> m_Task:
+    async def create(self, *, session: AsyncSession, task: td_Task) -> td_Task:
         """タスク登録"""
         session.add(task)
         await session.flush()
@@ -20,9 +20,9 @@ class TaskRepository:
 
     async def update(
         self, *, session: AsyncSession, id: int, patch_params: dict[str, any]
-    ) -> Optional[m_Task]:
+    ) -> Optional[td_Task]:
         """タスク更新"""
-        base_task: m_Task = await self.get_by_id(
+        base_task: td_Task = await self.get_by_id(
             session=session, id=id, for_update=True
         )
         if base_task is None:
@@ -38,9 +38,9 @@ class TaskRepository:
         await session.flush()
         return base_task
 
-    async def delete(self, *, session: AsyncSession, id: int) -> Optional[m_Task]:
+    async def delete(self, *, session: AsyncSession, id: int) -> Optional[td_Task]:
         """タスク削除"""
-        base_task: m_Task = await self.get_by_id(
+        base_task: td_Task = await self.get_by_id(
             session=session, id=id, for_update=True
         )
         if base_task is None:
@@ -62,26 +62,26 @@ class TaskRepository:
 
     async def query(
         self, *, session: AsyncSession, query_param: QueryParam
-    ) -> List[m_Task]:
+    ) -> List[td_Task]:
         """タスク照会"""
         query = (
-            select(m_Task)
+            select(td_Task)
             .where(*query_param.filter)
             .offset(query_param.offset)
             .limit(query_param.limit)
             .order_by(*query_param.sort)
         )
         result: Result = await session.execute(query)
-        tasks: List[Tuple[m_Task]] = result.all()
+        tasks: List[Tuple[td_Task]] = result.all()
         return [tp_task[0] for tp_task in tasks]
 
     async def get_by_id(
         self, *, session: AsyncSession, id: int, for_update: bool = False
-    ) -> Optional[m_Task]:
+    ) -> Optional[td_Task]:
         """タスク取得"""
-        query = select(m_Task).filter(m_Task.id == id)
+        query = select(td_Task).filter(td_Task.id == id)
         if for_update:
             query = query.with_for_update()
         result: Result = await session.execute(query)
-        task: Optional[Tuple[m_Task]] = result.first()
+        task: Optional[Tuple[td_Task]] = result.first()
         return task[0] if task else None
