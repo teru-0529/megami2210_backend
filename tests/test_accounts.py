@@ -42,6 +42,12 @@ class TestRouteExists:
         except NoMatchFound:
             pytest.fail("route not exist")
 
+    async def test_get_route(self, app: FastAPI, client: AsyncClient) -> None:
+        try:
+            await client.get(app.url_path_for("accounts:get-by-id", id="T-001"))
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestCreate:
@@ -213,3 +219,45 @@ class TestCreate:
             data=param[1],
         )
         assert res.status_code == param[2]
+
+
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestGet:
+    async def test_ok_case(
+        self, app: FastAPI, client: AsyncClient, tmp_account: UserPublic
+    ) -> None:
+
+        res = await client.get(
+            app.url_path_for("accounts:get-by-id", id=tmp_account.account_id)
+        )
+        assert res.status_code == HTTP_200_OK
+        get_account = UserPublic(**res.json())
+        assert get_account == tmp_account
+
+    # 異常ケースパラメータ
+    invalid_params = {
+        "<path:id>:桁数不足": (
+            "00",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:桁数超過": (
+            "000000",
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<path:id>:None": (
+            None,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_params.values()), ids=list(invalid_params.keys())
+    )
+    async def test_ng_case(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        param: tuple[str, int],
+    ) -> None:
+        res = await client.get(app.url_path_for("accounts:get-by-id", id=param[0]))
+        assert res.status_code == param[1]

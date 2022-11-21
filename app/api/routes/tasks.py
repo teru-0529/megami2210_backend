@@ -122,7 +122,7 @@ async def get_task_by_id(
     session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
-    タスクの1件取得。</br>
+    タスク1件の取得。</br>
 
     [PATH]
 

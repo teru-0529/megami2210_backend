@@ -3,7 +3,7 @@
 
 from typing import Optional
 
-from pydantic import Extra, Field, EmailStr, validator
+from pydantic import Extra, Field, EmailStr
 from fastapi import Path
 
 from app.api.schemas.base import CoreModel
@@ -47,16 +47,6 @@ f_is_active: Field = Field(
 f_verified_email: Field = Field(
     title="VerifiedEmail", description="メール疎通確認済みの場合にTrue", example=True
 )
-
-
-class UserAccountId(CoreModel):
-    account_id: str = p_account_id
-
-    @validator("account_id")
-    def check_max_length(cls, v):
-        if len(v) != 5:
-            raise ValueError("Must be 5 characters.")
-        return v
 
 
 class UserBase(CoreModel):
