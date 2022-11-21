@@ -40,10 +40,10 @@ async def create_task(
 
     [BODY]
 
-    - **title**: タスクの名称[Reqired]
+    - **title**: タスクの名称[reqired]
     - **description**: タスクの詳細内容
     - **asaignee_id**: タスクの担当者
-    - **is_significant**: 重要タスクの場合にTrue[Default=false]
+    - **is_significant**: 重要タスクの場合にTrue[default=false]
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
 
@@ -77,11 +77,11 @@ async def query_tasks(
 
     [QUERY]
 
-    - **offset**: 結果抽出時のオフセット値[Default=0]
-    - **limit**: 結果抽出時の最大件数[Default=10] ※1システム制限として最大1000件まで指定可能
-    - **sort**: ソートキー[Default=+id] ※2[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
+    - **offset**: 結果抽出時のオフセット値[default=0]
+    - **limit**: 結果抽出時の最大件数[default=10] ※1システム制限として最大1000件まで指定可能
+    - **sort**: ソートキー[default=+id] ※2[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
         - 指定可能キー: `id`, `title`, `description`, `asaignee_id`, `status`, `is_significant`, `deadline`
-    - **exclude_asaignee**: 担当者情報の詳細情報をレスポンスから除外する場合にTrue[Default=false]
+    - **exclude_asaignee**: 担当者情報の詳細情報をレスポンスから除外する場合にTrue[default=false]
 
     [BODY]
 
@@ -110,7 +110,9 @@ async def query_tasks(
         404: {
             "model": Message,
             "description": "The task was not found",
-            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
         },
         200: {"model": TaskPublic, "description": "Task requested by ID"},
     },
@@ -124,7 +126,7 @@ async def get_task_by_id(
 
     [PATH]
 
-    - **id**: タスクID[Reqired]
+    - **id**: タスクID[reqired]
     """
     service = TaskService()
     task = await service.get_by_id(session=session, id=id)
@@ -140,7 +142,9 @@ async def get_task_by_id(
         404: {
             "model": Message,
             "description": "The task was not found",
-            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
         },
         200: {"model": TaskPublic, "description": "Task patched by ID"},
     },
@@ -156,7 +160,7 @@ async def patch_task_by_id(
 
     [PATH]
 
-    - **id**: タスクID[Reqired]
+    - **id**: タスクID[reqired]
 
     [BODY]
 
@@ -179,7 +183,9 @@ async def patch_task_by_id(
         404: {
             "model": Message,
             "description": "The task was not found",
-            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
         },
         200: {"model": TaskPublic, "description": "Task deleted by ID"},
     },
@@ -193,7 +199,7 @@ async def delete_task_by_id(
 
     [PATH]
 
-    - **id**: タスクID[Reqired]
+    - **id**: タスクID[reqired]
 
     """
     service = TaskService()

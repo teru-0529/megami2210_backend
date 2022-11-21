@@ -25,6 +25,7 @@ from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
+is_regression = True
 
 
 @pytest_asyncio.fixture
@@ -56,41 +57,41 @@ def import_task(s_engine: Engine) -> DataFrame:
     return datas
 
 
-# @pytest.mark.skip
-class TestTasksRoutes:
-    async def test_create_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestRouteExists:
+    async def test_create_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.post(app.url_path_for("tasks:create"), json={})
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_get_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_get_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:get-by-id", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_query_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_query_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:query"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_patch_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_patch_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:patch", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_delete_route_exist(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_delete_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:delete", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
 
 
-# @pytest.mark.skip
-class TestCreateTask:
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestCreate:
 
     # 正常ケースパラメータ
     valid_params = {
@@ -138,6 +139,7 @@ class TestCreateTask:
         created_task = TaskCreate(**dict)
         assert created_task == new_task
 
+    # 異常ケースパラメータ
     invalid_params = {
         "<body:None>": ("{}", HTTP_422_UNPROCESSABLE_ENTITY),
         "<body:title>:必須": ('{"description":"dummy"}', HTTP_422_UNPROCESSABLE_ENTITY),
@@ -187,8 +189,8 @@ class TestCreateTask:
         assert res.status_code == param[1]
 
 
-# @pytest.mark.skip
-class TestGetTask:
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestGet:
     async def test_ok_case(
         self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
     ) -> None:
@@ -225,8 +227,8 @@ class TestGetTask:
         assert res.status_code == param[1]
 
 
-# @pytest.mark.skip
-class TestQueryTask:
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestQuery:
 
     # 正常ケースパラメータ
     valid_params = {
@@ -523,8 +525,8 @@ class TestQueryTask:
         assert res.status_code == param[2]
 
 
-# @pytest.mark.skip
-class TestPatchTask:
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestPatch:
 
     # 正常ケースパラメータ
     valid_params = {
@@ -585,6 +587,16 @@ class TestPatchTask:
             '{"asaignee_id":"000000"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
+        "<body:status>:区分値外": (
+            1,
+            '{"status":"NO_TYPE"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:status>:None": (
+            1,
+            '{"status":None}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
         "<body:deadline>:型不正": (
             1,
             '{"deadline":10}',
@@ -623,8 +635,8 @@ class TestPatchTask:
         assert res.status_code == param[2]
 
 
-# @pytest.mark.skip
-class TestDeleteTask:
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestDelete:
     async def test_ok_case(
         self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
     ) -> None:

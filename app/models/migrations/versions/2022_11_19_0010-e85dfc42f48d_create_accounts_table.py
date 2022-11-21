@@ -35,7 +35,7 @@ def create_profiles_table() -> None:
             "nickname",
             sa.String(20),
             unique=True,
-            nullable=False,
+            nullable=True,
             index=True,
             comment="ニックネーム",
         ),
@@ -55,9 +55,9 @@ def create_profiles_table() -> None:
     op.bulk_insert(
         profiles_table,
         [
-            {"account_id": "T-001", "user_name": "佐藤晃章", "nickname": "てるあき"},
-            {"account_id": "T-002", "user_name": "佐藤陽子", "nickname": "ようこ"},
-            {"account_id": "T-003", "user_name": "佐藤拓弥", "nickname": "たくみ"},
+            {"account_id": "T-901", "user_name": "西郷隆盛", "nickname": None},
+            {"account_id": "T-902", "user_name": "木戸孝允", "nickname": "桂小五郎"},
+            {"account_id": "T-903", "user_name": "大久保利通", "nickname": None},
         ],
     )
 
@@ -86,8 +86,8 @@ def create_authes_table() -> None:
             comment="初期パスワード変更済み",
         ),
         sa.Column(
-            "accopunt_type",
-            sa.Enum(*AccountTypes.list(), name="accopunt_type", schema="account"),
+            "account_type",
+            sa.Enum(*AccountTypes.list(), name="account_type", schema="account"),
             nullable=False,
             server_default=AccountTypes.general,
             index=True,
@@ -121,31 +121,31 @@ def create_authes_table() -> None:
         authes_table,
         [
             {
-                "account_id": "T-001",
-                "email": "teruaki@sato.com",
+                "account_id": "T-901",
+                "email": "saigo@bakumatsu.com",
                 "verified_email": True,
                 "solt": "100",
                 "password": "password",
                 "is_active": True,
-                "accopunt_type": AccountTypes.administrator,
+                "account_type": AccountTypes.administrator,
             },
             {
-                "account_id": "T-002",
-                "email": "yoko@sato.com",
+                "account_id": "T-902",
+                "email": "kido@bakumatsu.com",
                 "verified_email": False,
                 "solt": "100",
                 "password": "password",
                 "is_active": True,
-                "accopunt_type": AccountTypes.general,
+                "account_type": AccountTypes.general,
             },
             {
-                "account_id": "T-003",
-                "email": "takumi@sato.com",
+                "account_id": "T-903",
+                "email": "okubo@bakumatsu.com",
                 "verified_email": False,
                 "solt": "100",
                 "password": "password",
                 "is_active": True,
-                "accopunt_type": AccountTypes.general,
+                "account_type": AccountTypes.general,
             },
         ],
     )

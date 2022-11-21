@@ -39,7 +39,7 @@ class IDModelMixin(BaseModel):
 
 
 class Message(BaseModel):
-    message: str = Field(title="message", description="メッセージ", example="サーバーエラーです。")
+    detail: str = Field(title="detail", description="メッセージ", example="サーバーエラーです。")
 
 
 class QueryModel(BaseModel):

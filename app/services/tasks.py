@@ -90,7 +90,8 @@ class TaskService:
     def _ck_not_found(self, task: td_Task):
         if task is None:
             raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND, detail="指定されたidのタスクは見つかりませんでした。"
+                status_code=HTTP_404_NOT_FOUND,
+                detail="Task resource not found by specified Id.",
             )
 
     def New_QueryParam(

@@ -10,7 +10,7 @@ from pydantic import Extra, Field, validator
 from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
 from app.models.segment_values import TaskStatus
 
-p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)
+p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)  # FIXME: p_task_id
 
 q_exclude_asaignee: bool = Query(  # TODO:
     default=False,
@@ -34,7 +34,7 @@ f_asagnee_id: Field = Field(
     example="T-001",
 )
 f_status: Field = Field(
-    title="TaskStatus", description=TaskStatus.description(), example="TODO"
+    title="TaskStatus", description=TaskStatus.description(), example=TaskStatus.todo
 )
 f_is_significant: Field = Field(
     default=False, title="IsSignificant", description="重要タスクの場合にTrue", example=True
