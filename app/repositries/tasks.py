@@ -10,13 +10,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.table_models import td_Task
 from app.repositries import QueryParam
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class TaskRepository:
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def create(self, *, session: AsyncSession, task: td_Task) -> td_Task:
         """タスク登録"""
         session.add(task)
         await session.flush()
         return task
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def update(
         self, *, session: AsyncSession, id: int, patch_params: dict[str, any]
@@ -38,6 +45,8 @@ class TaskRepository:
         await session.flush()
         return base_task
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def delete(self, *, session: AsyncSession, id: int) -> Optional[td_Task]:
         """タスク削除"""
         base_task: td_Task = await self.get_by_id(
@@ -50,6 +59,8 @@ class TaskRepository:
         await session.flush()
         return base_task
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def count(self, *, session: AsyncSession, query_param: QueryParam) -> int:
         """タスク件数取得"""
         query = select(func.count())
@@ -59,6 +70,8 @@ class TaskRepository:
             query = query.select_from(table("tasks", schema="todo"))
         result: Result = await session.execute(query)
         return result.scalar()
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def query(
         self, *, session: AsyncSession, query_param: QueryParam
@@ -74,6 +87,8 @@ class TaskRepository:
         result: Result = await session.execute(query)
         tasks: List[Tuple[td_Task]] = result.all()
         return [tp_task[0] for tp_task in tasks]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def get_by_id(
         self, *, session: AsyncSession, id: int, for_update: bool = False

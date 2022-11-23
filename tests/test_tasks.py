@@ -25,7 +25,7 @@ from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
-is_regression = True
+is_regression = False
 
 
 @pytest_asyncio.fixture
@@ -39,6 +39,9 @@ async def tmp_task(session: AsyncSession) -> TaskInDB:
     service = TaskService()
     created_task = await service.create(session=session, new_task=new_task)
     return created_task
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @pytest.fixture
@@ -55,6 +58,9 @@ def import_task(s_engine: Engine) -> DataFrame:
         dtype={"deadline": DATE},
     )
     return datas
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
@@ -88,6 +94,9 @@ class TestRouteExists:
             await client.get(app.url_path_for("tasks:delete", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
@@ -139,6 +148,8 @@ class TestCreate:
         created_task = TaskCreate(**dict)
         assert created_task == new_task
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     # 異常ケースパラメータ
     invalid_params = {
         "<body:None>": ("{}", HTTP_422_UNPROCESSABLE_ENTITY),
@@ -171,6 +182,10 @@ class TestCreate:
             '{"title":"dummy","dummy":"dummy"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
+        "<body>:None": (
+            None,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
     }
 
     @pytest.mark.parametrize(
@@ -189,6 +204,9 @@ class TestCreate:
         assert res.status_code == param[1]
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
     async def test_ok_case(
@@ -200,9 +218,11 @@ class TestGet:
         get_task = TaskInDB(**res.json())
         assert get_task == tmp_task
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     # 異常ケースパラメータ
     invalid_params = {
-        "<path:id>:範囲外(500)": (500, HTTP_404_NOT_FOUND),
+        "<path:id>:存在しない": (500, HTTP_404_NOT_FOUND),
         "<path:id>:範囲外(-1)": (
             -1,
             HTTP_422_UNPROCESSABLE_ENTITY,
@@ -225,6 +245,9 @@ class TestGet:
     ) -> None:
         res = await client.get(app.url_path_for("tasks:get-by-id", id=param[0]))
         assert res.status_code == param[1]
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
@@ -376,6 +399,8 @@ class TestQuery:
         ids = [task.id for task in result.tasks]
         assert ids == param[4]
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     # 異常ケースパラメータ
     invalid_params = {
         "<query:limit>:範囲外(2000)": (
@@ -508,6 +533,11 @@ class TestQuery:
             '{"dummy":"dummy"}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
+        "<body>:None": (
+            {},
+            None,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
     }
 
     @pytest.mark.parametrize(
@@ -523,6 +553,9 @@ class TestQuery:
             app.url_path_for("tasks:query"), params=param[0], data=param[1]
         )
         assert res.status_code == param[2]
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
@@ -563,9 +596,11 @@ class TestPatch:
         expected = tmp_task.copy(update=update_dict)
         assert updated_task == expected
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     # 異常ケースパラメータ
     invalid_params = {
-        "<path:id>:範囲外(500)": (500, "{}", HTTP_404_NOT_FOUND),
+        "<path:id>:存在しない": (500, "{}", HTTP_404_NOT_FOUND),
         "<path:id>:範囲外(-1)": (
             -1,
             "{}",
@@ -617,6 +652,11 @@ class TestPatch:
             '{"is_significant":true}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
+        "<body>:None": (
+            1,
+            None,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
     }
 
     @pytest.mark.parametrize(
@@ -635,6 +675,9 @@ class TestPatch:
         assert res.status_code == param[2]
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
     async def test_ok_case(
@@ -650,9 +693,11 @@ class TestDelete:
         res = await client.get(app.url_path_for("tasks:get-by-id", id=tmp_task.id))
         assert res.status_code == HTTP_404_NOT_FOUND
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     # 異常ケースパラメータ
     invalid_params = {
-        "<path:id>:範囲外(500)": (500, HTTP_404_NOT_FOUND),
+        "<path:id>:存在しない": (500, HTTP_404_NOT_FOUND),
         "<path:id>:範囲外(-1)": (
             -1,
             HTTP_422_UNPROCESSABLE_ENTITY,

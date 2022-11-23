@@ -8,6 +8,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import ASYNC_URL, SYNC_URL
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class AsyncCon:
     url: str
@@ -27,6 +29,9 @@ class AsyncCon:
         )
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class SyncCon:
     url: str
 
@@ -35,6 +40,9 @@ class SyncCon:
 
     def engine(self, echo: bool = True) -> Engine:
         return create_engine(self.url, echo=echo)
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 async def get_session():  # pragma: no cover

@@ -10,6 +10,8 @@ from pydantic import Extra, Field, validator
 from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
 from app.models.segment_values import TaskStatus
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 p_id: int = Path(title="ID", description="タスクID", ge=1, example=10)  # FIXME: p_task_id
 
 q_exclude_asaignee: bool = Query(  # TODO:
@@ -18,7 +20,6 @@ q_exclude_asaignee: bool = Query(  # TODO:
     description="担当者情報の詳細情報をレスポンスから除外する場合にTrue",
     example=True,
 )
-
 
 f_title: Field = Field(
     title="TaskTitle", description="タスクの名称", example="create db model", max_length=30
@@ -84,6 +85,8 @@ q_deadline_to: Field = Field(
     title="Deadline-[TO]", description="<クエリ条件> タスク期限(TO)", example="2022-11-30"
 )
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class TaskBase(CoreModel):
     title: str = f_title
@@ -92,6 +95,9 @@ class TaskBase(CoreModel):
     status: TaskStatus = f_status
     is_significant: bool = f_is_significant
     deadline: Optional[date] = f_deadline
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class TaskCreate(CoreModel, extra=Extra.forbid):
@@ -109,6 +115,9 @@ class TaskCreate(CoreModel, extra=Extra.forbid):
         return val
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class TaskUpdate(CoreModel, extra=Extra.forbid):
     description: Optional[str] = f_description
     asaignee_id: Optional[str] = f_asagnee_id
@@ -123,17 +132,29 @@ class TaskUpdate(CoreModel, extra=Extra.forbid):
         return val
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class TaskInDB(IDModelMixin, TaskBase):
     class Config:
         orm_mode = True
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class TaskPublic(IDModelMixin, TaskBase):
     pass
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class TaskPublicList(QueryModel):
     tasks: List[TaskPublic]
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class TaskFilter(CoreModel, extra=Extra.forbid):

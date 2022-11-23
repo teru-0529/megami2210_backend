@@ -9,6 +9,8 @@ from fastapi import Path
 from app.api.schemas.base import CoreModel
 from app.models.segment_values import AccountTypes
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 p_account_id: str = Path(
     title="AccountId",
     description="アカウントID",
@@ -48,6 +50,8 @@ f_verified_email: Field = Field(
     title="VerifiedEmail", description="メール疎通確認済みの場合にTrue", example=True
 )
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class UserBase(CoreModel):
     account_id: str = f_account_id
@@ -59,10 +63,16 @@ class UserBase(CoreModel):
     verified_email: bool = f_verified_email
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class UserCreate(CoreModel, extra=Extra.forbid):
     user_name: str = f_user_name
     email: EmailStr = f_email
     account_type: Optional[AccountTypes] = f_account_type
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class UserAuthorize(CoreModel, extra=Extra.forbid):
@@ -70,19 +80,31 @@ class UserAuthorize(CoreModel, extra=Extra.forbid):
     password: str = f_password
 
 
-class UserUpdate(CoreModel, extra=Extra.forbid):
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class UserProfileUpdate(CoreModel, extra=Extra.forbid):
     nickname: Optional[str] = f_nickname
-    email: Optional[EmailStr] = f_email
+    email: EmailStr = f_email
 
 
-class UserUpdateByAdmin(CoreModel, extra=Extra.forbid):
-    user_name: Optional[str] = f_user_name
-    account_type: Optional[AccountTypes] = f_account_type
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class UserBaseProfileUpdate(CoreModel, extra=Extra.forbid):
+    user_name: str = f_user_name
+    account_type: AccountTypes = f_account_type
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class UserInDB(UserBase):
     class Config:
         orm_mode = True
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class UserPublic(UserBase):

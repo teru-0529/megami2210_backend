@@ -20,6 +20,8 @@ from app.services.tasks import TaskService
 
 router = APIRouter()
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 @router.post(
     "/",
@@ -53,6 +55,9 @@ async def create_task(
         "tasks:get-by-id", id=created_task.id
     )
     return created_task
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @router.post(
@@ -101,9 +106,11 @@ async def query_tasks(
     return tasks
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.get(
     "/{id}/",
-    response_model=TaskPublic,
     name="tasks:get-by-id",
     status_code=HTTP_200_OK,
     responses={
@@ -133,9 +140,11 @@ async def get_task_by_id(
     return task
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.patch(
     "/{id}/",
-    response_model=TaskPublic,
     name="tasks:patch",
     status_code=HTTP_200_OK,
     responses={
@@ -149,13 +158,13 @@ async def get_task_by_id(
         200: {"model": TaskPublic, "description": "Task patched by ID"},
     },
 )
-async def patch_task_by_id(
+async def patch_task(
     id: int = p_id,
     patch_params: TaskUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
-    タスクの1件更新。</br>
+    タスク1件の更新。</br>
     **title**、**is_significant** は変更不可:
 
     [PATH]
@@ -174,9 +183,11 @@ async def patch_task_by_id(
     return task
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.delete(
     "/{id}/",
-    response_model=TaskPublic,
     name="tasks:delete",
     status_code=HTTP_200_OK,
     responses={
@@ -190,12 +201,12 @@ async def patch_task_by_id(
         200: {"model": TaskPublic, "description": "Task deleted by ID"},
     },
 )
-async def delete_task_by_id(
+async def delete_task(
     id: int = p_id,
     session: AsyncSession = Depends(get_session),
 ) -> TaskPublic:
     """
-    タスクの1件削除。
+    タスク1件の削除。
 
     [PATH]
 

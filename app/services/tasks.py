@@ -19,8 +19,13 @@ from app.models.table_models import td_Task
 from app.repositries import QueryParam
 from app.repositries.tasks import TaskRepository
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class TaskService:
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def create(
         self, *, session: AsyncSession, new_task: TaskCreate
     ) -> TaskPublic:
@@ -32,6 +37,8 @@ class TaskService:
         await session.commit()
         await session.refresh(created_task)
         return TaskInDB.from_orm(created_task)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def query(
         self,
@@ -55,6 +62,8 @@ class TaskService:
         count: int = await repo.count(session=session, query_param=query_param)
         return TaskPublicList(tasks=tasks, count=count)
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク取得"""
         repo = TaskRepository()
@@ -62,6 +71,8 @@ class TaskService:
 
         self._ck_not_found(task)
         return TaskInDB.from_orm(task)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def patch(
         self, *, session: AsyncSession, id: int, patch_params: TaskUpdate
@@ -78,6 +89,8 @@ class TaskService:
         await session.refresh(updated_task)
         return TaskInDB.from_orm(updated_task)
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def delete(self, *, session: AsyncSession, id: int) -> TaskPublic:
         """タスク削除"""
         repo = TaskRepository()
@@ -87,6 +100,8 @@ class TaskService:
         await session.commit()
         return TaskInDB.from_orm(deleted_task)
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]noneチェック
     def _ck_not_found(self, task: td_Task):
         if task is None:
             raise HTTPException(
@@ -94,6 +109,8 @@ class TaskService:
                 detail="Task resource not found by specified Id.",
             )
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]クエリパラメータクラスの作成
     def New_QueryParam(
         self, *, offset: int, limit: int, sort: str, filter: TaskFilter
     ) -> QueryParam:

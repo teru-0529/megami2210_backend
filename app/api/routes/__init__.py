@@ -9,6 +9,8 @@ from app.api.schemas.base import Message
 
 router = APIRouter()
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 @router.get(
     "/health",
@@ -31,6 +33,8 @@ async def health_check() -> dict:  # pragma: no cover
     ok = {"detail": "APIサーバーは正常に稼働しています。"}
     return ok
 
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 router.include_router(task_router, prefix="/tasks", tags=["tasks"])
 router.include_router(account_raoute, prefix="/accounts", tags=["accounts"])

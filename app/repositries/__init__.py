@@ -6,12 +6,16 @@ from typing import List
 from sqlalchemy import asc, desc
 from sqlalchemy.sql.functions import FunctionElement
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class QueryParam:
     offset: int = 0
     limit: int = 10
     sort: List[FunctionElement]
     filter: List[FunctionElement]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     def __init__(
         self, *, columns: List[str], offset: int, limit: int, sort: str
@@ -33,6 +37,8 @@ class QueryParam:
         self.limit = limit
         self.offset = offset
         self.filter = []
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     def append_filter(self, elem: FunctionElement) -> None:
         self.filter.append(elem)

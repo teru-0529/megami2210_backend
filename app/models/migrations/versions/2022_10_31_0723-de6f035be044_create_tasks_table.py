@@ -18,6 +18,9 @@ branch_labels = None
 depends_on = None
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 def create_tasks_table() -> None:
     op.create_table(
         "tasks",
@@ -58,6 +61,9 @@ def create_tasks_table() -> None:
         EXECUTE PROCEDURE set_modified_at();
         """
     )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 def upgrade() -> None:

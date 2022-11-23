@@ -5,12 +5,16 @@ from app.core.database import SyncCon
 con = SyncCon()
 s_engine = con.engine()
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 # todoスキーマ
 BaseTD = automap_base()
 BaseTD.prepare(s_engine, reflect=True, schema="todo")
 
 # Taskモデル
 td_Task = BaseTD.classes.tasks
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 # accountスキーマ
 BaseAC = automap_base()
