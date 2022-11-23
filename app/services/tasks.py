@@ -19,6 +19,12 @@ from app.models.table_models import td_Task
 from app.repositries import QueryParam
 from app.repositries.tasks import TaskRepository
 
+# 対象無し例外
+not_found_exception: HTTPException = HTTPException(
+    status_code=HTTP_404_NOT_FOUND,
+    detail="Task resource not found by specified Id.",
+)
+
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
@@ -68,8 +74,9 @@ class TaskService:
         """タスク取得"""
         repo = TaskRepository()
         task: td_Task = await repo.get_by_id(session=session, id=id)
+        if not task:
+            raise not_found_exception
 
-        self._ck_not_found(task)
         return TaskInDB.from_orm(task)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -83,7 +90,9 @@ class TaskService:
         updated_task: td_Task = await repo.update(
             session=session, id=id, patch_params=update_dict
         )
-        self._ck_not_found(updated_task)
+        if not updated_task:
+            await session.rollback()
+            raise not_found_exception
 
         await session.commit()
         await session.refresh(updated_task)
@@ -95,19 +104,12 @@ class TaskService:
         """タスク削除"""
         repo = TaskRepository()
         deleted_task: td_Task = await repo.delete(session=session, id=id)
-        self._ck_not_found(deleted_task)
+        if not deleted_task:
+            await session.rollback()
+            raise not_found_exception
 
         await session.commit()
         return TaskInDB.from_orm(deleted_task)
-
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # [INNER]noneチェック
-    def _ck_not_found(self, task: td_Task):
-        if task is None:
-            raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND,
-                detail="Task resource not found by specified Id.",
-            )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER]クエリパラメータクラスの作成

@@ -53,3 +53,12 @@ https://www.mathkuro.com/python/%E3%80%90pydantic%E3%80%91%E6%9C%AA%E5%AE%9A%E7%
 
 #### WEBAPIのベストプラクティス
 https://qiita.com/mserizawa/items/b833e407d89abd21ee72
+
+#### joinサンプル
+```
+   query = (
+      select(ac_Profile, ac_Auth)
+      .join(ac_Auth, ac_Profile.account_id == ac_Auth.account_id)
+      .filter(ac_Profile.account_id == id)
+   )
+```

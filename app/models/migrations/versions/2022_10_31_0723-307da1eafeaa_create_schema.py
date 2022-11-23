@@ -41,6 +41,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP FUNCTION IF EXISTS set_modified_at;")
+    op.execute("DROP FUNCTION IF EXISTS set_modified_at CASCADE;")
     op.execute("DROP SCHEMA IF EXISTS todo CASCADE;")
     op.execute("DROP SCHEMA IF EXISTS account CASCADE;")

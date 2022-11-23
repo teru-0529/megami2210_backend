@@ -10,21 +10,26 @@ from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
     HTTP_400_BAD_REQUEST,
-    HTTP_422_UNPROCESSABLE_ENTITY,
     HTTP_404_NOT_FOUND,
+    HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.accounts import UserCreate, UserPublic
+from app.api.schemas.accounts import (
+    AccountCreate,
+    ProfileBaseUpdate,
+    ProfileInDB,
+    ProfileUpdate,
+)
 from app.models.segment_values import AccountTypes
 from app.services.accounts import AccountService
 
 pytestmark = pytest.mark.asyncio
-is_regression = False
+is_regression = True
 
 
 @pytest_asyncio.fixture
-async def fixed_account(session: AsyncSession) -> UserPublic:
-    new_user = UserCreate(
+async def fixed_account(session: AsyncSession) -> ProfileInDB:
+    new_user = AccountCreate(
         user_name="織田信長",
         email="oda@sengoku.com",
     )
@@ -36,8 +41,8 @@ async def fixed_account(session: AsyncSession) -> UserPublic:
 
 
 @pytest_asyncio.fixture
-async def tmp_account(session: AsyncSession) -> UserPublic:
-    new_user = UserCreate(
+async def tmp_account(session: AsyncSession) -> ProfileInDB:
+    new_user = AccountCreate(
         user_name="徳川家康",
         email="tokugawa@sengoku.com",
     )
@@ -101,7 +106,7 @@ class TestCreate:
     valid_params = {
         "<body:full>": (
             "T-001",
-            UserCreate(
+            AccountCreate(
                 user_name="織田信長",
                 email="oda@sengoku.com",
                 account_type=AccountTypes.administrator,
@@ -109,7 +114,7 @@ class TestCreate:
         ),
         "<body:account_type>:任意入力": (
             "T-001",
-            UserCreate(
+            AccountCreate(
                 user_name="織田信長",
                 email="oda@sengoku.com",
             ),
@@ -123,7 +128,7 @@ class TestCreate:
         self,
         app: FastAPI,
         client: AsyncClient,
-        param: tuple[str, UserCreate],
+        param: tuple[str, AccountCreate],
     ) -> None:
 
         res = await client.put(
@@ -132,20 +137,19 @@ class TestCreate:
         )
 
         assert res.status_code == HTTP_200_OK
-        dict = res.json()
-        assert dict["account_id"] == param[0]
-        assert dict["user_name"] == param[1].user_name
-        assert dict["email"] == param[1].email
-        assert (dict["account_type"] == param[1].account_type) or (
-            dict["account_type"] == AccountTypes.general
-            and param[1].account_type is None
-        )
+        created_account = ProfileInDB(**res.json())
+        assert created_account.account_id == param[0]
+        assert created_account.user_name == param[1].user_name
+        assert created_account.email == param[1].email
+        assert created_account.account_type == param[1].account_type
+        assert created_account.is_active is False
+        assert created_account.verified_email is False
+        assert created_account.nickname is None
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
     invalid_params = {
-        "<path:id>:存在しない": ("T-XXX", "{}", HTTP_404_NOT_FOUND),
         "<path:id>:桁数不足": (
             "00",
             '{"user_name":"武田信玄","email":"shingen@sengoku.com"}',
@@ -267,7 +271,7 @@ class TestCreate:
         app: FastAPI,
         client: AsyncClient,
         param: tuple[str, str, int],
-        fixed_account: UserPublic,
+        fixed_account: ProfileInDB,
     ) -> None:
         res = await client.put(
             app.url_path_for("accounts:create", id=param[0]),
@@ -282,15 +286,15 @@ class TestCreate:
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
     async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, tmp_account: UserPublic
+        self, app: FastAPI, client: AsyncClient, tmp_account: ProfileInDB
     ) -> None:
 
         res = await client.get(
             app.url_path_for("accounts:get-by-id", id=tmp_account.account_id)
         )
         assert res.status_code == HTTP_200_OK
-        get_account = UserPublic(**res.json())
-        assert get_account == tmp_account
+        profile = ProfileInDB(**res.json())
+        assert profile == tmp_account
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -326,15 +330,46 @@ class TestGet:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
+# @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatchProfile:
     # FIXME:正常ケース
+    # 正常ケースパラメータ
+    valid_params = {
+        "<body:nickname>": ProfileUpdate(nickname="将軍"),
+        "<body:email>": ProfileUpdate(email="shogun@edobakufu.com"),
+        "複合ケース": ProfileUpdate(nickname="東証大権現", email="daigongen@nikko.com"),
+    }
+
+    @pytest.mark.parametrize(
+        "update_params", list(valid_params.values()), ids=list(valid_params.keys())
+    )
+    async def test_ok_case(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        tmp_account: ProfileInDB,
+        update_params: ProfileUpdate,
+    ) -> None:
+        res = await client.patch(
+            app.url_path_for("accounts:patch-profile", id=tmp_account.account_id),
+            data=update_params.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_200_OK
+        updated_account = ProfileInDB(**res.json())
+
+        update_dict = update_params.dict(exclude_unset=True)
+        expected = tmp_account.copy(update=update_dict)
+        assert updated_account == expected
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
     invalid_params = {
-        "<path:id>:存在しない": ("T-XXX", "{}", HTTP_404_NOT_FOUND),
+        "<path:id>:存在しない": (
+            "T-XXX",
+            '{"email":"shingen@takeda.com"}',
+            HTTP_404_NOT_FOUND,
+        ),
         "<path:id>:桁数不足": (
             "00",
             "{}",
@@ -425,11 +460,11 @@ class TestPatchProfile:
         app: FastAPI,
         client: AsyncClient,
         param: tuple[str, str, int],
-        fixed_account: UserPublic,
-        temp_account: UserPublic,
+        fixed_account: ProfileInDB,
+        tmp_account: ProfileInDB,
     ) -> None:
-        res = await client.put(
-            app.url_path_for("accounts:patch-profile", temp_account.account_id),
+        res = await client.patch(
+            app.url_path_for("accounts:patch-profile", id=tmp_account.account_id),
             data=param[0],
         )
         assert res.status_code == param[1]
@@ -440,13 +475,42 @@ class TestPatchProfile:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatchBaseProfile:
-    # FIXME:正常ケース
+
+    # 正常ケースパラメータ
+    valid_params = {
+        "<body:user_name>": ProfileBaseUpdate(user_name="徳川家光"),
+        "<body:account_type>": ProfileBaseUpdate(account_type=AccountTypes.provisional),
+        "複合ケース": ProfileBaseUpdate(
+            user_name="徳川家光", account_type=AccountTypes.administrator
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "update_params", list(valid_params.values()), ids=list(valid_params.keys())
+    )
+    async def test_ok_case(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        tmp_account: ProfileInDB,
+        update_params: ProfileBaseUpdate,
+    ) -> None:
+        res = await client.patch(
+            app.url_path_for("accounts:patch-base-profile", id=tmp_account.account_id),
+            data=update_params.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_200_OK
+        updated_account = ProfileInDB(**res.json())
+
+        update_dict = update_params.dict(exclude_unset=True)
+        expected = tmp_account.copy(update=update_dict)
+        assert updated_account == expected
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
     invalid_params = {
-        "<path:id>:存在しない": ("T-XXX", "{}", HTTP_404_NOT_FOUND),
+        "<path:id>:存在しない": ("T-XXX", '{"user_name":"DUMMY"}', HTTP_404_NOT_FOUND),
         "<path:id>:桁数不足": (
             "00",
             "{}",
@@ -527,11 +591,11 @@ class TestPatchBaseProfile:
         app: FastAPI,
         client: AsyncClient,
         param: tuple[str, str, int],
-        fixed_account: UserPublic,
-        temp_account: UserPublic,
+        fixed_account: ProfileInDB,
+        tmp_account: ProfileInDB,
     ) -> None:
-        res = await client.put(
-            app.url_path_for("patch-base-profile", temp_account.account_id),
+        res = await client.patch(
+            app.url_path_for("accounts:patch-base-profile", id=tmp_account.account_id),
             data=param[0],
         )
         assert res.status_code == param[1]
@@ -542,12 +606,31 @@ class TestPatchBaseProfile:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
-    # FIXME:正常ケース
+    async def test_ok_case(
+        self, app: FastAPI, client: AsyncClient, tmp_account: ProfileInDB
+    ) -> None:
+
+        res = await client.delete(
+            app.url_path_for("accounts:delete", id=tmp_account.account_id)
+        )
+        assert res.status_code == HTTP_200_OK
+        profile = ProfileInDB(**res.json())
+        assert profile == tmp_account
+
+        # 再検索して存在しないこと
+        res = await client.get(
+            app.url_path_for("accounts:get-by-id", id=tmp_account.account_id)
+        )
+        assert res.status_code == HTTP_404_NOT_FOUND
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
     invalid_params = {
+        "<path:id>:存在しない": (
+            "T-XXX",
+            HTTP_404_NOT_FOUND,
+        ),
         "<path:id>:桁数不足": (
             "00",
             HTTP_422_UNPROCESSABLE_ENTITY,

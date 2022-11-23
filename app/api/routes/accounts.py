@@ -6,11 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_200_OK
 
 from app.api.schemas.accounts import (
-    UserCreate,
-    UserPublic,
+    AccountCreate,
+    ProfileBaseUpdate,
+    ProfilePublic,
+    ProfileUpdate,
     p_account_id,
-    UserProfileUpdate,
-    UserBaseProfileUpdate,
 )
 from app.api.schemas.base import Message
 from app.core.database import get_session
@@ -35,14 +35,14 @@ router = APIRouter()
                 }
             },
         },
-        200: {"model": UserPublic, "description": "New account created"},
+        200: {"model": ProfilePublic, "description": "New account created"},
     },
 )
 async def create_task(
     id: str = p_account_id,
-    new_account: UserCreate = Body(...),
+    new_account: AccountCreate = Body(...),
     session: AsyncSession = Depends(get_session),
-) -> UserPublic:
+) -> ProfilePublic:
     """
     アカウントの新規作成。</br>
 
@@ -79,13 +79,13 @@ async def create_task(
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": UserPublic, "description": "Account requested by ID"},
+        200: {"model": ProfilePublic, "description": "Account requested by ID"},
     },
 )
 async def get_user_by_id(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
-) -> UserPublic:
+) -> ProfilePublic:
     """
     アカウント1件の取得。</br>
 
@@ -113,14 +113,14 @@ async def get_user_by_id(
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": UserPublic, "description": "Account profile patched by ID"},
+        200: {"model": ProfilePublic, "description": "Account profile patched by ID"},
     },
 )
 async def patch_account_profile(  # FIXME:将来的にはログインユーザーの変更
     id: str = p_account_id,
-    patch_params: UserProfileUpdate = Body(...),
+    patch_params: ProfileUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
-) -> UserPublic:
+) -> ProfilePublic:
     """
     本人によるアカウント1件の更新。</br>
     **user_name**、**account_type** は管理者管轄項目のため変更不可、**password** の変更は別APIで実施。:
@@ -156,14 +156,14 @@ async def patch_account_profile(  # FIXME:将来的にはログインユーザ�
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": UserPublic, "description": "Account profile patched by ID"},
+        200: {"model": ProfilePublic, "description": "Account profile patched by ID"},
     },
 )
 async def patch_account_base_profile(
     id: str = p_account_id,
-    patch_params: UserBaseProfileUpdate = Body(...),
+    patch_params: ProfileBaseUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
-) -> UserPublic:
+) -> ProfilePublic:
     """
     管理者によるアカウント1件の更新。</br>
     **nickname**、**email** は本人管轄項目のため変更不可。:
@@ -199,13 +199,13 @@ async def patch_account_base_profile(
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": UserPublic, "description": "Account deleted by ID"},
+        200: {"model": ProfilePublic, "description": "Account deleted by ID"},
     },
 )
 async def delete_account(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
-) -> UserPublic:
+) -> ProfilePublic:
     """
     アカウント1件の削除。
 

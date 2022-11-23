@@ -3,8 +3,8 @@
 
 from typing import Optional
 
-from pydantic import Extra, Field, EmailStr
 from fastapi import Path
+from pydantic import EmailStr, Extra, Field, validator
 
 from app.api.schemas.base import CoreModel
 from app.models.segment_values import AccountTypes
@@ -39,6 +39,7 @@ f_password: Field = Field(
     title="Password", description="サインインパスワード", min_length=8, example="password"
 )
 f_account_type: Field = Field(
+    default=AccountTypes.general,
     title="AccountType",
     description=AccountTypes.description(),
     example=AccountTypes.general,
@@ -53,7 +54,7 @@ f_verified_email: Field = Field(
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class UserBase(CoreModel):
+class ProfileBase(CoreModel):
     account_id: str = f_account_id
     user_name: str = f_user_name
     nickname: Optional[str] = f_nickname
@@ -66,10 +67,10 @@ class UserBase(CoreModel):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class UserCreate(CoreModel, extra=Extra.forbid):
+class AccountCreate(CoreModel, extra=Extra.forbid):
     user_name: str = f_user_name
     email: EmailStr = f_email
-    account_type: Optional[AccountTypes] = f_account_type
+    account_type: AccountTypes = f_account_type
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -83,23 +84,35 @@ class UserAuthorize(CoreModel, extra=Extra.forbid):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class UserProfileUpdate(CoreModel, extra=Extra.forbid):
+class ProfileUpdate(CoreModel, extra=Extra.forbid):
     nickname: Optional[str] = f_nickname
-    email: EmailStr = f_email
+    email: Optional[EmailStr] = f_email
+
+    @validator("email")
+    def not_none(cls, v):
+        if v is None:
+            raise ValueError("value is none.")
+        return v
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class UserBaseProfileUpdate(CoreModel, extra=Extra.forbid):
-    user_name: str = f_user_name
-    account_type: AccountTypes = f_account_type
+class ProfileBaseUpdate(CoreModel, extra=Extra.forbid):
+    user_name: Optional[str] = f_user_name
+    account_type: Optional[AccountTypes] = f_account_type
+
+    @validator("user_name", "account_type")
+    def not_none(cls, v):
+        if v is None:
+            raise ValueError("value is none.")
+        return v
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class UserInDB(UserBase):
+class ProfileInDB(ProfileBase):
     class Config:
         orm_mode = True
 
@@ -107,5 +120,5 @@ class UserInDB(UserBase):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class UserPublic(UserBase):
+class ProfilePublic(ProfileBase):
     pass

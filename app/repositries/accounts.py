@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 # accouts.py
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.engine import Result
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +19,7 @@ class AccountRepository:
 
     async def create(
         self, *, session: AsyncSession, profile: ac_Profile, auth: ac_Auth
-    ) -> tuple[ac_Profile, ac_Auth]:
+    ) -> Tuple[ac_Profile, ac_Auth]:
 
         """アカウント登録"""
         try:
@@ -29,64 +28,56 @@ class AccountRepository:
             await session.flush()
         except IntegrityError as e:
             raise e
-        return (profile, auth)
+        return profile
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def update(
         self, *, session: AsyncSession, id: str, patch_params: dict[str, any]
-    ) -> Optional[tuple[ac_Profile, ac_Auth]]:
+    ) -> Optional[ac_Profile]:
 
         """アカウント更新"""
-        result: tuple[ac_Profile, ac_Auth] = await self.get_by_id(
+        base_profile: ac_Profile = await self.get_by_id(
             session=session, id=id, for_update=True
         )
-        if result is None:
+        if base_profile is None:
             return None
-
-        profile, auth = result
 
         # patch_paramsのフィールドを反映
         {
-            setattr(profile, f, v)
+            setattr(base_profile, f, v)
             for f, v in patch_params.items()
-            if f in profile.__dict__
+            if f in base_profile.__dict__
         }
-        {setattr(auth, f, v) for f, v in patch_params.items() if f in auth.__dict__}
 
         await session.flush()
-        return result
+        return base_profile
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    async def delete(
-        self, *, session: AsyncSession, id: str
-    ) -> Optional[tuple[ac_Profile, ac_Auth]]:
+    async def delete(self, *, session: AsyncSession, id: str) -> Optional[ac_Profile]:
 
         """アカウント削除"""
-        result: tuple[ac_Profile, ac_Auth] = await self.get_by_id(
+        base_profile: ac_Profile = await self.get_by_id(
             session=session, id=id, for_update=True
         )
-        if result is None:
+        if base_profile is None:
             return None
 
-        await session.delete(result[0])
+        await session.delete(base_profile)
         await session.flush()
-        return result
+        return base_profile
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def get_by_id(
         self, *, session: AsyncSession, id: str, for_update: bool = False
-    ) -> Optional[tuple[ac_Profile, ac_Auth]]:
+    ) -> Optional[ac_Profile]:
 
         """アカウント取得"""
-        query = (
-            select(ac_Profile, ac_Auth)
-            .join(ac_Auth, ac_Profile.account_id == ac_Auth.account_id)
-            .filter(ac_Profile.account_id == id)
-        )
+        query = select(ac_Profile).filter(ac_Profile.account_id == id)
         if for_update:
             query = query.with_for_update()
         result: Result = await session.execute(query)
-        return result.first()
+        profile: Optional[Tuple[ac_Profile]] = result.first()
+        return profile[0] if profile else None

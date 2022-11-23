@@ -25,7 +25,7 @@ from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
-is_regression = False
+is_regression = True
 
 
 @pytest_asyncio.fixture
@@ -143,10 +143,12 @@ class TestCreate:
             data=new_task.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_201_CREATED
-        dict = res.json()
-        del dict["id"], dict["status"]
-        created_task = TaskCreate(**dict)
-        assert created_task == new_task
+        created_task = TaskInDB(**res.json())
+        assert created_task.title == new_task.title
+        assert created_task.description == new_task.description
+        assert created_task.asaignee_id == new_task.asaignee_id
+        assert created_task.is_significant == new_task.is_significant
+        assert created_task.deadline == new_task.deadline
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 

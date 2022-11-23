@@ -41,6 +41,31 @@ def create_profiles_table() -> None:
             index=True,
             comment="ニックネーム",
         ),
+        sa.Column(
+            "email", sa.Text, unique=True, nullable=False, index=True, comment="メールアドレス"
+        ),
+        sa.Column(
+            "verified_email",
+            sa.Boolean,
+            nullable=False,
+            server_default="False",
+            comment="メール送達確認済み",
+        ),
+        sa.Column(
+            "account_type",
+            sa.Enum(*AccountTypes.list(), name="account_type", schema="account"),
+            nullable=False,
+            server_default=AccountTypes.general,
+            index=True,
+            comment="アカウント種別",
+        ),
+        sa.Column(
+            "is_active",
+            sa.Boolean,
+            nullable=False,
+            server_default="False",
+            comment="初期パスワード変更済み",
+        ),
         *timestamps(),
         schema="account",
     )
@@ -57,9 +82,33 @@ def create_profiles_table() -> None:
     op.bulk_insert(
         profiles_table,
         [
-            {"account_id": "T-901", "user_name": "西郷隆盛", "nickname": None},
-            {"account_id": "T-902", "user_name": "木戸孝允", "nickname": "桂小五郎"},
-            {"account_id": "T-903", "user_name": "大久保利通", "nickname": None},
+            {
+                "account_id": "T-901",
+                "user_name": "西郷隆盛",
+                "nickname": None,
+                "email": "saigo@bakumatsu.com",
+                "verified_email": True,
+                "account_type": AccountTypes.administrator,
+                "is_active": True,
+            },
+            {
+                "account_id": "T-902",
+                "user_name": "木戸孝允",
+                "nickname": "桂小五郎",
+                "email": "kido@bakumatsu.com",
+                "verified_email": False,
+                "account_type": AccountTypes.general,
+                "is_active": True,
+            },
+            {
+                "account_id": "T-903",
+                "user_name": "大久保利通",
+                "nickname": None,
+                "email": "okubo@bakumatsu.com",
+                "verified_email": False,
+                "account_type": AccountTypes.general,
+                "is_active": True,
+            },
         ],
     )
 
@@ -74,30 +123,8 @@ def create_authes_table() -> None:
         sa.Column(
             "email", sa.Text, unique=True, nullable=False, index=True, comment="メールアドレス"
         ),
-        sa.Column(
-            "verified_email",
-            sa.Boolean,
-            nullable=False,
-            server_default="False",
-            comment="メール送達確認済み",
-        ),
         sa.Column("solt", sa.Text, nullable=False, comment="ソルト"),
         sa.Column("password", sa.Text, nullable=False, comment="パスワード(HASH済)"),
-        sa.Column(
-            "is_active",
-            sa.Boolean,
-            nullable=False,
-            server_default="False",
-            comment="初期パスワード変更済み",
-        ),
-        sa.Column(
-            "account_type",
-            sa.Enum(*AccountTypes.list(), name="account_type", schema="account"),
-            nullable=False,
-            server_default=AccountTypes.general,
-            index=True,
-            comment="アカウント種別",
-        ),
         *timestamps(),
         schema="account",
     )
@@ -121,6 +148,17 @@ def create_authes_table() -> None:
         source_schema="account",
         referent_schema="account",
     )
+    op.create_foreign_key(
+        "fk_email",
+        "authes",
+        "profiles",
+        ["email"],
+        ["email"],
+        onupdate="CASCADE",
+        ondelete="CASCADE",
+        source_schema="account",
+        referent_schema="account",
+    )
 
     op.bulk_insert(
         authes_table,
@@ -128,29 +166,20 @@ def create_authes_table() -> None:
             {
                 "account_id": "T-901",
                 "email": "saigo@bakumatsu.com",
-                "verified_email": True,
                 "solt": "100",
                 "password": "password",
-                "is_active": True,
-                "account_type": AccountTypes.administrator,
             },
             {
                 "account_id": "T-902",
                 "email": "kido@bakumatsu.com",
-                "verified_email": False,
                 "solt": "100",
                 "password": "password",
-                "is_active": True,
-                "account_type": AccountTypes.general,
             },
             {
                 "account_id": "T-903",
                 "email": "okubo@bakumatsu.com",
-                "verified_email": False,
                 "solt": "100",
                 "password": "password",
-                "is_active": True,
-                "account_type": AccountTypes.general,
             },
         ],
     )
@@ -209,133 +238,14 @@ def create_watch_tasks_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-def create_xx_profiles_table() -> None:
-    op.create_table(
-        "xx_profiles",
-        sa.Column("account_id", sa.String(5), primary_key=True, comment="アカウントID"),
-        sa.Column(
-            "user_name",
-            sa.String(20),
-            unique=True,
-            nullable=False,
-            index=True,
-            comment="氏名",
-        ),
-        sa.Column(
-            "nickname",
-            sa.String(20),
-            unique=True,
-            nullable=True,
-            index=True,
-            comment="ニックネーム",
-        ),
-        sa.Column(
-            "email", sa.Text, unique=True, nullable=False, index=True, comment="メールアドレス"
-        ),
-        sa.Column(
-            "verified_email",
-            sa.Boolean,
-            nullable=False,
-            server_default="False",
-            comment="メール送達確認済み",
-        ),
-        sa.Column(
-            "account_type",
-            sa.Enum(*AccountTypes.list(), name="account_type", schema="account"),
-            nullable=False,
-            server_default=AccountTypes.general,
-            index=True,
-            comment="アカウント種別",
-        ),
-        sa.Column(
-            "is_active",
-            sa.Boolean,
-            nullable=False,
-            server_default="False",
-            comment="初期パスワード変更済み",
-        ),
-        *timestamps(),
-        schema="account",
-    )
-    op.execute(
-        """
-        CREATE TRIGGER xx_profiles_modified
-            BEFORE UPDATE
-            ON account.xx_profiles
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-def create_xx_authes_table() -> None:
-    op.create_table(
-        "xx_authes",
-        sa.Column("account_id", sa.String(5), primary_key=True, comment="アカウントID"),
-        sa.Column(
-            "email", sa.Text, unique=True, nullable=False, index=True, comment="メールアドレス"
-        ),
-        sa.Column("solt", sa.Text, nullable=False, comment="ソルト"),
-        sa.Column("password", sa.Text, nullable=False, comment="パスワード(HASH済)"),
-        *timestamps(),
-        schema="account",
-    )
-    op.execute(
-        """
-        CREATE TRIGGER authes_modified
-            BEFORE UPDATE
-            ON account.xx_authes
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-    op.create_foreign_key(
-        "fk_account_id",
-        "xx_authes",
-        "xx_profiles",
-        ["account_id"],
-        ["account_id"],
-        onupdate="CASCADE",
-        ondelete="CASCADE",
-        source_schema="account",
-        referent_schema="account",
-    )
-    op.create_foreign_key(
-        "fk_email",
-        "xx_authes",
-        "xx_profiles",
-        ["email"],
-        ["email"],
-        onupdate="CASCADE",
-        ondelete="CASCADE",
-        source_schema="account",
-        referent_schema="account",
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
 def upgrade() -> None:
     create_profiles_table()
     create_authes_table()
     create_watch_tasks_table()
 
-    create_xx_profiles_table()
-    create_xx_authes_table()
-
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS account.xx_authes CASCADE;")
-    op.execute("DROP TABLE IF EXISTS account.xx_profiles CASCADE;")
-
     op.execute("DROP TABLE IF EXISTS account.watch_tasks CASCADE;")
     op.execute("DROP TABLE IF EXISTS account.authes CASCADE;")
     op.execute("DROP TABLE IF EXISTS account.profiles CASCADE;")
-    # op.drop_table("watch_tasks", schema="account")
-    # op.drop_table("authes", schema="account")
-    # op.drop_table("profiles", schema="account")
     op.execute("DROP TYPE IF EXISTS account.accopunt_type;")
