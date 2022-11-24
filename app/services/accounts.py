@@ -6,10 +6,17 @@ from typing import List
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
+from starlette.status import (
+    HTTP_400_BAD_REQUEST,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_404_NOT_FOUND,
+)
 
 from app.api.schemas.accounts import (
     AccountCreate,
+    InitPass,
+    PasswordChange,
+    PasswordReset,
     ProfileBaseUpdate,
     ProfileInDB,
     ProfilePublic,
@@ -17,6 +24,8 @@ from app.api.schemas.accounts import (
 )
 from app.models.table_models import ac_Auth, ac_Profile
 from app.repositries.accounts import AccountRepository
+from app.services import auth_service
+from app.services.authentication import AuthError
 
 # 対象無し例外
 not_found_exception: HTTPException = HTTPException(
@@ -35,15 +44,24 @@ class AccountService:
         self, *, session: AsyncSession, id: str, new_account: AccountCreate
     ) -> ProfilePublic:
 
-        """アカウント登録"""  # FIXME: 初期パスワード
-        profile = ac_Profile(**new_account.dict())
+        """アカウント登録"""
+        profile = ac_Profile(**new_account.dict(exclude={"init_password"}))
         profile.account_id = id
 
-        auth = ac_Auth()
-        auth.account_id = id
-        auth.email = new_account.email
-        auth.solt = "12345"  # FIXME:
-        auth.password = "abcdef"  # FIXME:
+        init_password = (
+            new_account.init_password
+            if new_account.init_password
+            else auth_service.generate_init_password()
+        )
+        hashed_password, solt = auth_service.create_hash_password(init_password)
+
+        auth = ac_Auth(
+            account_id=id, email=new_account.email, password=hashed_password, solt=solt
+        )
+        # auth.account_id = id
+        # auth.email = new_account.email
+
+        # auth_service.create_hash_password(auth=auth, plaintext_password=init_password)
 
         repo = AccountRepository()
         try:
@@ -56,7 +74,9 @@ class AccountService:
             self.ch_exception_detail(e)
 
         await session.refresh(created_profile)
-        return ProfileInDB.from_orm(created_profile)
+        result = ProfileInDB.from_orm(created_profile)
+        result.init_password = init_password
+        return result
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -64,7 +84,7 @@ class AccountService:
 
         """アカウント取得"""
         repo = AccountRepository()
-        profile: ac_Profile = await repo.get_by_id(session=session, id=id)
+        profile: ac_Profile = await repo.get_profile_by_id(session=session, id=id)
         if not profile:
             raise not_found_exception
 
@@ -124,6 +144,49 @@ class AccountService:
 
         await session.commit()
         return ProfileInDB.from_orm(deleted_profile)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def password_change(
+        self, *, session: AsyncSession, id: str, pass_change: PasswordChange
+    ) -> None:
+
+        """パスワード変更"""
+
+        repo = AccountRepository()
+        try:
+            await repo.password_change(
+                session=session,
+                id=id,
+                old_password=pass_change.old_password.get_secret_value(),
+                new_password=pass_change.new_password.get_secret_value(),
+            )
+            await session.commit()
+        except AuthError:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="Password is mistaken.",
+            )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def password_reset(
+        self, *, session: AsyncSession, id: str, pass_reset: PasswordReset
+    ) -> InitPass:
+
+        """パスワードリセット"""
+
+        init_password = (
+            pass_reset.init_password
+            if pass_reset.init_password
+            else auth_service.generate_init_password()
+        )
+
+        repo = AccountRepository()
+        await repo.password_reset(session=session, id=id, password=init_password)
+        await session.commit()
+
+        return InitPass(init_password=init_password)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER]例外文字列の判定

@@ -4,7 +4,7 @@
 from typing import Optional
 
 from fastapi import Path
-from pydantic import EmailStr, Extra, Field, validator
+from pydantic import EmailStr, Extra, Field, validator, SecretStr
 
 from app.api.schemas.base import CoreModel
 from app.models.segment_values import AccountTypes
@@ -51,6 +51,13 @@ f_verified_email: Field = Field(
     title="VerifiedEmail", description="メール疎通確認済みの場合にTrue", example=True
 )
 
+
+def f_password(description: str = "サインインパスワード") -> Field:
+    return Field(
+        title="Password", description=description, min_length=8, example="password"
+    )
+
+
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
@@ -62,6 +69,7 @@ class ProfileBase(CoreModel):
     account_type: AccountTypes = f_account_type
     is_active: bool = f_is_active
     verified_email: bool = f_verified_email
+    init_password: Optional[SecretStr] = f_password()
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -70,15 +78,8 @@ class ProfileBase(CoreModel):
 class AccountCreate(CoreModel, extra=Extra.forbid):
     user_name: str = f_user_name
     email: EmailStr = f_email
-    account_type: AccountTypes = f_account_type
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-class UserAuthorize(CoreModel, extra=Extra.forbid):
-    account_id: str = f_account_id
-    password: str = f_password
+    account_type: Optional[AccountTypes] = f_account_type
+    init_password: Optional[str] = f_password("初期パスワード")
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -122,3 +123,32 @@ class ProfileInDB(ProfileBase):
 
 class ProfilePublic(ProfileBase):
     pass
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class ProfilePublicWithInitPass(ProfilePublic):
+    init_password: str = f_password("初期パスワード")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class PasswordChange(CoreModel, extra=Extra.forbid):
+    old_password: SecretStr = f_password("現パスワード")
+    new_password: SecretStr = f_password("新パスワード")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class PasswordReset(CoreModel, extra=Extra.forbid):
+    init_password: Optional[str] = f_password("初期パスワード")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class InitPass(CoreModel):
+    init_password: str = f_password("初期パスワード")

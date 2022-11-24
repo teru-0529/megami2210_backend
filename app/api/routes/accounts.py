@@ -7,8 +7,12 @@ from starlette.status import HTTP_200_OK
 
 from app.api.schemas.accounts import (
     AccountCreate,
+    InitPass,
+    PasswordChange,
+    PasswordReset,
     ProfileBaseUpdate,
     ProfilePublic,
+    ProfilePublicWithInitPass,
     ProfileUpdate,
     p_account_id,
 )
@@ -35,16 +39,17 @@ router = APIRouter()
                 }
             },
         },
-        200: {"model": ProfilePublic, "description": "New account created"},
+        200: {"model": ProfilePublicWithInitPass, "description": "New account created"},
     },
 )
-async def create_task(
+async def create(
     id: str = p_account_id,
     new_account: AccountCreate = Body(...),
     session: AsyncSession = Depends(get_session),
-) -> ProfilePublic:
+) -> ProfilePublicWithInitPass:
     """
     アカウントの新規作成。</br>
+    作成したアカウントは非Active状態。発行した初期パスワードを変更することでアクティベートされる。
 
     [PATH]
 
@@ -55,6 +60,7 @@ async def create_task(
     - **user_name**: ユーザー氏名[reqired]
     - **email**: Eメールアドレス[reqired]
     - **account_type**: アカウント種類[default=GENERAL]
+    - **init_password**: 初期パスワード ※未設定の場合は内部でランダムに生成する
     """
 
     service = AccountService()
@@ -82,7 +88,7 @@ async def create_task(
         200: {"model": ProfilePublic, "description": "Account requested by ID"},
     },
 )
-async def get_user_by_id(
+async def get_by_id(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
 ) -> ProfilePublic:
@@ -116,7 +122,7 @@ async def get_user_by_id(
         200: {"model": ProfilePublic, "description": "Account profile patched by ID"},
     },
 )
-async def patch_account_profile(  # FIXME:将来的にはログインユーザーの変更
+async def patch_profile(  # FIXME:将来的にはログインユーザーの変更
     id: str = p_account_id,
     patch_params: ProfileUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
@@ -159,7 +165,7 @@ async def patch_account_profile(  # FIXME:将来的にはログインユーザ�
         200: {"model": ProfilePublic, "description": "Account profile patched by ID"},
     },
 )
-async def patch_account_base_profile(
+async def patch_base_profile(
     id: str = p_account_id,
     patch_params: ProfileBaseUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
@@ -202,7 +208,7 @@ async def patch_account_base_profile(
         200: {"model": ProfilePublic, "description": "Account deleted by ID"},
     },
 )
-async def delete_account(
+async def delete(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
 ) -> ProfilePublic:
@@ -217,3 +223,94 @@ async def delete_account(
     service = AccountService()
     account = await service.delete(session=session, id=id)
     return account
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+@router.patch(
+    "/{id}/password",
+    name="accounts:password-change",
+    status_code=HTTP_200_OK,
+    responses={
+        400: {
+            "model": Message,
+            "description": "Wrong input parameters",
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
+        },
+        401: {
+            "model": Message,
+            "description": "Auth error",
+            "content": {
+                "application/json": {"example": {"detail": "Password is mistaken."}}
+            },
+        },
+        200: {"model": None, "description": "Password changed"},
+    },
+)
+async def change_password(
+    id: str = p_account_id,
+    pass_change: PasswordChange = Body(...),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """
+    パスワードの変更。</br>
+    変更することでアカウントはActive状態になる。
+
+    [PATH]
+
+    - **id**: アカウントID[reqired]
+
+    [BODY]
+
+    - **old_password**: 現パスワード[reqired]
+    - **new_password**: 新パスワード[reqired]
+    """
+
+    service = AccountService()
+    await service.password_change(session=session, id=id, pass_change=pass_change)
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+@router.put(
+    "/{id}/password",
+    name="accounts:password-reset",
+    status_code=HTTP_200_OK,
+    responses={
+        400: {
+            "model": Message,
+            "description": "Wrong input parameters",
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
+        },
+        200: {"model": InitPass, "description": "Password reseted"},
+    },
+)
+async def reset_password(
+    id: str = p_account_id,
+    pass_reset: PasswordReset = Body(...),
+    session: AsyncSession = Depends(get_session),
+) -> InitPass:
+    """
+    パスワードのリセット。</br>
+    アカウントを非Active化し初期パスワード再発行する。変更することでアカウントが再度アクティベートされる。
+
+    [PATH]
+
+    - **id**: アカウントID[reqired]
+
+    [BODY]
+
+    - **init_password**: 初期パスワード ※未設定の場合は内部でランダムに生成する
+    """
+
+    service = AccountService()
+    init_pass = await service.password_reset(
+        session=session, id=id, pass_reset=pass_reset
+    )
+    return init_pass

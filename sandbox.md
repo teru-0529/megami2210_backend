@@ -62,3 +62,5 @@ https://qiita.com/mserizawa/items/b833e407d89abd21ee72
       .filter(ac_Profile.account_id == id)
    )
 ```
+#### ランダム文字列生成
+https://qiita.com/Scstechr/items/c3b2eb291f7c5b81902a

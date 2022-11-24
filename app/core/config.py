@@ -6,7 +6,7 @@ from starlette.datastructures import Secret
 
 config = Config(".env")
 
-PROJECT_NAME = "MEGUMI2210(TODO Application)"
+PROJECT_NAME = "MEGUMI2210(MY Application)"
 VERSION = "0.9.0"
 API_PREFIX = "/api"
 

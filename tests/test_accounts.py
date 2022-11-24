@@ -32,6 +32,7 @@ async def fixed_account(session: AsyncSession) -> ProfileInDB:
     new_user = AccountCreate(
         user_name="織田信長",
         email="oda@sengoku.com",
+        init_password="testPassword",
     )
     service = AccountService()
     created_user = await service.create(
@@ -45,6 +46,7 @@ async def tmp_account(session: AsyncSession) -> ProfileInDB:
     new_user = AccountCreate(
         user_name="徳川家康",
         email="tokugawa@sengoku.com",
+        init_password="testPassword",
     )
     service = AccountService()
     created_user = await service.create(
@@ -92,6 +94,22 @@ class TestRouteExists:
     async def test_delete_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.delete(app.url_path_for("accounts:delete", id="T-001"))
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
+    async def test_password_change_route(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        try:
+            await client.patch(app.url_path_for("accounts:password-change", id="T-001"))
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
+    async def test_password_reset_route(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        try:
+            await client.put(app.url_path_for("accounts:password-reset", id="T-001"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
@@ -294,7 +312,7 @@ class TestGet:
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        assert profile == tmp_account
+        _assert_without_password(actual=profile, expected=tmp_account)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -330,9 +348,8 @@ class TestGet:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-# @pytest.mark.skipif(not is_regression, reason="not regression phase")
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatchProfile:
-    # FIXME:正常ケース
     # 正常ケースパラメータ
     valid_params = {
         "<body:nickname>": ProfileUpdate(nickname="将軍"),
@@ -359,7 +376,7 @@ class TestPatchProfile:
 
         update_dict = update_params.dict(exclude_unset=True)
         expected = tmp_account.copy(update=update_dict)
-        assert updated_account == expected
+        _assert_without_password(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -504,7 +521,7 @@ class TestPatchBaseProfile:
 
         update_dict = update_params.dict(exclude_unset=True)
         expected = tmp_account.copy(update=update_dict)
-        assert updated_account == expected
+        _assert_without_password(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -615,7 +632,7 @@ class TestDelete:
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        assert profile == tmp_account
+        _assert_without_password(actual=profile, expected=tmp_account)
 
         # 再検索して存在しないこと
         res = await client.get(
@@ -656,3 +673,11 @@ class TestDelete:
     ) -> None:
         res = await client.delete(app.url_path_for("accounts:delete", id=param[0]))
         assert res.status_code == param[1]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+
+def _assert_without_password(actual: ProfileInDB, expected: ProfileInDB) -> None:
+    actual.init_password = None
+    expected.init_password = None
+    assert actual == expected
