@@ -29,12 +29,40 @@ is_regression = True
 
 
 @pytest_asyncio.fixture
-async def tmp_task(session: AsyncSession) -> TaskInDB:
+async def fixed_task(session: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
-        title="tmp task",
-        description="tmp task",
+        title="fixed task",
+        description="fixed task",
         asaignee_id="T-001",
-        deadline=date(2022, 12, 31),
+        deadline=date(2030, 12, 31),
+    )
+    service = TaskService()
+    created_task = await service.create(session=session, new_task=new_task)
+    yield created_task
+    await service.delete(session=session, id=created_task.id)
+
+
+@pytest_asyncio.fixture
+async def task_for_update(session: AsyncSession) -> TaskInDB:
+    new_task = TaskCreate(
+        title="updated task",
+        description="updated task",
+        asaignee_id="T-001",
+        deadline=date(2030, 12, 31),
+    )
+    service = TaskService()
+    created_task = await service.create(session=session, new_task=new_task)
+    yield created_task
+    await service.delete(session=session, id=created_task.id)
+
+
+@pytest_asyncio.fixture
+async def task_for_delete(session: AsyncSession) -> TaskInDB:
+    new_task = TaskCreate(
+        title="updated task",
+        description="updated task",
+        asaignee_id="T-001",
+        deadline=date(2030, 12, 31),
     )
     service = TaskService()
     created_task = await service.create(session=session, new_task=new_task)
@@ -212,13 +240,13 @@ class TestCreate:
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
     async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
+        self, app: FastAPI, client: AsyncClient, fixed_task: TaskInDB
     ) -> None:
 
-        res = await client.get(app.url_path_for("tasks:get-by-id", id=tmp_task.id))
+        res = await client.get(app.url_path_for("tasks:get-by-id", id=fixed_task.id))
         assert res.status_code == HTTP_200_OK
         get_task = TaskInDB(**res.json())
-        assert get_task == tmp_task
+        assert get_task == fixed_task
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -584,18 +612,18 @@ class TestPatch:
         self,
         app: FastAPI,
         client: AsyncClient,
-        tmp_task: TaskInDB,
+        task_for_update: TaskInDB,
         update_params: TaskUpdate,
     ) -> None:
         res = await client.patch(
-            app.url_path_for("tasks:patch", id=tmp_task.id),
+            app.url_path_for("tasks:patch", id=task_for_update.id),
             data=update_params.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_200_OK
         updated_task = TaskInDB(**res.json())
 
         update_dict = update_params.dict(exclude_unset=True)
-        expected = tmp_task.copy(update=update_dict)
+        expected = task_for_update.copy(update=update_dict)
         assert updated_task == expected
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -683,16 +711,20 @@ class TestPatch:
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
     async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, tmp_task: TaskInDB
+        self, app: FastAPI, client: AsyncClient, task_for_delete: TaskInDB
     ) -> None:
 
-        res = await client.delete(app.url_path_for("tasks:delete", id=tmp_task.id))
+        res = await client.delete(
+            app.url_path_for("tasks:delete", id=task_for_delete.id)
+        )
         assert res.status_code == HTTP_200_OK
         get_task = TaskInDB(**res.json())
-        assert get_task == tmp_task
+        assert get_task == task_for_delete
 
         # 再検索して存在しないこと
-        res = await client.get(app.url_path_for("tasks:get-by-id", id=tmp_task.id))
+        res = await client.get(
+            app.url_path_for("tasks:get-by-id", id=task_for_delete.id)
+        )
         assert res.status_code == HTTP_404_NOT_FOUND
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----

@@ -6,6 +6,16 @@ import string
 from typing import Tuple
 
 import bcrypt
+from app.api.schemas.accounts import ProfileInDB
+from app.core.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    JWT_ALGORITHM,
+    JWT_AUDIENCE,
+    SECRET_KEY,
+)
+from app.api.schemas.token import JWTMeta, JWTCreds, JWTPayload
+from datetime import datetime, timedelta
+import jwt
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -28,8 +38,6 @@ class AuthService:
         """solt生成/パスワードのhash、authモデルに設定する"""
         solt: str = self._generate_solt()
         hashed_password = self._hash_password(plaintext_password, solt)
-        # auth.password = hashed_password
-        # auth.solt = solt
         return hashed_password, solt
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -39,11 +47,31 @@ class AuthService:
         return bcrypt.checkpw(
             password=plaintext_password.encode(), hashed_password=hash_password.encode()
         )
-        # solt: str = self._generate_solt()
-        # hashed_password = self._hash_password(plaintext_password, solt)
-        # auth.password = hashed_password
-        # auth.solt = solt
-        # return {"password": hashed_password, "solt": solt}
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    def create_token_for_user(
+        self,
+        *,
+        account: ProfileInDB,
+        secret_key: str = str(SECRET_KEY),
+        audience: str = JWT_AUDIENCE,
+        expires_in: int = ACCESS_TOKEN_EXPIRE_MINUTES
+    ) -> str:
+        """JWTを作成する"""
+        if not account or not isinstance(account, ProfileInDB):
+            return None
+        jwt_meta = JWTMeta(
+            aud=audience,
+            iat=datetime.timestamp(datetime.utcnow()),
+            exp=datetime.timestamp(datetime.utcnow() + timedelta(minutes=expires_in)),
+        )
+        jwt_creds = JWTCreds(sub=account.account_id)
+        payload = JWTPayload(**jwt_meta.dict(), **jwt_creds.dict())
+        token = jwt.encode(
+            payload=payload.dict(), key=secret_key, algorithm=JWT_ALGORITHM
+        )
+        return token
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER] soltの生成

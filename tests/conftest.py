@@ -13,8 +13,10 @@ from httpx import AsyncClient
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.schemas.accounts import AccountCreate, ProfileInDB
 from app.core.config import ASYNC_DIALECT, SYNC_DIALECT, db_url
 from app.core.database import AsyncCon, SyncCon, get_session
+from app.services.accounts import AccountService
 
 SERVER = "testDB"
 SYNC_URL = db_url(dialect=SYNC_DIALECT, server=SERVER)
@@ -50,6 +52,21 @@ def app() -> FastAPI:
     from app.api.server import get_application
 
     return get_application()
+
+
+@pytest_asyncio.fixture
+async def fixed_account(session: AsyncSession) -> ProfileInDB:
+    new_user = AccountCreate(
+        user_name="織田信長",
+        email="oda@sengoku.com",
+        init_password="testPassword",
+    )
+    service = AccountService()
+    created_user = await service.create(
+        session=session, id="T-000", new_account=new_user
+    )
+    yield created_user
+    await service.delete(session=session, id=created_user.account_id)
 
 
 @pytest_asyncio.fixture

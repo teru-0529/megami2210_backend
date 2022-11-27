@@ -28,21 +28,22 @@ is_regression = True
 
 
 @pytest_asyncio.fixture
-async def fixed_account(session: AsyncSession) -> ProfileInDB:
+async def account_for_update(session: AsyncSession) -> ProfileInDB:
     new_user = AccountCreate(
-        user_name="織田信長",
-        email="oda@sengoku.com",
+        user_name="徳川家康",
+        email="tokugawa@sengoku.com",
         init_password="testPassword",
     )
     service = AccountService()
     created_user = await service.create(
-        session=session, id="T-000", new_account=new_user
+        session=session, id="T-001", new_account=new_user
     )
-    return created_user
+    yield created_user
+    await service.delete(session=session, id=created_user.account_id)
 
 
 @pytest_asyncio.fixture
-async def tmp_account(session: AsyncSession) -> ProfileInDB:
+async def account_for_delete(session: AsyncSession) -> ProfileInDB:
     new_user = AccountCreate(
         user_name="徳川家康",
         email="tokugawa@sengoku.com",
@@ -304,15 +305,15 @@ class TestCreate:
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
     async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, tmp_account: ProfileInDB
+        self, app: FastAPI, client: AsyncClient, fixed_account: ProfileInDB
     ) -> None:
 
         res = await client.get(
-            app.url_path_for("accounts:get-by-id", id=tmp_account.account_id)
+            app.url_path_for("accounts:get-by-id", id=fixed_account.account_id)
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        _assert_without_password(actual=profile, expected=tmp_account)
+        _assert_without_password(actual=profile, expected=fixed_account)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -364,18 +365,20 @@ class TestPatchProfile:
         self,
         app: FastAPI,
         client: AsyncClient,
-        tmp_account: ProfileInDB,
+        account_for_update: ProfileInDB,
         update_params: ProfileUpdate,
     ) -> None:
         res = await client.patch(
-            app.url_path_for("accounts:patch-profile", id=tmp_account.account_id),
+            app.url_path_for(
+                "accounts:patch-profile", id=account_for_update.account_id
+            ),
             data=update_params.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_200_OK
         updated_account = ProfileInDB(**res.json())
 
         update_dict = update_params.dict(exclude_unset=True)
-        expected = tmp_account.copy(update=update_dict)
+        expected = account_for_update.copy(update=update_dict)
         _assert_without_password(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -478,10 +481,12 @@ class TestPatchProfile:
         client: AsyncClient,
         param: tuple[str, str, int],
         fixed_account: ProfileInDB,
-        tmp_account: ProfileInDB,
+        account_for_update: ProfileInDB,
     ) -> None:
         res = await client.patch(
-            app.url_path_for("accounts:patch-profile", id=tmp_account.account_id),
+            app.url_path_for(
+                "accounts:patch-profile", id=account_for_update.account_id
+            ),
             data=param[0],
         )
         assert res.status_code == param[1]
@@ -509,18 +514,20 @@ class TestPatchBaseProfile:
         self,
         app: FastAPI,
         client: AsyncClient,
-        tmp_account: ProfileInDB,
+        account_for_update: ProfileInDB,
         update_params: ProfileBaseUpdate,
     ) -> None:
         res = await client.patch(
-            app.url_path_for("accounts:patch-base-profile", id=tmp_account.account_id),
+            app.url_path_for(
+                "accounts:patch-base-profile", id=account_for_update.account_id
+            ),
             data=update_params.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_200_OK
         updated_account = ProfileInDB(**res.json())
 
         update_dict = update_params.dict(exclude_unset=True)
-        expected = tmp_account.copy(update=update_dict)
+        expected = account_for_update.copy(update=update_dict)
         _assert_without_password(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -609,10 +616,12 @@ class TestPatchBaseProfile:
         client: AsyncClient,
         param: tuple[str, str, int],
         fixed_account: ProfileInDB,
-        tmp_account: ProfileInDB,
+        account_for_update: ProfileInDB,
     ) -> None:
         res = await client.patch(
-            app.url_path_for("accounts:patch-base-profile", id=tmp_account.account_id),
+            app.url_path_for(
+                "accounts:patch-base-profile", id=account_for_update.account_id
+            ),
             data=param[0],
         )
         assert res.status_code == param[1]
@@ -624,19 +633,19 @@ class TestPatchBaseProfile:
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
     async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, tmp_account: ProfileInDB
+        self, app: FastAPI, client: AsyncClient, account_for_delete: ProfileInDB
     ) -> None:
 
         res = await client.delete(
-            app.url_path_for("accounts:delete", id=tmp_account.account_id)
+            app.url_path_for("accounts:delete", id=account_for_delete.account_id)
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        _assert_without_password(actual=profile, expected=tmp_account)
+        _assert_without_password(actual=profile, expected=account_for_delete)
 
         # 再検索して存在しないこと
         res = await client.get(
-            app.url_path_for("accounts:get-by-id", id=tmp_account.account_id)
+            app.url_path_for("accounts:get-by-id", id=account_for_delete.account_id)
         )
         assert res.status_code == HTTP_404_NOT_FOUND
 

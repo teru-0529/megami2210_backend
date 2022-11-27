@@ -58,10 +58,6 @@ class AccountService:
         auth = ac_Auth(
             account_id=id, email=new_account.email, password=hashed_password, solt=solt
         )
-        # auth.account_id = id
-        # auth.email = new_account.email
-
-        # auth_service.create_hash_password(auth=auth, plaintext_password=init_password)
 
         repo = AccountRepository()
         try:

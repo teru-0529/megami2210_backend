@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import ASYNC_URL, SYNC_URL
 
@@ -18,7 +19,7 @@ class AsyncCon:
         self.url = url
 
     def engine(self, echo: bool = True) -> AsyncEngine:
-        return create_async_engine(self.url, echo=echo)
+        return create_async_engine(self.url, echo=echo, poolclass=NullPool)
 
     def session(self, echo: bool = True) -> AsyncSession:
         return sessionmaker(
@@ -39,7 +40,7 @@ class SyncCon:
         self.url = url
 
     def engine(self, echo: bool = True) -> Engine:
-        return create_engine(self.url, echo=echo)
+        return create_engine(self.url, echo=echo, poolclass=NullPool)
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
