@@ -22,6 +22,7 @@ from app.api.schemas.accounts import (
 )
 from app.models.segment_values import AccountTypes
 from app.services.accounts import AccountService
+from tests.conftest import assert_profile
 
 pytestmark = pytest.mark.asyncio
 is_regression = True
@@ -313,7 +314,7 @@ class TestGet:
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        _assert_without_password(actual=profile, expected=fixed_account)
+        assert_profile(actual=profile, expected=fixed_account)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -379,7 +380,7 @@ class TestPatchProfile:
 
         update_dict = update_params.dict(exclude_unset=True)
         expected = account_for_update.copy(update=update_dict)
-        _assert_without_password(actual=updated_account, expected=expected)
+        assert_profile(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -528,7 +529,7 @@ class TestPatchBaseProfile:
 
         update_dict = update_params.dict(exclude_unset=True)
         expected = account_for_update.copy(update=update_dict)
-        _assert_without_password(actual=updated_account, expected=expected)
+        assert_profile(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -641,7 +642,7 @@ class TestDelete:
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        _assert_without_password(actual=profile, expected=account_for_delete)
+        assert_profile(actual=profile, expected=account_for_delete)
 
         # 再検索して存在しないこと
         res = await client.get(
@@ -682,11 +683,3 @@ class TestDelete:
     ) -> None:
         res = await client.delete(app.url_path_for("accounts:delete", id=param[0]))
         assert res.status_code == param[1]
-
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-
-
-def _assert_without_password(actual: ProfileInDB, expected: ProfileInDB) -> None:
-    actual.init_password = None
-    expected.init_password = None
-    assert actual == expected

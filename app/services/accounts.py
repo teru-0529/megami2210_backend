@@ -22,6 +22,7 @@ from app.api.schemas.accounts import (
     ProfilePublic,
     ProfileUpdate,
 )
+from app.api.schemas.token import AccessToken
 from app.models.table_models import ac_Auth, ac_Profile
 from app.repositries.accounts import AccountRepository
 from app.services import auth_service
@@ -32,6 +33,7 @@ not_found_exception: HTTPException = HTTPException(
     status_code=HTTP_404_NOT_FOUND,
     detail="Account resource not found by specified Id.",
 )
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -143,6 +145,60 @@ class AccountService:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
+    async def login(
+        self, *, session: AsyncSession, id: str, password: str
+    ) -> AccessToken:
+
+        """ログイン認証"""
+
+        repo = AccountRepository()
+        profile: ac_Profile = await repo.login_authentication(
+            session=session, id=id, password=password
+        )
+        if not profile:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="Authentication was unsuccessful.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        token = auth_service.create_token_for_user(
+            account=ProfileInDB.from_orm(profile)
+        )
+        return AccessToken(access_token=token, token_type="bearer")
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def get_mine(self, *, session: AsyncSession, token: str) -> ProfilePublic:
+
+        """ログインユーザー情報の取得"""
+
+        try:
+            account_id = auth_service.get_id_from_token(token=token)
+            profile = await self.get_by_id(session=session, id=account_id)
+        except Exception:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="No authenticated user.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if not profile:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="No authenticated user.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            # if not current_account.is_active: #FIXME:
+            #     raise HTTPException(
+            #         status_code=HTTP_401_UNAUTHORIZED,
+            #         detail="Not an active user.",
+            #         headers={"WWW-Authenticate": "Bearer"},
+            #     )
+
+        print(profile)
+        return ProfileInDB.from_orm(profile)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def password_change(
         self, *, session: AsyncSession, id: str, pass_change: PasswordChange
     ) -> None:
@@ -161,7 +217,7 @@ class AccountService:
         except AuthError:
             raise HTTPException(
                 status_code=HTTP_401_UNAUTHORIZED,
-                detail="Password is mistaken.",
+                detail="Authentication was unsuccessful.",
             )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----

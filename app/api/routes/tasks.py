@@ -112,7 +112,6 @@ async def query_tasks(
 @router.get(
     "/{id}/",
     name="tasks:get-by-id",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,
@@ -146,7 +145,6 @@ async def get_task_by_id(
 @router.patch(
     "/{id}/",
     name="tasks:patch",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,
@@ -189,7 +187,6 @@ async def patch_task(
 @router.delete(
     "/{id}/",
     name="tasks:delete",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,

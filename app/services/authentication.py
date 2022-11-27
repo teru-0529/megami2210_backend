@@ -3,19 +3,23 @@
 
 import random
 import string
+from datetime import datetime, timedelta
 from typing import Tuple
 
 import bcrypt
+import jwt
+from fastapi import HTTPException
+from pydantic import ValidationError
+from starlette.status import HTTP_401_UNAUTHORIZED
+
 from app.api.schemas.accounts import ProfileInDB
+from app.api.schemas.token import JWTCreds, JWTMeta, JWTPayload
 from app.core.config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     JWT_ALGORITHM,
     JWT_AUDIENCE,
     SECRET_KEY,
 )
-from app.api.schemas.token import JWTMeta, JWTCreds, JWTPayload
-from datetime import datetime, timedelta
-import jwt
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -72,6 +76,25 @@ class AuthService:
             payload=payload.dict(), key=secret_key, algorithm=JWT_ALGORITHM
         )
         return token
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    def get_id_from_token(
+        self, *, token: str, secret_key: str = str(SECRET_KEY)
+    ) -> str:
+        """JWTからログイン中のアカウントを再現する"""
+        try:
+            decoded_token = jwt.decode(
+                token, key=secret_key, audience=JWT_AUDIENCE, algorithms=JWT_ALGORITHM
+            )
+            payload = JWTPayload(**decoded_token)
+        except (jwt.PyJWTError, ValidationError):
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="Could not validate token credentials.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return payload.sub
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER] soltの生成

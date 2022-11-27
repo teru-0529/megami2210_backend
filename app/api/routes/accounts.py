@@ -3,7 +3,6 @@
 
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_200_OK
 
 from app.api.schemas.accounts import (
     AccountCreate,
@@ -28,7 +27,6 @@ router = APIRouter()
 @router.put(
     "/{id}/",
     name="accounts:create",
-    status_code=HTTP_200_OK,
     responses={
         400: {
             "model": Message,
@@ -76,7 +74,6 @@ async def create(
 @router.get(
     "/{id}/",
     name="accounts:get-by-id",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,
@@ -110,8 +107,14 @@ async def get_by_id(
 @router.patch(
     "/{id}/profile",
     name="accounts:patch-profile",
-    status_code=HTTP_200_OK,
     responses={
+        400: {
+            "model": Message,
+            "description": "Wrong input parameters",
+            "content": {
+                "application/json": {"example": {"detail": "duplicate key: [email]."}}
+            },
+        },
         404: {
             "model": Message,
             "description": "The account was not found",
@@ -153,8 +156,16 @@ async def patch_profile(  # FIXME:将来的にはログインユーザーの変�
 @router.patch(
     "/{id}/base-profile",
     name="accounts:patch-base-profile",
-    status_code=HTTP_200_OK,
     responses={
+        400: {
+            "model": Message,
+            "description": "Wrong input parameters",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "duplicate key: [user_name]."}
+                }
+            },
+        },
         404: {
             "model": Message,
             "description": "The account was not found",
@@ -196,7 +207,6 @@ async def patch_base_profile(
 @router.delete(
     "/{id}/",
     name="accounts:delete",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,
@@ -231,20 +241,21 @@ async def delete(
 @router.patch(
     "/{id}/password",
     name="accounts:password-change",
-    status_code=HTTP_200_OK,
     responses={
-        400: {
-            "model": Message,
-            "description": "Wrong input parameters",
-            "content": {
-                "application/json": {"example": {"detail": "Resource not found."}}
-            },
-        },
         401: {
             "model": Message,
             "description": "Auth error",
             "content": {
-                "application/json": {"example": {"detail": "Password is mistaken."}}
+                "application/json": {
+                    "example": {"detail": "Authentication was unsuccessful."}
+                }
+            },
+        },
+        404: {
+            "model": Message,
+            "description": "The account was not found",
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
         200: {"model": None, "description": "Password changed"},
@@ -279,11 +290,10 @@ async def change_password(
 @router.put(
     "/{id}/password",
     name="accounts:password-reset",
-    status_code=HTTP_200_OK,
     responses={
-        400: {
+        404: {
             "model": Message,
-            "description": "Wrong input parameters",
+            "description": "The account was not found",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },

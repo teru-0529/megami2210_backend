@@ -14,8 +14,9 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.accounts import AccountCreate, ProfileInDB
-from app.core.config import ASYNC_DIALECT, SYNC_DIALECT, db_url
+from app.core.config import ASYNC_DIALECT, JWT_TOKEN_PREFIX, SYNC_DIALECT, db_url
 from app.core.database import AsyncCon, SyncCon, get_session
+from app.services import auth_service
 from app.services.accounts import AccountService
 
 SERVER = "testDB"
@@ -86,3 +87,26 @@ async def client(app: FastAPI, session: AsyncSession) -> AsyncClient:
         headers={"Content-Type": "application/json"},
     ) as client:
         yield client
+
+
+@pytest.fixture
+def authorized_client(client: AsyncClient, fixed_account: ProfileInDB) -> AsyncClient:
+
+    # ヘッダーにアクセストークンを設定する
+    token = auth_service.create_token_for_user(account=fixed_account)
+    client.headers = {
+        **client.headers,
+        "Authorization": f"{JWT_TOKEN_PREFIX} {token}",
+    }
+    return client
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+def assert_profile(actual: ProfileInDB, expected: ProfileInDB) -> None:
+    assert actual.account_id == expected.account_id
+    assert actual.account_type == expected.account_type
+    assert actual.email == expected.email
+    assert actual.user_name == expected.user_name
+    assert actual.nickname == expected.nickname

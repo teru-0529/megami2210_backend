@@ -86,6 +86,23 @@ class AccountRepository:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
+    async def login_authentication(
+        self, *, session: AsyncSession, id: str, password: str
+    ) -> Optional[ac_Profile]:
+
+        """パスワード変更"""
+        base_auth: ac_Auth = await self._get_auth_by_id(session=session, id=id)
+        if base_auth is None:
+            return None
+        # 現パスワードチェック
+        if not auth_service.check_password(password, base_auth.password):
+            return None
+
+        profile: ac_Profile = await self.get_profile_by_id(session=session, id=id)
+        return profile
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     async def password_change(
         self, *, session: AsyncSession, id: str, old_password: str, new_password: str
     ) -> None:

@@ -64,3 +64,10 @@ https://qiita.com/mserizawa/items/b833e407d89abd21ee72
 ```
 #### ランダム文字列生成
 https://qiita.com/Scstechr/items/c3b2eb291f7c5b81902a
+
+#### パスワードのHash化
+https://qiita.com/dumbbell/items/62735f30d8cb33dd2773
+https://qiita.com/matsulib/items/2bcf59c2b2cb5eb5c5c4
+
+#### テスト時のengineの作り方
+https://qiita.com/takkeybook/items/bc8c1b6712362db53267
