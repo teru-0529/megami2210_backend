@@ -63,21 +63,19 @@ async def account_for_delete(session: AsyncSession) -> ProfileInDB:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestRouteExists:
-    async def test_create_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_create(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.put(app.url_path_for("accounts:create", id="T-001"), json={})
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_get_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_get_profile(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("accounts:get-profile", id="T-001"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_patch_base_profile_route(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    async def test_patch_profile(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.patch(
                 app.url_path_for("accounts:patch-profile", id="T-001"),
@@ -86,15 +84,13 @@ class TestRouteExists:
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_delete_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_delete(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.delete(app.url_path_for("accounts:delete", id="T-001"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_password_reset_route(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    async def test_password_reset(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.patch(app.url_path_for("accounts:password-reset", id="T-001"))
         except NoMatchFound:
@@ -112,23 +108,23 @@ class TestCreate:
         "<body:full>": (
             "T-001",
             AccountCreate(
-                user_name="織田信長",
-                email="oda@sengoku.com",
+                user_name="徳川家康",
+                email="tokugawa@sengoku.com",
                 account_type=AccountTypes.administrator,
-                init_password="odanobunaga",
+                init_password="password",
             ),
         ),
         "<body:account_type>:任意入力": (
             "T-001",
             AccountCreate(
-                user_name="織田信長", email="oda@sengoku.com", init_password="odanobunaga"
+                user_name="徳川家康", email="tokugawa@sengoku.com", init_password="password"
             ),
         ),
         "<body:init_password>:任意入力": (
             "T-001",
             AccountCreate(
-                user_name="織田信長",
-                email="oda@sengoku.com",
+                user_name="徳川家康",
+                email="tokugawa@sengoku.com",
                 account_type=AccountTypes.administrator,
             ),
         ),
@@ -137,14 +133,15 @@ class TestCreate:
     @pytest.mark.parametrize(
         "param", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_ok_case(
+    # 正常ケース
+    async def test_ok(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         param: tuple[str, AccountCreate],
     ) -> None:
 
-        res = await client.put(
+        res = await admin_client.put(
             app.url_path_for("accounts:create", id=param[0]),
             data=param[1].json(exclude_unset=True),
         )
@@ -158,6 +155,46 @@ class TestCreate:
         assert created_account.is_active is False
         assert created_account.verified_email is False
         assert created_account.nickname is None
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常(DB相関)ケースパラメータ
+    invalid_db_params = {
+        "duplicate:[account_id]": (
+            "T-000",
+            '{"user_name":"武田信玄","email":"shingen@sengoku.com"}',
+            HTTP_409_CONFLICT,
+        ),
+        "duplicate:[user_name]": (
+            "T-100",
+            '{"user_name":"織田信長","email":"shingen@sengoku.com"}',
+            HTTP_409_CONFLICT,
+        ),
+        "duplicate:[email]": (
+            "T-100",
+            '{"user_name":"武田信玄","email":"oda@sengoku.com"}',
+            HTTP_409_CONFLICT,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_db_params.values()), ids=list(invalid_db_params.keys())
+    )
+    # 異常ケース（重複エラー）
+    async def test_ng_duplicate(
+        self,
+        app: FastAPI,
+        admin_client: AsyncClient,
+        param: tuple[str, str, int],
+    ) -> None:
+        res = await admin_client.put(
+            app.url_path_for("accounts:create", id=param[0]),
+            data=param[1],
+        )
+        assert res.status_code == param[2]
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -253,50 +290,14 @@ class TestCreate:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         param: tuple[str, str, int],
     ) -> None:
-        res = await client.put(
-            app.url_path_for("accounts:create", id=param[0]),
-            data=param[1],
-        )
-        assert res.status_code == param[2]
-
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-
-    # 異常(DB相関)ケースパラメータ
-    invalid_db_params = {
-        "duplicate:[account_id]": (
-            "T-000",
-            '{"user_name":"武田信玄","email":"shingen@sengoku.com"}',
-            HTTP_409_CONFLICT,
-        ),
-        "duplicate:[user_name]": (
-            "T-100",
-            '{"user_name":"織田信長","email":"shingen@sengoku.com"}',
-            HTTP_409_CONFLICT,
-        ),
-        "duplicate:[email]": (
-            "T-100",
-            '{"user_name":"武田信玄","email":"oda@sengoku.com"}',
-            HTTP_409_CONFLICT,
-        ),
-    }
-
-    @pytest.mark.parametrize(
-        "param", list(invalid_db_params.values()), ids=list(invalid_db_params.keys())
-    )
-    async def test_db_ng_case(
-        self,
-        app: FastAPI,
-        client: AsyncClient,
-        param: tuple[str, str, int],
-        fixed_account: ProfileInDB,
-    ) -> None:
-        res = await client.put(
+        res = await admin_client.put(
             app.url_path_for("accounts:create", id=param[0]),
             data=param[1],
         )
@@ -308,17 +309,22 @@ class TestCreate:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
-    async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, fixed_account: ProfileInDB
+
+    # 正常ケース
+    async def test_ok(
+        self, app: FastAPI, admin_client: AsyncClient, admin_account: ProfileInDB
     ) -> None:
 
-        res = await client.get(
-            app.url_path_for("accounts:get-profile", id=fixed_account.account_id)
+        res = await admin_client.get(
+            app.url_path_for("accounts:get-profile", id=admin_account.account_id)
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
-        assert_profile(actual=profile, expected=fixed_account)
+        assert_profile(actual=profile, expected=admin_account)
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -340,13 +346,16 @@ class TestGet:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         param: tuple[str, int],
     ) -> None:
-        res = await client.get(app.url_path_for("accounts:get-profile", id=param[0]))
+        res = await admin_client.get(
+            app.url_path_for("accounts:get-profile", id=param[0])
+        )
         assert res.status_code == param[1]
 
 
@@ -368,14 +377,15 @@ class TestPatchProfile:
     @pytest.mark.parametrize(
         "update_params", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_ok_case(
+    # 正常ケース
+    async def test_ok(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         account_for_update: ProfileInDB,
         update_params: ProfileBaseUpdate,
     ) -> None:
-        res = await client.patch(
+        res = await admin_client.patch(
             app.url_path_for(
                 "accounts:patch-profile", id=account_for_update.account_id
             ),
@@ -387,6 +397,39 @@ class TestPatchProfile:
         update_dict = update_params.dict(exclude_unset=True)
         expected = account_for_update.copy(update=update_dict)
         assert_profile(actual=updated_account, expected=expected)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常(DB相関)ケースパラメータ
+    invalid_db_params = {
+        "duplicate:[user_name]": (
+            '{"user_name":"織田信長"}',
+            HTTP_409_CONFLICT,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_db_params.values()), ids=list(invalid_db_params.keys())
+    )
+    # 異常ケース（重複エラー）
+    async def test_ng_duplicate(
+        self,
+        app: FastAPI,
+        admin_client: AsyncClient,
+        admin_account: ProfileInDB,
+        param: tuple[str, str, int],
+        account_for_update: ProfileInDB,
+    ) -> None:
+        res = await admin_client.patch(
+            app.url_path_for(
+                "accounts:patch-profile", id=account_for_update.account_id
+            ),
+            data=param[0],
+        )
+        assert res.status_code == param[1]
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -443,46 +486,18 @@ class TestPatchProfile:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         param: tuple[str, str, int],
     ) -> None:
-        res = await client.patch(
+        res = await admin_client.patch(
             app.url_path_for("accounts:patch-profile", id=param[0]),
             data=param[1],
         )
         assert res.status_code == param[2]
-
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-
-    # 異常(DB相関)ケースパラメータ
-    invalid_db_params = {
-        "duplicate:[user_name]": (
-            '{"user_name":"織田信長"}',
-            HTTP_409_CONFLICT,
-        ),
-    }
-
-    @pytest.mark.parametrize(
-        "param", list(invalid_db_params.values()), ids=list(invalid_db_params.keys())
-    )
-    async def test_db_ng_case(
-        self,
-        app: FastAPI,
-        client: AsyncClient,
-        param: tuple[str, str, int],
-        fixed_account: ProfileInDB,
-        account_for_update: ProfileInDB,
-    ) -> None:
-        res = await client.patch(
-            app.url_path_for(
-                "accounts:patch-profile", id=account_for_update.account_id
-            ),
-            data=param[0],
-        )
-        assert res.status_code == param[1]
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -490,11 +505,13 @@ class TestPatchProfile:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
-    async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, account_for_delete: ProfileInDB
+
+    # 正常ケース
+    async def test_ok(
+        self, app: FastAPI, admin_client: AsyncClient, account_for_delete: ProfileInDB
     ) -> None:
 
-        res = await client.delete(
+        res = await admin_client.delete(
             app.url_path_for("accounts:delete", id=account_for_delete.account_id)
         )
         assert res.status_code == HTTP_200_OK
@@ -502,11 +519,14 @@ class TestDelete:
         assert_profile(actual=profile, expected=account_for_delete)
 
         # 再検索して存在しないこと
-        res = await client.get(
+        res = await admin_client.get(
             app.url_path_for("accounts:get-profile", id=account_for_delete.account_id)
         )
         assert res.status_code == HTTP_404_NOT_FOUND
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -532,13 +552,16 @@ class TestDelete:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         param: tuple[str, int],
     ) -> None:
-        res = await client.delete(app.url_path_for("accounts:delete", id=param[0]))
+        res = await admin_client.delete(
+            app.url_path_for("accounts:delete", id=param[0])
+        )
         assert res.status_code == param[1]
 
 
@@ -547,11 +570,12 @@ class TestDelete:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestResetPassword:
+
     # 正常ケース
-    async def test_ok_case(
+    async def test_ok(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         account_for_update: ProfileInDB,
     ) -> None:
         update_param = PasswordReset(init_password="new_password")
@@ -562,12 +586,12 @@ class TestResetPassword:
         }
 
         # リセット前はリセットパスワードでログインできないこと
-        client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await client.post(app.url_path_for("mine:login"), data=login_data)
+        admin_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await admin_client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
-        client.headers["content-type"] = ""
-        res = await client.patch(
+        admin_client.headers["content-type"] = ""
+        res = await admin_client.patch(
             app.url_path_for(
                 "accounts:password-reset", id=account_for_update.account_id
             ),
@@ -577,18 +601,21 @@ class TestResetPassword:
         assert res.status_code == HTTP_200_OK
 
         # リセット後はリセットパスワードでログインできること
-        client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await client.post(app.url_path_for("mine:login"), data=login_data)
+        admin_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await admin_client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_200_OK
 
         # リセット後のアカウントが非アクティベート状態であること
-        res = await client.get(
+        res = await admin_client.get(
             app.url_path_for("accounts:get-profile", id=account_for_update.account_id)
         )
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
         profile.is_active is False
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -614,13 +641,14 @@ class TestResetPassword:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        admin_client: AsyncClient,
         param: tuple[str, int],
     ) -> None:
-        res = await client.patch(
+        res = await admin_client.patch(
             app.url_path_for("accounts:password-reset", id="T-001"), data=param[0]
         )
         assert res.status_code == param[1]

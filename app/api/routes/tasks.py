@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
+from app.api.routes.mine import oauth2_scheme
 from app.api.schemas.base import Message, q_limit, q_offset, q_sort
 from app.api.schemas.tasks import (
     TaskCreate,
@@ -35,6 +36,7 @@ async def create_task(
     response: Response,
     new_task: TaskCreate = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
     タスクの新規作成。</br>
@@ -73,6 +75,7 @@ async def query_tasks(
     execute_assaignee: bool = q_exclude_asaignee,  # TODO:
     filter: TaskFilter = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublicList:
     """
     タスク検索。</br>
@@ -124,6 +127,7 @@ async def query_tasks(
 async def get_task_by_id(
     id: int = p_id,
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
     タスク1件の取得。</br>
@@ -158,6 +162,7 @@ async def patch_task(
     id: int = p_id,
     patch_params: TaskUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
     タスク1件の更新。</br>
@@ -199,6 +204,7 @@ async def patch_task(
 async def delete_task(
     id: int = p_id,
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
     タスク1件の削除。

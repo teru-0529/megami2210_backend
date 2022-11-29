@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.routes.mine import oauth2_scheme
 from app.api.schemas.accounts import (
     AccountCreate,
     InitPass,
@@ -16,8 +17,6 @@ from app.api.schemas.accounts import (
 from app.api.schemas.base import Message
 from app.core.database import get_session
 from app.services.accounts import AccountService
-
-# from app.api.routes import oauth2_scheme
 
 router = APIRouter()
 
@@ -47,6 +46,7 @@ async def create(
     id: str = p_account_id,
     new_account: AccountCreate = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> ProfilePublicWithInitPass:
     """
     アカウントの新規作成。</br>
@@ -91,6 +91,7 @@ async def create(
 async def get_by_id(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> ProfilePublic:
     """
     アカウント1件の取得。</br>
@@ -134,6 +135,7 @@ async def patch_base_profile(
     id: str = p_account_id,
     patch_params: ProfileBaseUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> ProfilePublic:
     """
     管理者によるアカウント1件の更新。</br>
@@ -175,6 +177,7 @@ async def patch_base_profile(
 async def delete(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> ProfilePublic:
     """
     アカウント1件の削除。
@@ -210,6 +213,7 @@ async def reset_password(
     id: str = p_account_id,
     pass_reset: PasswordReset = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> InitPass:
     """
     パスワードのリセット。</br>

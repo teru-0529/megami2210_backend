@@ -93,31 +93,31 @@ def import_task(s_engine: Engine) -> DataFrame:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestRouteExists:
-    async def test_create_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_create(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.post(app.url_path_for("tasks:create"), json={})
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_get_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_get(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:get", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_query_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_query(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:query"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_patch_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_patch(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:patch", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_delete_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_delete(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("tasks:delete", id=1))
         except NoMatchFound:
@@ -162,11 +162,12 @@ class TestCreate:
     @pytest.mark.parametrize(
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, new_task: TaskCreate
+    # 正常ケース
+    async def test_ok(
+        self, app: FastAPI, general_client: AsyncClient, new_task: TaskCreate
     ) -> None:
 
-        res = await client.post(
+        res = await general_client.post(
             app.url_path_for("tasks:create"),
             data=new_task.json(exclude_unset=True),
         )
@@ -178,6 +179,9 @@ class TestCreate:
         assert created_task.is_significant == new_task.is_significant
         assert created_task.deadline == new_task.deadline
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -221,13 +225,14 @@ class TestCreate:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        general_client: AsyncClient,
         param: tuple[str, int],
     ) -> None:
-        res = await client.post(
+        res = await general_client.post(
             app.url_path_for("tasks:create"),
             data=param[0],
         )
@@ -239,15 +244,21 @@ class TestCreate:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
-    async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, fixed_task: TaskInDB
+
+    # 正常ケースパラメータ
+    async def test_ok(
+        self, app: FastAPI, provisional_client: AsyncClient, fixed_task: TaskInDB
     ) -> None:
 
-        res = await client.get(app.url_path_for("tasks:get", id=fixed_task.id))
+        res = await provisional_client.get(
+            app.url_path_for("tasks:get", id=fixed_task.id)
+        )
         assert res.status_code == HTTP_200_OK
         get_task = TaskInDB(**res.json())
         assert get_task == fixed_task
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -267,13 +278,14 @@ class TestGet:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        provisional_client: AsyncClient,
         param: tuple[any, int],
     ) -> None:
-        res = await client.get(app.url_path_for("tasks:get", id=param[0]))
+        res = await provisional_client.get(app.url_path_for("tasks:get", id=param[0]))
         assert res.status_code == param[1]
 
 
@@ -410,15 +422,16 @@ class TestQuery:
     @pytest.mark.parametrize(
         "param", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_ok_case(
+    # 正常ケース
+    async def test_ok(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        provisional_client: AsyncClient,
         import_task: DataFrame,
         param: tuple[any, str, int, int, List[int]],
     ) -> None:
 
-        res = await client.post(
+        res = await provisional_client.post(
             app.url_path_for("tasks:query"), params=param[0], data=param[1]
         )
         assert res.status_code == HTTP_200_OK
@@ -429,6 +442,8 @@ class TestQuery:
         ids = [task.id for task in result.tasks]
         assert ids == param[4]
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -573,13 +588,14 @@ class TestQuery:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        provisional_client: AsyncClient,
         param: tuple[any, str, int],
     ) -> None:
-        res = await client.post(
+        res = await provisional_client.post(
             app.url_path_for("tasks:query"), params=param[0], data=param[1]
         )
         assert res.status_code == param[2]
@@ -608,14 +624,15 @@ class TestPatch:
     @pytest.mark.parametrize(
         "update_params", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_ok_case(
+    # 正常ケース
+    async def test_ok(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        general_client: AsyncClient,
         task_for_update: TaskInDB,
         update_params: TaskUpdate,
     ) -> None:
-        res = await client.patch(
+        res = await general_client.patch(
             app.url_path_for("tasks:patch", id=task_for_update.id),
             data=update_params.json(exclude_unset=True),
         )
@@ -626,6 +643,9 @@ class TestPatch:
         expected = task_for_update.copy(update=update_dict)
         assert updated_task == expected
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -692,13 +712,14 @@ class TestPatch:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        general_client: AsyncClient,
         param: tuple[any, str, int],
     ) -> None:
-        res = await client.patch(
+        res = await general_client.patch(
             app.url_path_for("tasks:patch", id=param[0]),
             data=param[1],
         )
@@ -710,11 +731,13 @@ class TestPatch:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
-    async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, task_for_delete: TaskInDB
+
+    # 正常ケース
+    async def test_ok(
+        self, app: FastAPI, general_client: AsyncClient, task_for_delete: TaskInDB
     ) -> None:
 
-        res = await client.delete(
+        res = await general_client.delete(
             app.url_path_for("tasks:delete", id=task_for_delete.id)
         )
         assert res.status_code == HTTP_200_OK
@@ -722,9 +745,14 @@ class TestDelete:
         assert get_task == task_for_delete
 
         # 再検索して存在しないこと
-        res = await client.get(app.url_path_for("tasks:get", id=task_for_delete.id))
+        res = await general_client.get(
+            app.url_path_for("tasks:get", id=task_for_delete.id)
+        )
         assert res.status_code == HTTP_404_NOT_FOUND
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # FIXME:認証エラー
+    # FIXME:認可エラー
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -744,11 +772,12 @@ class TestDelete:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        client: AsyncClient,
+        general_client: AsyncClient,
         param: tuple[any, int],
     ) -> None:
-        res = await client.delete(app.url_path_for("tasks:delete", id=param[0]))
+        res = await general_client.delete(app.url_path_for("tasks:delete", id=param[0]))
         assert res.status_code == param[1]

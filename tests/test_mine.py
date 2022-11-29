@@ -56,31 +56,25 @@ async def duplicate_dummy_profile(session: AsyncSession) -> ProfileInDB:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestRouteExists:
-    async def test_login_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_login(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.post(app.url_path_for("mine:login"), data="{}")
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_get_my_profile_route(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    async def test_get_profile(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.get(app.url_path_for("mine:get-profile"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_patch_my_profile_route(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    async def test_patch_profile(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.patch(app.url_path_for("mine:patch-profile"), data="{}")
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_password_change_route(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    async def test_password_change(self, app: FastAPI, client: AsyncClient) -> None:
         try:
             await client.patch(app.url_path_for("mine:change-password"), data="{}")
         except NoMatchFound:
@@ -94,10 +88,10 @@ class TestRouteExists:
 class TestCreateToken:
 
     # 正常ケース
-    async def test_ok_case(self, fixed_account: ProfileInDB) -> None:
+    async def test_ok(self, general_account: ProfileInDB) -> None:
 
         token = auth_service.create_token_for_user(
-            account=fixed_account,
+            account=general_account,
             secret_key=str(SECRET_KEY),
             audience=JWT_AUDIENCE,
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -107,13 +101,13 @@ class TestCreateToken:
             token, str(SECRET_KEY), audience=JWT_AUDIENCE, algorithms=[JWT_ALGORITHM]
         )
         assert creds.get("sub") is not None
-        assert creds["sub"] == fixed_account.account_id
+        assert creds["sub"] == general_account.account_id
         assert creds["aud"] == JWT_AUDIENCE
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース(ユーザー無し)
-    async def test_ng_case_none_account(self) -> None:
+    async def test_ng_none_account(self) -> None:
         token = auth_service.create_token_for_user(
             account=None,
             secret_key=str(SECRET_KEY),
@@ -154,17 +148,17 @@ class TestCreateToken:
         ),
     }
 
-    # 異常ケース(パラメータ不正)
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
-        self, fixed_account: ProfileInDB, param: tuple[str, str, BaseException]
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
+        self, general_account: ProfileInDB, param: tuple[str, str, BaseException]
     ) -> None:
 
         with pytest.raises(param[2]):
             token = auth_service.create_token_for_user(
-                account=fixed_account,
+                account=general_account,
                 secret_key=str(param[0]),
                 audience=param[1],
                 expires_in=ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -185,14 +179,14 @@ class TestCreateToken:
 class TestLogin:
 
     # 正常ケース
-    async def test_ok_case(
-        self, app: FastAPI, client: AsyncClient, fixed_account: ProfileInDB
+    async def test_ok(
+        self, app: FastAPI, client: AsyncClient, non_active_account: ProfileInDB
     ) -> None:
-        client.headers["content-type"] = "application/x-www-form-urlencoded"
         login_data = {
-            "username": fixed_account.account_id,
-            "password": fixed_account.init_password,
+            "username": non_active_account.account_id,
+            "password": non_active_account.init_password,
         }
+        client.headers["content-type"] = "application/x-www-form-urlencoded"
         res = await client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_200_OK
 
@@ -206,7 +200,7 @@ class TestLogin:
             token, str(SECRET_KEY), audience=JWT_AUDIENCE, algorithms=[JWT_ALGORITHM]
         )
         assert "sub" in creds
-        assert creds["sub"] == fixed_account.account_id
+        assert creds["sub"] == non_active_account.account_id
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -237,16 +231,16 @@ class TestLogin:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    # 異常ケース
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
         client: AsyncClient,
-        fixed_account: ProfileInDB,
+        non_active_account: ProfileInDB,
         param: tuple[str, str, int],
     ) -> None:
         client.headers["content-type"] = "application/x-www-form-urlencoded"
-        dict = fixed_account.dict()
+        dict = non_active_account.dict()
         dict[param[0]] = param[1]
         login_data = {
             "username": dict["account_id"],
@@ -264,14 +258,14 @@ class TestLogin:
 class TestGetIdFromToken:
 
     # 正常ケース
-    async def test_ok_case(self, fixed_account: ProfileInDB) -> None:
+    async def test_ok(self, general_account: ProfileInDB) -> None:
         token = auth_service.create_token_for_user(
-            account=fixed_account, secret_key=str(SECRET_KEY)
+            account=general_account, secret_key=str(SECRET_KEY)
         )
         account_id = auth_service.get_id_from_token(
             token=token, secret_key=str(SECRET_KEY)
         )
-        assert account_id == fixed_account.account_id
+        assert account_id == general_account.account_id
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -298,14 +292,14 @@ class TestGetIdFromToken:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    # 異常ケース
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
-        fixed_account: ProfileInDB,
+        general_account: ProfileInDB,
         param: tuple[str, str],
     ) -> None:
         token = auth_service.create_token_for_user(
-            account=fixed_account, secret_key=str(SECRET_KEY)
+            account=general_account, secret_key=str(SECRET_KEY)
         )
         if param[1] != "use correct token":
             token = param[1]
@@ -318,24 +312,22 @@ class TestGetIdFromToken:
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
-class TestGetMyProfile:
+class TestGetProfile:
 
     # 正常ケース
-    async def test_ok_case(
-        self, app: FastAPI, authorized_client: AsyncClient, fixed_account: ProfileInDB
+    async def test_ok(
+        self, app: FastAPI, general_client: AsyncClient, general_account: ProfileInDB
     ) -> None:
-        res = await authorized_client.get(app.url_path_for("mine:get-profile"))
+        res = await general_client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_200_OK
 
         my_account = ProfileInDB(**res.json())
-        assert_profile(actual=my_account, expected=fixed_account)
+        assert_profile(actual=my_account, expected=general_account)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    # 異常ケース（未認証クライアント）
-    async def test_ng_case_unauthorized(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    # 異常ケース（認証エラー）
+    async def test_ng_authentication(self, app: FastAPI, client: AsyncClient) -> None:
         res = await client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
@@ -351,15 +343,15 @@ class TestGetMyProfile:
     @pytest.mark.parametrize(
         "jwt_prefix", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    # 異常ケース
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
         client: AsyncClient,
-        fixed_account: ProfileInDB,
+        general_account: ProfileInDB,
         jwt_prefix: str,
     ) -> None:
-        token = auth_service.create_token_for_user(account=fixed_account)
+        token = auth_service.create_token_for_user(account=general_account)
         res = await client.get(
             app.url_path_for("mine:get-profile"),
             headers={"Authorization": f"{jwt_prefix} {token}"},
@@ -372,6 +364,7 @@ class TestGetMyProfile:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatchProfile:
+
     # 正常ケースパラメータ
     valid_params = {
         "<body:nickname>": ProfileUpdate(nickname="将軍"),
@@ -382,14 +375,15 @@ class TestPatchProfile:
     @pytest.mark.parametrize(
         "update_params", list(valid_params.values()), ids=list(valid_params.keys())
     )
-    async def test_ok_case(
+    # 正常ケース
+    async def test_ok(
         self,
         app: FastAPI,
-        authorized_client: AsyncClient,
-        fixed_account: ProfileInDB,
+        general_client: AsyncClient,
+        general_account: ProfileInDB,
         update_params: ProfileUpdate,
     ) -> None:
-        res = await authorized_client.patch(
+        res = await general_client.patch(
             app.url_path_for("mine:patch-profile"),
             data=update_params.json(exclude_unset=True),
         )
@@ -397,16 +391,14 @@ class TestPatchProfile:
         updated_profile = ProfileInDB(**res.json())
 
         update_dict = update_params.dict(exclude_unset=True)
-        expected_profile = fixed_account.copy(update=update_dict)
+        expected_profile = general_account.copy(update=update_dict)
 
         assert_profile(actual=updated_profile, expected=expected_profile)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    # 異常ケース（未認証クライアント）
-    async def test_ng_case_unauthorized(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    # 異常ケース（認証エラー）
+    async def test_ng_authentication(self, app: FastAPI, client: AsyncClient) -> None:
         res = await client.patch(app.url_path_for("mine:patch-profile"), data="{}")
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
@@ -447,13 +439,14 @@ class TestPatchProfile:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        authorized_client: AsyncClient,
+        general_client: AsyncClient,
         param: tuple[str, int],
     ) -> None:
-        res = await authorized_client.patch(
+        res = await general_client.patch(
             app.url_path_for("mine:patch-profile"), data=param[0]
         )
         assert res.status_code == param[1]
@@ -474,11 +467,11 @@ class TestPatchProfile:
     async def test_db_ng_case(
         self,
         app: FastAPI,
-        authorized_client: AsyncClient,
+        general_client: AsyncClient,
         param: tuple[str, int],
         duplicate_dummy_profile: ProfileInDB,
     ) -> None:
-        res = await authorized_client.patch(
+        res = await general_client.patch(
             app.url_path_for("mine:patch-profile"), data=param[0]
         )
         assert res.status_code == param[1]
@@ -489,54 +482,53 @@ class TestPatchProfile:
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestChangePassword:
+
     # 正常ケース
-    async def test_ok_case(
+    async def test_ok(
         self,
         app: FastAPI,
-        authorized_client: AsyncClient,
-        fixed_account: ProfileInDB,
+        non_active_client: AsyncClient,
+        non_active_account: ProfileInDB,
     ) -> None:
         update_param = PasswordChange(new_password="new_password")
 
         login_data = {
-            "username": fixed_account.account_id,
+            "username": non_active_account.account_id,
             "password": update_param.new_password,
         }
 
         # 変更前は新パスワードでログインできないこと
-        authorized_client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await authorized_client.post(
+        non_active_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await non_active_client.post(
             app.url_path_for("mine:login"), data=login_data
         )
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
-        authorized_client.headers["content-type"] = ""
-        res = await authorized_client.patch(
+        non_active_client.headers["content-type"] = ""
+        res = await non_active_client.patch(
             app.url_path_for("mine:change-password"),
             data=update_param.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_200_OK
 
         # 変更後は新パスワードでログインできること
-        authorized_client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await authorized_client.post(
+        non_active_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await non_active_client.post(
             app.url_path_for("mine:login"), data=login_data
         )
         assert res.status_code == HTTP_200_OK
 
         # 変更後のアカウントがアクティベート状態であること
-        authorized_client.headers["content-type"] = ""
-        res = await authorized_client.get(app.url_path_for("mine:get-profile"))
+        non_active_client.headers["content-type"] = ""
+        res = await non_active_client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
         profile.is_active is True
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    # 異常ケース（未認証クライアント）
-    async def test_ng_case_unauthorized(
-        self, app: FastAPI, client: AsyncClient
-    ) -> None:
+    # 異常ケース（認証エラー）
+    async def test_ng_authentication(self, app: FastAPI, client: AsyncClient) -> None:
         res = await client.patch(app.url_path_for("mine:change-password"), data="{}")
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
@@ -565,13 +557,14 @@ class TestChangePassword:
     @pytest.mark.parametrize(
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
-    async def test_ng_case(
+    # 異常ケース（バリデーションエラー）
+    async def test_ng_validation(
         self,
         app: FastAPI,
-        authorized_client: AsyncClient,
+        non_active_client: AsyncClient,
         param: tuple[str, int],
     ) -> None:
-        res = await authorized_client.patch(
+        res = await non_active_client.patch(
             app.url_path_for("mine:change-password"), data=param[0]
         )
         assert res.status_code == param[1]
