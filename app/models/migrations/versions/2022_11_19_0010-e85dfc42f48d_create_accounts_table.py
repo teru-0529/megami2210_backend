@@ -5,12 +5,19 @@ Revises: de6f035be044
 Create Date: 2022-11-19 00:10:53.096333
 
 """
-from alembic import op
+import os
+import pathlib
+import sys
+
 import sqlalchemy as sa
+from alembic import op
 
 from app.models.migrations.util import timestamps
 from app.models.segment_values import AccountTypes
 
+dir = str(pathlib.Path(__file__).resolve().parents[4])
+sys.path.append(os.path.join(dir, ".venv", "lib", "python3.11", "site-packages"))
+from app.services import auth_service  # noqa:E402
 
 # revision identifiers, used by Alembic.
 revision = "e85dfc42f48d"
@@ -85,7 +92,7 @@ def create_profiles_table() -> None:
             {
                 "account_id": "T-901",
                 "user_name": "西郷隆盛",
-                "nickname": None,
+                "nickname": "西郷どん",
                 "email": "saigo@bakumatsu.com",
                 "verified_email": True,
                 "account_type": AccountTypes.administrator,
@@ -107,7 +114,7 @@ def create_profiles_table() -> None:
                 "email": "okubo@bakumatsu.com",
                 "verified_email": False,
                 "account_type": AccountTypes.general,
-                "is_active": True,
+                "is_active": False,
             },
         ],
     )
@@ -160,26 +167,31 @@ def create_authes_table() -> None:
         referent_schema="account",
     )
 
+    # パスワードのHash化処理
+    hash_password, solt = auth_service.create_hash_password(
+        plaintext_password="password"
+    )
+
     op.bulk_insert(
         authes_table,
         [
             {
                 "account_id": "T-901",
                 "email": "saigo@bakumatsu.com",
-                "solt": "100",
-                "password": "password",
+                "solt": solt,
+                "password": hash_password,
             },
             {
                 "account_id": "T-902",
                 "email": "kido@bakumatsu.com",
-                "solt": "100",
-                "password": "password",
+                "solt": solt,
+                "password": hash_password,
             },
             {
                 "account_id": "T-903",
                 "email": "okubo@bakumatsu.com",
-                "solt": "100",
-                "password": "password",
+                "solt": solt,
+                "password": hash_password,
             },
         ],
     )

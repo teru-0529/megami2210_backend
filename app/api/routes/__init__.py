@@ -3,14 +3,14 @@
 
 from fastapi import APIRouter
 
-from app.api.routes.tasks import router as task_router
 from app.api.routes.accounts import router as account_router
-from app.api.routes.login import router as login_router
+from app.api.routes.mine import router as mine_router
+from app.api.routes.tasks import router as task_router
 from app.api.schemas.base import Message
 
 router = APIRouter()
 
-router.include_router(login_router, tags=["mine"])
+router.include_router(mine_router, tags=["mine"])
 router.include_router(account_router, prefix="/accounts", tags=["accounts"])
 router.include_router(task_router, prefix="/tasks", tags=["tasks"])
 

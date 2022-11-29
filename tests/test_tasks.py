@@ -101,7 +101,7 @@ class TestRouteExists:
 
     async def test_get_route(self, app: FastAPI, client: AsyncClient) -> None:
         try:
-            await client.get(app.url_path_for("tasks:get-by-id", id=1))
+            await client.get(app.url_path_for("tasks:get", id=1))
         except NoMatchFound:
             pytest.fail("route not exist")
 
@@ -243,7 +243,7 @@ class TestGet:
         self, app: FastAPI, client: AsyncClient, fixed_task: TaskInDB
     ) -> None:
 
-        res = await client.get(app.url_path_for("tasks:get-by-id", id=fixed_task.id))
+        res = await client.get(app.url_path_for("tasks:get", id=fixed_task.id))
         assert res.status_code == HTTP_200_OK
         get_task = TaskInDB(**res.json())
         assert get_task == fixed_task
@@ -273,7 +273,7 @@ class TestGet:
         client: AsyncClient,
         param: tuple[any, int],
     ) -> None:
-        res = await client.get(app.url_path_for("tasks:get-by-id", id=param[0]))
+        res = await client.get(app.url_path_for("tasks:get", id=param[0]))
         assert res.status_code == param[1]
 
 
@@ -722,9 +722,7 @@ class TestDelete:
         assert get_task == task_for_delete
 
         # 再検索して存在しないこと
-        res = await client.get(
-            app.url_path_for("tasks:get-by-id", id=task_for_delete.id)
-        )
+        res = await client.get(app.url_path_for("tasks:get", id=task_for_delete.id))
         assert res.status_code == HTTP_404_NOT_FOUND
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----

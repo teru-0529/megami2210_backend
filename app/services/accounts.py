@@ -7,9 +7,9 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import (
-    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
     HTTP_404_NOT_FOUND,
+    HTTP_409_CONFLICT,
 )
 
 from app.api.schemas.accounts import (
@@ -26,14 +26,19 @@ from app.api.schemas.token import AccessToken
 from app.models.table_models import ac_Auth, ac_Profile
 from app.repositries.accounts import AccountRepository
 from app.services import auth_service
-from app.services.authentication import AuthError
+
+# 未認証例外
+not_authorized_exception: HTTPException = HTTPException(
+    status_code=HTTP_401_UNAUTHORIZED,
+    detail="No authenticated user.",
+    headers={"WWW-Authenticate": "Bearer"},
+)
 
 # 対象無し例外
 not_found_exception: HTTPException = HTTPException(
     status_code=HTTP_404_NOT_FOUND,
     detail="Account resource not found by specified Id.",
 )
-
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -87,16 +92,6 @@ class AccountService:
             raise not_found_exception
 
         return ProfileInDB.from_orm(profile)
-
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-
-    async def patch_profile(
-        self, *, session: AsyncSession, id: str, patch_params: ProfileUpdate
-    ) -> ProfilePublic:
-
-        """アカウント更新(profile)"""
-        update_dict = patch_params.dict(exclude_unset=True)
-        return await self.update(session=session, id=id, update_dict=update_dict)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -156,11 +151,7 @@ class AccountService:
             session=session, id=id, password=password
         )
         if not profile:
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
-                detail="Authentication was unsuccessful.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise not_authorized_exception
         token = auth_service.create_token_for_user(
             account=ProfileInDB.from_orm(profile)
         )
@@ -168,25 +159,19 @@ class AccountService:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    async def get_mine(self, *, session: AsyncSession, token: str) -> ProfilePublic:
+    async def get_my_profile(
+        self, *, session: AsyncSession, token: str
+    ) -> ProfilePublic:
 
-        """ログインユーザー情報の取得"""
+        """ログインユーザーのプロフィール取得"""
 
         try:
             account_id = auth_service.get_id_from_token(token=token)
             profile = await self.get_by_id(session=session, id=account_id)
-        except Exception:
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
-                detail="No authenticated user.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        if not profile:
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
-                detail="No authenticated user.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        except Exception:  # pragma: no cover
+            raise not_authorized_exception
+        if not profile:  # pragma: no cover
+            raise not_authorized_exception
             # if not current_account.is_active: #FIXME:
             #     raise HTTPException(
             #         status_code=HTTP_401_UNAUTHORIZED,
@@ -199,26 +184,40 @@ class AccountService:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    async def password_change(
-        self, *, session: AsyncSession, id: str, pass_change: PasswordChange
+    async def patch_my_profile(
+        self, *, session: AsyncSession, token: str, patch_params: ProfileUpdate
+    ) -> ProfilePublic:
+
+        """ログインユーザーのプロフィール更新"""
+
+        try:
+            account_id = auth_service.get_id_from_token(token=token)
+        except Exception:  # pragma: no cover
+            raise not_authorized_exception
+        update_dict = patch_params.dict(exclude_unset=True)
+        return await self.update(
+            session=session, id=account_id, update_dict=update_dict
+        )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def change_my_password(
+        self, *, session: AsyncSession, token: str, pass_change: PasswordChange
     ) -> None:
 
-        """パスワード変更"""
+        """ログインユーザーのパスワード変更"""
 
         repo = AccountRepository()
         try:
+            account_id = auth_service.get_id_from_token(token=token)
             await repo.password_change(
                 session=session,
-                id=id,
-                old_password=pass_change.old_password.get_secret_value(),
+                id=account_id,
                 new_password=pass_change.new_password.get_secret_value(),
             )
             await session.commit()
-        except AuthError:
-            raise HTTPException(
-                status_code=HTTP_401_UNAUTHORIZED,
-                detail="Authentication was unsuccessful.",
-            )
+        except Exception:  # pragma: no cover
+            raise not_authorized_exception
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -253,7 +252,7 @@ class AccountService:
             ],
         ):
             raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST, detail="duplicate key: [account_id]."
+                status_code=HTTP_409_CONFLICT, detail="duplicate key: [account_id]."
             )
         elif self.exists_params(
             args,
@@ -264,7 +263,7 @@ class AccountService:
             ],
         ):
             raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST, detail="duplicate key: [user_name]."
+                status_code=HTTP_409_CONFLICT, detail="duplicate key: [user_name]."
             )
         elif self.exists_params(
             args,
@@ -275,7 +274,7 @@ class AccountService:
             ],
         ):
             raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST, detail="duplicate key: [email]."
+                status_code=HTTP_409_CONFLICT, detail="duplicate key: [email]."
             )
         raise e  # pragma: no cover
 

@@ -7,17 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas.accounts import (
     AccountCreate,
     InitPass,
-    PasswordChange,
     PasswordReset,
     ProfileBaseUpdate,
     ProfilePublic,
     ProfilePublicWithInitPass,
-    ProfileUpdate,
     p_account_id,
 )
 from app.api.schemas.base import Message
 from app.core.database import get_session
 from app.services.accounts import AccountService
+
+# from app.api.routes import oauth2_scheme
 
 router = APIRouter()
 
@@ -28,16 +28,19 @@ router = APIRouter()
     "/{id}/",
     name="accounts:create",
     responses={
-        400: {
+        409: {
             "model": Message,
-            "description": "Wrong input parameters",
+            "description": "Resource conflict Error",
             "content": {
                 "application/json": {
                     "example": {"detail": "duplicate key: [account_id]."}
                 }
             },
         },
-        200: {"model": ProfilePublicWithInitPass, "description": "New account created"},
+        200: {
+            "model": ProfilePublicWithInitPass,
+            "description": "Create new account successful",
+        },
     },
 )
 async def create(
@@ -73,16 +76,16 @@ async def create(
 
 @router.get(
     "/{id}/",
-    name="accounts:get-by-id",
+    name="accounts:get-profile",
     responses={
         404: {
             "model": Message,
-            "description": "The account was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": ProfilePublic, "description": "Account requested by ID"},
+        200: {"model": ProfilePublic, "description": "Get profile successful"},
     },
 )
 async def get_by_id(
@@ -108,58 +111,9 @@ async def get_by_id(
     "/{id}/profile",
     name="accounts:patch-profile",
     responses={
-        400: {
+        409: {
             "model": Message,
-            "description": "Wrong input parameters",
-            "content": {
-                "application/json": {"example": {"detail": "duplicate key: [email]."}}
-            },
-        },
-        404: {
-            "model": Message,
-            "description": "The account was not found",
-            "content": {
-                "application/json": {"example": {"detail": "Resource not found."}}
-            },
-        },
-        200: {"model": ProfilePublic, "description": "Account profile patched by ID"},
-    },
-)
-async def patch_profile(  # FIXME:将来的にはログインユーザーの変更
-    id: str = p_account_id,
-    patch_params: ProfileUpdate = Body(...),
-    session: AsyncSession = Depends(get_session),
-) -> ProfilePublic:
-    """
-    本人によるアカウント1件の更新。</br>
-    **user_name**、**account_type** は管理者管轄項目のため変更不可、**password** の変更は別APIで実施。:
-
-    [PATH]
-
-    - **id**: アカウントID[reqired]
-
-    [BODY]
-
-    - **nickname**: ニックネーム
-    - **email**: Eメールアドレス[not-nullable]
-    """
-    service = AccountService()
-    account = await service.patch_profile(
-        session=session, id=id, patch_params=patch_params
-    )
-    return account
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-@router.patch(
-    "/{id}/base-profile",
-    name="accounts:patch-base-profile",
-    responses={
-        400: {
-            "model": Message,
-            "description": "Wrong input parameters",
+            "description": "Resource conflict Error",
             "content": {
                 "application/json": {
                     "example": {"detail": "duplicate key: [user_name]."}
@@ -168,12 +122,12 @@ async def patch_profile(  # FIXME:将来的にはログインユーザーの変�
         },
         404: {
             "model": Message,
-            "description": "The account was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": ProfilePublic, "description": "Account profile patched by ID"},
+        200: {"model": ProfilePublic, "description": "Update profile successful"},
     },
 )
 async def patch_base_profile(
@@ -210,12 +164,12 @@ async def patch_base_profile(
     responses={
         404: {
             "model": Message,
-            "description": "The account was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": ProfilePublic, "description": "Account deleted by ID"},
+        200: {"model": ProfilePublic, "description": "Delete account successful"},
     },
 )
 async def delete(
@@ -240,65 +194,16 @@ async def delete(
 
 @router.patch(
     "/{id}/password",
-    name="accounts:password-change",
-    responses={
-        401: {
-            "model": Message,
-            "description": "Auth error",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Authentication was unsuccessful."}
-                }
-            },
-        },
-        404: {
-            "model": Message,
-            "description": "The account was not found",
-            "content": {
-                "application/json": {"example": {"detail": "Resource not found."}}
-            },
-        },
-        200: {"model": None, "description": "Password changed"},
-    },
-)
-async def change_password(
-    id: str = p_account_id,
-    pass_change: PasswordChange = Body(...),
-    session: AsyncSession = Depends(get_session),
-) -> None:
-    """
-    パスワードの変更。</br>
-    変更することでアカウントはActive状態になる。
-
-    [PATH]
-
-    - **id**: アカウントID[reqired]
-
-    [BODY]
-
-    - **old_password**: 現パスワード[reqired]
-    - **new_password**: 新パスワード[reqired]
-    """
-
-    service = AccountService()
-    await service.password_change(session=session, id=id, pass_change=pass_change)
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-@router.put(
-    "/{id}/password",
     name="accounts:password-reset",
     responses={
         404: {
             "model": Message,
-            "description": "The account was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": InitPass, "description": "Password reseted"},
+        200: {"model": InitPass, "description": "Reset password successful"},
     },
 )
 async def reset_password(

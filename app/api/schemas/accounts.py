@@ -136,7 +136,6 @@ class ProfilePublicWithInitPass(ProfilePublic):
 
 
 class PasswordChange(CoreModel, extra=Extra.forbid):
-    old_password: SecretStr = f_password("現パスワード")
     new_password: SecretStr = f_password("新パスワード")
 
 

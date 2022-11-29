@@ -27,7 +27,7 @@ router = APIRouter()
     "/",
     response_model=TaskPublic,
     name="tasks:create",
-    response_description="New task created",
+    response_description="Create new task successful",
     status_code=HTTP_201_CREATED,
 )
 async def create_task(
@@ -51,9 +51,7 @@ async def create_task(
 
     service = TaskService()
     created_task = await service.create(session=session, new_task=new_task)
-    response.headers["Location"] = request.url_for(
-        "tasks:get-by-id", id=created_task.id
-    )
+    response.headers["Location"] = request.url_for("tasks:get", id=created_task.id)
     return created_task
 
 
@@ -64,7 +62,7 @@ async def create_task(
     "/queried",
     response_model=TaskPublicList,
     name="tasks:query",
-    response_description="Tasks filtered by query params",
+    response_description="Query tasks successful",
     status_code=HTTP_200_OK,
     tags=["query"],
 )
@@ -111,16 +109,16 @@ async def query_tasks(
 
 @router.get(
     "/{id}/",
-    name="tasks:get-by-id",
+    name="tasks:get",
     responses={
         404: {
             "model": Message,
-            "description": "The task was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": TaskPublic, "description": "Task requested by ID"},
+        200: {"model": TaskPublic, "description": "Get task successful"},
     },
 )
 async def get_task_by_id(
@@ -148,12 +146,12 @@ async def get_task_by_id(
     responses={
         404: {
             "model": Message,
-            "description": "The task was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": TaskPublic, "description": "Task patched by ID"},
+        200: {"model": TaskPublic, "description": "Update task successful"},
     },
 )
 async def patch_task(
@@ -190,12 +188,12 @@ async def patch_task(
     responses={
         404: {
             "model": Message,
-            "description": "The task was not found",
+            "description": "Resource not found Error",
             "content": {
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": TaskPublic, "description": "Task deleted by ID"},
+        200: {"model": TaskPublic, "description": "Delete task successful"},
     },
 )
 async def delete_task(

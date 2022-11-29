@@ -1,9 +1,12 @@
 #!/usr/bin/python3
 # token.py
 
-from datetime import timedelta, datetime
-from app.core.config import JWT_AUDIENCE, ACCESS_TOKEN_EXPIRE_MINUTES
+from datetime import datetime, timedelta
+
+from pydantic import Field
+
 from app.api.schemas.base import CoreModel
+from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, JWT_AUDIENCE
 
 
 class JWTMeta(CoreModel):
@@ -24,5 +27,7 @@ class JWTPayload(JWTMeta, JWTCreds):
 
 
 class AccessToken(CoreModel):
-    access_token: str
-    token_type: str
+    access_token: str = Field(
+        title="AccessToken", description="アクセストークン", example="token"
+    )
+    token_type: str = Field(title="TokenType", description="トークン種類", example="bearer")

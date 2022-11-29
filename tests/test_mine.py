@@ -3,17 +3,25 @@
 
 import jwt
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI, HTTPException
 from httpx import AsyncClient
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
     HTTP_401_UNAUTHORIZED,
+    HTTP_409_CONFLICT,
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.accounts import ProfileInDB
+from app.api.schemas.accounts import (
+    AccountCreate,
+    PasswordChange,
+    ProfileInDB,
+    ProfileUpdate,
+)
 from app.core.config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     JWT_ALGORITHM,
@@ -21,10 +29,27 @@ from app.core.config import (
     SECRET_KEY,
 )
 from app.services import auth_service
+from app.services.accounts import AccountService
 from tests.conftest import assert_profile
 
 pytestmark = pytest.mark.asyncio
 is_regression = True
+
+
+@pytest_asyncio.fixture
+async def duplicate_dummy_profile(session: AsyncSession) -> ProfileInDB:
+    new_user = AccountCreate(
+        user_name="徳川家康",
+        email="tokugawa@sengoku.com",
+        init_password="testPassword",
+    )
+    service = AccountService()
+    created_user = await service.create(
+        session=session, id="T-001", new_account=new_user
+    )
+    yield created_user
+    await service.delete(session=session, id=created_user.account_id)
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -37,9 +62,27 @@ class TestRouteExists:
         except NoMatchFound:
             pytest.fail("route not exist")
 
-    async def test_get_mine_route(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_get_my_profile_route(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
         try:
-            await client.get(app.url_path_for("mine:get"))
+            await client.get(app.url_path_for("mine:get-profile"))
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
+    async def test_patch_my_profile_route(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        try:
+            await client.patch(app.url_path_for("mine:patch-profile"), data="{}")
+        except NoMatchFound:
+            pytest.fail("route not exist")
+
+    async def test_password_change_route(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        try:
+            await client.patch(app.url_path_for("mine:change-password"), data="{}")
         except NoMatchFound:
             pytest.fail("route not exist")
 
@@ -275,13 +318,13 @@ class TestGetIdFromToken:
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
-class TestGetMine:
+class TestGetMyProfile:
 
     # 正常ケース
     async def test_ok_case(
         self, app: FastAPI, authorized_client: AsyncClient, fixed_account: ProfileInDB
     ) -> None:
-        res = await authorized_client.get(app.url_path_for("mine:get"))
+        res = await authorized_client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_200_OK
 
         my_account = ProfileInDB(**res.json())
@@ -293,7 +336,7 @@ class TestGetMine:
     async def test_ng_case_unauthorized(
         self, app: FastAPI, client: AsyncClient
     ) -> None:
-        res = await client.get(app.url_path_for("mine:get"))
+        res = await client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -318,7 +361,217 @@ class TestGetMine:
     ) -> None:
         token = auth_service.create_token_for_user(account=fixed_account)
         res = await client.get(
-            app.url_path_for("mine:get"),
+            app.url_path_for("mine:get-profile"),
             headers={"Authorization": f"{jwt_prefix} {token}"},
         )
         assert res.status_code == HTTP_401_UNAUTHORIZED
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestPatchProfile:
+    # 正常ケースパラメータ
+    valid_params = {
+        "<body:nickname>": ProfileUpdate(nickname="将軍"),
+        "<body:email>": ProfileUpdate(email="shogun@edobakufu.com"),
+        "複合ケース": ProfileUpdate(nickname="東証大権現", email="daigongen@nikko.com"),
+    }
+
+    @pytest.mark.parametrize(
+        "update_params", list(valid_params.values()), ids=list(valid_params.keys())
+    )
+    async def test_ok_case(
+        self,
+        app: FastAPI,
+        authorized_client: AsyncClient,
+        fixed_account: ProfileInDB,
+        update_params: ProfileUpdate,
+    ) -> None:
+        res = await authorized_client.patch(
+            app.url_path_for("mine:patch-profile"),
+            data=update_params.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_200_OK
+        updated_profile = ProfileInDB(**res.json())
+
+        update_dict = update_params.dict(exclude_unset=True)
+        expected_profile = fixed_account.copy(update=update_dict)
+
+        assert_profile(actual=updated_profile, expected=expected_profile)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（未認証クライアント）
+    async def test_ng_case_unauthorized(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        res = await client.patch(app.url_path_for("mine:patch-profile"), data="{}")
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケースパラメータ
+    invalid_params = {
+        "<body:nickname>:桁数超過": (
+            '{"nickname":"000000000100000000020000000003"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:email>:フォーマット不正①": (
+            '{"email":"shingen.sengoku"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:email>:フォーマット不正②": (
+            '{"email":"sengoku.com"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:email>:フォーマット不正③": (
+            '{"email":"shingen@takeda@com"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:email>:None": (
+            '{"email":null}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body>:変更不可フィールド(account_type)": (
+            '{"account_type":"GENERAL"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body>:None": (
+            None,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_params.values()), ids=list(invalid_params.keys())
+    )
+    async def test_ng_case(
+        self,
+        app: FastAPI,
+        authorized_client: AsyncClient,
+        param: tuple[str, int],
+    ) -> None:
+        res = await authorized_client.patch(
+            app.url_path_for("mine:patch-profile"), data=param[0]
+        )
+        assert res.status_code == param[1]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常(DB相関)ケースパラメータ
+    invalid_db_params = {
+        "duplicate:[email]": (
+            '{"email":"tokugawa@sengoku.com"}',
+            HTTP_409_CONFLICT,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_db_params.values()), ids=list(invalid_db_params.keys())
+    )
+    async def test_db_ng_case(
+        self,
+        app: FastAPI,
+        authorized_client: AsyncClient,
+        param: tuple[str, int],
+        duplicate_dummy_profile: ProfileInDB,
+    ) -> None:
+        res = await authorized_client.patch(
+            app.url_path_for("mine:patch-profile"), data=param[0]
+        )
+        assert res.status_code == param[1]
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+@pytest.mark.skipif(not is_regression, reason="not regression phase")
+class TestChangePassword:
+    # 正常ケース
+    async def test_ok_case(
+        self,
+        app: FastAPI,
+        authorized_client: AsyncClient,
+        fixed_account: ProfileInDB,
+    ) -> None:
+        update_param = PasswordChange(new_password="new_password")
+
+        login_data = {
+            "username": fixed_account.account_id,
+            "password": update_param.new_password,
+        }
+
+        # 変更前は新パスワードでログインできないこと
+        authorized_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await authorized_client.post(
+            app.url_path_for("mine:login"), data=login_data
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+        authorized_client.headers["content-type"] = ""
+        res = await authorized_client.patch(
+            app.url_path_for("mine:change-password"),
+            data=update_param.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_200_OK
+
+        # 変更後は新パスワードでログインできること
+        authorized_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await authorized_client.post(
+            app.url_path_for("mine:login"), data=login_data
+        )
+        assert res.status_code == HTTP_200_OK
+
+        # 変更後のアカウントがアクティベート状態であること
+        authorized_client.headers["content-type"] = ""
+        res = await authorized_client.get(app.url_path_for("mine:get-profile"))
+        assert res.status_code == HTTP_200_OK
+        profile = ProfileInDB(**res.json())
+        profile.is_active is True
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（未認証クライアント）
+    async def test_ng_case_unauthorized(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        res = await client.patch(app.url_path_for("mine:change-password"), data="{}")
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケースパラメータ
+    invalid_params = {
+        "<body:new_password>:桁数不足": (
+            '{"new_password":"pass"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body:new_password>:None": (
+            '{"new_password":None}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body>:設定不可フィールド(dummy)": (
+            '{"dummy":"dummy"}',
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+        "<body>:None": (
+            None,
+            HTTP_422_UNPROCESSABLE_ENTITY,
+        ),
+    }
+
+    @pytest.mark.parametrize(
+        "param", list(invalid_params.values()), ids=list(invalid_params.keys())
+    )
+    async def test_ng_case(
+        self,
+        app: FastAPI,
+        authorized_client: AsyncClient,
+        param: tuple[str, int],
+    ) -> None:
+        res = await authorized_client.patch(
+            app.url_path_for("mine:change-password"), data=param[0]
+        )
+        assert res.status_code == param[1]
