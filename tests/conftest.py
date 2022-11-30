@@ -13,8 +13,13 @@ from httpx import AsyncClient
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import ASYNC_DIALECT, SYNC_DIALECT, db_url
+from app.api.schemas.accounts import AccountCreate, ProfileInDB, ProfileBaseUpdate
+from app.core.config import ASYNC_DIALECT, JWT_TOKEN_PREFIX, SYNC_DIALECT, db_url
 from app.core.database import AsyncCon, SyncCon, get_session
+from app.services import auth_service
+from app.services.accounts import AccountService
+from app.repositries.accounts import AccountRepository
+from app.models.segment_values import AccountTypes
 
 SERVER = "testDB"
 SYNC_URL = db_url(dialect=SYNC_DIALECT, server=SERVER)
@@ -53,6 +58,60 @@ def app() -> FastAPI:
 
 
 @pytest_asyncio.fixture
+async def non_active_account(session: AsyncSession) -> ProfileInDB:
+    # 未アクティベート
+    new_user = AccountCreate(
+        user_name="織田信長",
+        email="oda@sengoku.com",
+        init_password="testPassword",
+    )
+    service = AccountService()
+    account = await service.create(session=session, id="T-000", new_account=new_user)
+    yield account
+    await service.delete(session=session, id=account.account_id)
+
+
+@pytest_asyncio.fixture
+async def general_account(
+    session: AsyncSession, non_active_account: ProfileInDB
+) -> ProfileInDB:
+    # アクティベート済（account_type:GENERAL）
+    repo = AccountRepository()
+    await repo.password_change(
+        session=session, id=non_active_account.account_id, new_password="password"
+    )
+    service = AccountService()
+    account = await service.get_by_id(session=session, id=non_active_account.account_id)
+    yield account
+
+
+@pytest_asyncio.fixture
+async def provisional_account(
+    session: AsyncSession, general_account: ProfileInDB
+) -> ProfileInDB:
+    # アクティベート済（account_type:PROVISIONAL)
+    patch_params = ProfileBaseUpdate(account_type=AccountTypes.provisional)
+    service = AccountService()
+    account = await service.patch_base_profile(
+        session=session, id=general_account.account_id, patch_params=patch_params
+    )
+    yield account
+
+
+@pytest_asyncio.fixture
+async def admin_account(
+    session: AsyncSession, general_account: ProfileInDB
+) -> ProfileInDB:
+    # アクティベート済（account_type:ADMINISTRATOR)
+    patch_params = ProfileBaseUpdate(account_type=AccountTypes.administrator)
+    service = AccountService()
+    account = await service.patch_base_profile(
+        session=session, id=general_account.account_id, patch_params=patch_params
+    )
+    yield account
+
+
+@pytest_asyncio.fixture
 async def client(app: FastAPI, session: AsyncSession) -> AsyncClient:
 
     # DIを使ってFastAPIのDBの向き先をテスト用DBに変更
@@ -69,3 +128,58 @@ async def client(app: FastAPI, session: AsyncSession) -> AsyncClient:
         headers={"Content-Type": "application/json"},
     ) as client:
         yield client
+
+
+@pytest.fixture
+def non_active_client(
+    client: AsyncClient, non_active_account: ProfileInDB
+) -> AsyncClient:
+    token = auth_service.create_token_for_user(account=non_active_account)
+    client.headers = {
+        **client.headers,
+        "Authorization": f"{JWT_TOKEN_PREFIX} {token}",
+    }
+    yield client
+
+
+@pytest.fixture
+def general_client(client: AsyncClient, general_account: ProfileInDB) -> AsyncClient:
+    token = auth_service.create_token_for_user(account=general_account)
+    client.headers = {
+        **client.headers,
+        "Authorization": f"{JWT_TOKEN_PREFIX} {token}",
+    }
+    yield client
+
+
+@pytest.fixture
+def provisional_client(
+    client: AsyncClient, provisional_account: ProfileInDB
+) -> AsyncClient:
+    token = auth_service.create_token_for_user(account=provisional_account)
+    client.headers = {
+        **client.headers,
+        "Authorization": f"{JWT_TOKEN_PREFIX} {token}",
+    }
+    yield client
+
+
+@pytest.fixture
+def admin_client(client: AsyncClient, admin_account: ProfileInDB) -> AsyncClient:
+    token = auth_service.create_token_for_user(account=admin_account)
+    client.headers = {
+        **client.headers,
+        "Authorization": f"{JWT_TOKEN_PREFIX} {token}",
+    }
+    yield client
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+def assert_profile(actual: ProfileInDB, expected: ProfileInDB) -> None:
+    assert actual.account_id == expected.account_id
+    assert actual.account_type == expected.account_type
+    assert actual.email == expected.email
+    assert actual.user_name == expected.user_name
+    assert actual.nickname == expected.nickname

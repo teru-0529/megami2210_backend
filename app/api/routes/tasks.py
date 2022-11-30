@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
+from app.api.routes.mine import oauth2_scheme
 from app.api.schemas.base import Message, q_limit, q_offset, q_sort
 from app.api.schemas.tasks import (
     TaskCreate,
@@ -17,15 +18,18 @@ from app.api.schemas.tasks import (
 )
 from app.core.database import get_session
 from app.services.tasks import TaskService
+from app.services.permittion import CkPermission
 
 router = APIRouter()
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @router.post(
     "/",
     response_model=TaskPublic,
     name="tasks:create",
-    response_description="New task created",
+    response_description="Create new task successful",
     status_code=HTTP_201_CREATED,
 )
 async def create_task(
@@ -33,34 +37,40 @@ async def create_task(
     response: Response,
     new_task: TaskCreate = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
     タスクの新規作成。</br>
-    登録時、**id**は自動採番、**status**は`TODO`固定。:
+    PROVISIONALユーザーは実行不可。</br>
+    登録時、**id**は自動採番、**status**は`TODO`固定。
 
     [BODY]
 
-    - **title**: タスクの名称[Reqired]
+    - **title**: タスクの名称[reqired]
     - **description**: タスクの詳細内容
     - **asaignee_id**: タスクの担当者
-    - **is_significant**: 重要タスクの場合にTrue[Default=false]
+    - **is_significant**: 重要タスクの場合にTrue[default=false]
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
 
     service = TaskService()
     created_task = await service.create(session=session, new_task=new_task)
-    response.headers["Location"] = request.url_for(
-        "tasks:get-by-id", id=created_task.id
-    )
+    response.headers["Location"] = request.url_for("tasks:get", id=created_task.id)
     return created_task
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.post(
-    "/be-queried",
+    "/queried",
     response_model=TaskPublicList,
     name="tasks:query",
-    response_description="Tasks filtered by query params",
+    response_description="Query tasks successful",
     status_code=HTTP_200_OK,
+    tags=["query"],
 )
 async def query_tasks(
     offset: int = q_offset,
@@ -69,18 +79,20 @@ async def query_tasks(
     execute_assaignee: bool = q_exclude_asaignee,  # TODO:
     filter: TaskFilter = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublicList:
     """
     タスク検索。</br>
+    アクティベート後のすべてのユーザーが実行可能。</br>
     ※QUERYメソッドが提案されているが現状未実装のため、POSTメソッド、サブリソースを利用した対応
 
     [QUERY]
 
-    - **offset**: 結果抽出時のオフセット値[Default=0]
-    - **limit**: 結果抽出時の最大件数[Default=10] ※1システム制限として最大1000件まで指定可能
-    - **sort**: ソートキー[Default=+id] ※2[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
+    - **offset**: 結果抽出時のオフセット値[default=0]
+    - **limit**: 結果抽出時の最大件数[default=10] ※1システム制限として最大1000件まで指定可能
+    - **sort**: ソートキー[default=+id] ※2[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC
         - 指定可能キー: `id`, `title`, `description`, `asaignee_id`, `status`, `is_significant`, `deadline`
-    - **exclude_asaignee**: 担当者情報の詳細情報をレスポンスから除外する場合にTrue[Default=false]
+    - **exclude_asaignee**: 担当者情報の詳細情報をレスポンスから除外する場合にTrue[default=false]
 
     [BODY]
 
@@ -93,6 +105,9 @@ async def query_tasks(
     - **deadline_from**: <クエリ条件> タスク期限[FROM] ※4「deadline_from」<=「deadline_to」を保つ必要がある
     - **deadline_to**: <クエリ条件> タスク期限[TO] ※4
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_only()
+
     service = TaskService()
     tasks = await service.query(
         offset, limit, sort, execute_assaignee, session=session, filter=filter
@@ -100,62 +115,75 @@ async def query_tasks(
     return tasks
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.get(
     "/{id}/",
-    response_model=TaskPublic,
-    name="tasks:get-by-id",
-    status_code=HTTP_200_OK,
+    name="tasks:get",
     responses={
         404: {
             "model": Message,
-            "description": "The task was not found",
-            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+            "description": "Resource not found Error",
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
         },
-        200: {"model": TaskPublic, "description": "Task requested by ID"},
+        200: {"model": TaskPublic, "description": "Get task successful"},
     },
 )
 async def get_task_by_id(
     id: int = p_id,
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
-    タスクの1件取得。</br>
+    タスク1件の取得。</br>
+    アクティベート後のすべてのユーザーが実行可能。
 
     [PATH]
 
-    - **id**: タスクID[Reqired]
+    - **id**: タスクID[reqired]
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_only()
+
     service = TaskService()
     task = await service.get_by_id(session=session, id=id)
     return task
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.patch(
     "/{id}/",
-    response_model=TaskPublic,
     name="tasks:patch",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,
-            "description": "The task was not found",
-            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+            "description": "Resource not found Error",
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
         },
-        200: {"model": TaskPublic, "description": "Task patched by ID"},
+        200: {"model": TaskPublic, "description": "Update task successful"},
     },
 )
-async def patch_task_by_id(
+async def patch_task(
     id: int = p_id,
     patch_params: TaskUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
-    タスクの1件更新。</br>
-    **title**、**is_significant** は変更不可:
+    タスク1件の更新。</br>
+    PROVISIONALユーザーは実行不可。</br>
+    **title**、**is_significant** は変更できない。
 
     [PATH]
 
-    - **id**: タスクID[Reqired]
+    - **id**: タスクID[reqired]
 
     [BODY]
 
@@ -164,37 +192,48 @@ async def patch_task_by_id(
     - **status**: タスクステータス
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
+
     service = TaskService()
     task = await service.patch(session=session, id=id, patch_params=patch_params)
     return task
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 @router.delete(
     "/{id}/",
-    response_model=TaskPublic,
     name="tasks:delete",
-    status_code=HTTP_200_OK,
     responses={
         404: {
             "model": Message,
-            "description": "The task was not found",
-            "content": {"application/json": {"example": {"message": "リソースが存在しません。"}}},
+            "description": "Resource not found Error",
+            "content": {
+                "application/json": {"example": {"detail": "Resource not found."}}
+            },
         },
-        200: {"model": TaskPublic, "description": "Task deleted by ID"},
+        200: {"model": TaskPublic, "description": "Delete task successful"},
     },
 )
-async def delete_task_by_id(
+async def delete_task(
     id: int = p_id,
     session: AsyncSession = Depends(get_session),
+    token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
-    タスクの1件削除。
+    タスク1件の削除。</br>
+    PROVISIONALユーザーは実行不可。
 
     [PATH]
 
-    - **id**: タスクID[Reqired]
+    - **id**: タスクID[reqired]
 
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
+
     service = TaskService()
     task = await service.delete(session=session, id=id)
     return task

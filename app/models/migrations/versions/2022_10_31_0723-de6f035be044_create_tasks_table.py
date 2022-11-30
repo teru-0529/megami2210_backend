@@ -18,13 +18,16 @@ branch_labels = None
 depends_on = None
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 def create_tasks_table() -> None:
     op.create_table(
         "tasks",
         sa.Column("id", sa.Integer, primary_key=True, comment="タスクID"),
         sa.Column("title", sa.String(30), nullable=False, comment="タイトル"),
         sa.Column("description", sa.Text, nullable=True, comment="内容"),
-        sa.Column("asaignee_id", sa.String(3), nullable=True, comment="担当者ID"),
+        sa.Column("asaignee_id", sa.String(5), nullable=True, comment="担当者ID"),
         sa.Column(
             "status",
             sa.Enum(*TaskStatus.list(), name="status", schema="todo"),
@@ -60,10 +63,13 @@ def create_tasks_table() -> None:
     )
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 def upgrade() -> None:
     create_tasks_table()
 
 
 def downgrade() -> None:
-    op.drop_table("tasks", schema="todo")
+    op.execute("DROP TABLE IF EXISTS todo.tasks CASCADE;")
     op.execute("DROP TYPE IF EXISTS todo.status;")

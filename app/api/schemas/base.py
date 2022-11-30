@@ -4,6 +4,8 @@
 from fastapi import Query
 from pydantic import BaseModel, Field
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 q_offset: int = Query(
     default=0,
     title="Offset of result data",
@@ -29,17 +31,28 @@ q_sort: str = Query(
     example='"+deadline,-id"',
 )
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class CoreModel(BaseModel):
     pass
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class IDModelMixin(BaseModel):
     id: int = Field(title="Id", description="リソースのユニーク性を担保するID", ge=1, example=10)
 
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class Message(BaseModel):
-    message: str = Field(title="message", description="メッセージ", example="サーバーエラーです。")
+    detail: str = Field(title="detail", description="メッセージ", example="サーバーエラーです。")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class QueryModel(BaseModel):

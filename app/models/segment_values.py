@@ -3,6 +3,8 @@
 
 from enum import Enum
 
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
 
 class Base(str, Enum):
     pass
@@ -10,6 +12,9 @@ class Base(str, Enum):
     @classmethod
     def list(cls):
         return list(map(lambda c: c.value, cls))
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 class TaskStatus(Base):
@@ -23,4 +28,21 @@ class TaskStatus(Base):
   * `TODO` - 未対応
   * `DOING` - 対応中
   * `DONE` - 完了
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class AccountTypes(Base):
+    administrator = "ADMINISTRATOR"
+    general = "GENERAL"
+    provisional = "PROVISIONAL"
+
+    def description() -> str:
+        return """
+アカウント種類:
+  * `ADMINISTRATOR` - 管理ユーザー
+  * `GENERAL` - 一般ユーザー
+  * `PROVISIONAL` - 仮発行ユーザー
     """

@@ -3,10 +3,18 @@
 
 from fastapi import APIRouter
 
+from app.api.routes.accounts import router as account_router
+from app.api.routes.mine import router as mine_router
 from app.api.routes.tasks import router as task_router
 from app.api.schemas.base import Message
 
 router = APIRouter()
+
+router.include_router(mine_router, tags=["mine"])
+router.include_router(account_router, prefix="/accounts", tags=["accounts"])
+router.include_router(task_router, prefix="/tasks", tags=["tasks"])
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 @router.get(
@@ -17,7 +25,7 @@ router = APIRouter()
             "model": Message,
             "description": "state of api server",
             "content": {
-                "application/json": {"example": {"message": "APIサーバーは正常に稼働しています。"}}
+                "application/json": {"example": {"detail": "APIサーバーは正常に稼働しています。"}}
             },
         },
     },
@@ -27,8 +35,8 @@ async def health_check() -> dict:  # pragma: no cover
     APIサーバーのヘルスチェック。:
 
     """
-    ok = {"message": "APIサーバーは正常に稼働しています。"}
+    ok = {"detail": "APIサーバーは正常に稼働しています。"}
     return ok
 
 
-router.include_router(task_router, prefix="/tasks", tags=["tasks"])
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
