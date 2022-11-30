@@ -17,6 +17,7 @@ from app.api.schemas.accounts import (
 from app.api.schemas.base import Message
 from app.core.database import get_session
 from app.services.accounts import AccountService
+from app.services.permittion import CkPermission
 
 router = APIRouter()
 
@@ -50,7 +51,8 @@ async def create(
 ) -> ProfilePublicWithInitPass:
     """
     アカウントの新規作成。</br>
-    作成したアカウントは非Active状態。発行した初期パスワードを変更することでアクティベートされる。
+    作成したアカウントは非Active状態。発行した初期パスワードを変更することでアクティベートされる。</br>
+    ADMINユーザーのみ実行可能。
 
     [PATH]
 
@@ -63,6 +65,8 @@ async def create(
     - **account_type**: アカウント種類[default=GENERAL]
     - **init_password**: 初期パスワード ※未設定の場合は内部でランダムに生成する
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_admin()
 
     service = AccountService()
     created_account = await service.create(
@@ -95,11 +99,15 @@ async def get_by_id(
 ) -> ProfilePublic:
     """
     アカウント1件の取得。</br>
+    PROVISIONALユーザーは実行不可。
 
     [PATH]
 
     - **id**: アカウントID[reqired]
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
+
     service = AccountService()
     account = await service.get_by_id(session=session, id=id)
     return account
@@ -139,7 +147,8 @@ async def patch_base_profile(
 ) -> ProfilePublic:
     """
     管理者によるアカウント1件の更新。</br>
-    **nickname**、**email** は本人管轄項目のため変更不可。:
+    ADMINユーザーのみ実行可能。</br>
+    **nickname**、**email** は本人管轄項目のため変更できない。
 
     [PATH]
 
@@ -150,6 +159,9 @@ async def patch_base_profile(
     - **user_name**: ユーザー氏名[not-nullable]
     - **account_type**: アカウント種別[not-nullable]
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_admin()
+
     service = AccountService()
     account = await service.patch_base_profile(
         session=session, id=id, patch_params=patch_params
@@ -180,13 +192,17 @@ async def delete(
     token: str = Depends(oauth2_scheme),
 ) -> ProfilePublic:
     """
-    アカウント1件の削除。
+    アカウント1件の削除。</br>
+    ADMINユーザーのみ実行可能。
 
     [PATH]
 
     - **id**: アカウントID[reqired]
 
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_admin()
+
     service = AccountService()
     account = await service.delete(session=session, id=id)
     return account
@@ -217,7 +233,8 @@ async def reset_password(
 ) -> InitPass:
     """
     パスワードのリセット。</br>
-    アカウントを非Active化し初期パスワード再発行する。変更することでアカウントが再度アクティベートされる。
+    アカウントを非Active化し初期パスワード再発行する。変更することでアカウントが再度アクティベートされる。</br>
+    ADMINユーザーのみ実行可能。
 
     [PATH]
 
@@ -227,6 +244,8 @@ async def reset_password(
 
     - **init_password**: 初期パスワード ※未設定の場合は内部でランダムに生成する
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_admin()
 
     service = AccountService()
     init_pass = await service.password_reset(

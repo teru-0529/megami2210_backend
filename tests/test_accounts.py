@@ -10,6 +10,7 @@ from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
     HTTP_401_UNAUTHORIZED,
+    HTTP_403_FORBIDDEN,
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
     HTTP_422_UNPROCESSABLE_ENTITY,
@@ -157,8 +158,29 @@ class TestCreate:
         assert created_account.nickname is None
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.put(
+            app.url_path_for("accounts:create", id="T-000"),
+            data='{"user_name":"武田信玄","email":"shingen@sengoku.com"}',
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, general_client: AsyncClient
+    ) -> None:
+        res = await general_client.put(
+            app.url_path_for("accounts:create", id="T-000"),
+            data='{"user_name":"武田信玄","email":"shingen@sengoku.com"}',
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常(DB相関)ケースパラメータ
@@ -323,8 +345,27 @@ class TestGet:
         assert_profile(actual=profile, expected=admin_account)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.get(
+            app.url_path_for("accounts:get-profile", id="T-000"),
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, provisional_client: AsyncClient
+    ) -> None:
+        res = await provisional_client.get(
+            app.url_path_for("accounts:get-profile", id="T-000"),
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -399,8 +440,29 @@ class TestPatchProfile:
         assert_profile(actual=updated_account, expected=expected)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.patch(
+            app.url_path_for("accounts:patch-profile", id="T-000"),
+            data='{"user_name":"武田信玄"}',
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, general_client: AsyncClient
+    ) -> None:
+        res = await general_client.patch(
+            app.url_path_for("accounts:patch-profile", id="T-000"),
+            data='{"user_name":"武田信玄"}',
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常(DB相関)ケースパラメータ
@@ -525,8 +587,27 @@ class TestDelete:
         assert res.status_code == HTTP_404_NOT_FOUND
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.delete(
+            app.url_path_for("accounts:delete", id="T-000")
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, general_client: AsyncClient
+    ) -> None:
+        res = await general_client.delete(
+            app.url_path_for("accounts:delete", id="T-000")
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -614,8 +695,29 @@ class TestResetPassword:
         profile.is_active is False
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.patch(
+            app.url_path_for("accounts:password-reset", id="T-000"),
+            data='{"init_password":"password"}',
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, general_client: AsyncClient
+    ) -> None:
+        res = await general_client.patch(
+            app.url_path_for("accounts:password-reset", id="T-000"),
+            data='{"init_password":"password"}',
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ

@@ -18,6 +18,7 @@ from app.api.schemas.tasks import (
 )
 from app.core.database import get_session
 from app.services.tasks import TaskService
+from app.services.permittion import CkPermission
 
 router = APIRouter()
 
@@ -40,7 +41,8 @@ async def create_task(
 ) -> TaskPublic:
     """
     タスクの新規作成。</br>
-    登録時、**id**は自動採番、**status**は`TODO`固定。:
+    PROVISIONALユーザーは実行不可。</br>
+    登録時、**id**は自動採番、**status**は`TODO`固定。
 
     [BODY]
 
@@ -50,6 +52,8 @@ async def create_task(
     - **is_significant**: 重要タスクの場合にTrue[default=false]
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
 
     service = TaskService()
     created_task = await service.create(session=session, new_task=new_task)
@@ -79,6 +83,7 @@ async def query_tasks(
 ) -> TaskPublicList:
     """
     タスク検索。</br>
+    アクティベート後のすべてのユーザーが実行可能。</br>
     ※QUERYメソッドが提案されているが現状未実装のため、POSTメソッド、サブリソースを利用した対応
 
     [QUERY]
@@ -100,6 +105,9 @@ async def query_tasks(
     - **deadline_from**: <クエリ条件> タスク期限[FROM] ※4「deadline_from」<=「deadline_to」を保つ必要がある
     - **deadline_to**: <クエリ条件> タスク期限[TO] ※4
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_only()
+
     service = TaskService()
     tasks = await service.query(
         offset, limit, sort, execute_assaignee, session=session, filter=filter
@@ -131,11 +139,15 @@ async def get_task_by_id(
 ) -> TaskPublic:
     """
     タスク1件の取得。</br>
+    アクティベート後のすべてのユーザーが実行可能。
 
     [PATH]
 
     - **id**: タスクID[reqired]
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_only()
+
     service = TaskService()
     task = await service.get_by_id(session=session, id=id)
     return task
@@ -166,7 +178,8 @@ async def patch_task(
 ) -> TaskPublic:
     """
     タスク1件の更新。</br>
-    **title**、**is_significant** は変更不可:
+    PROVISIONALユーザーは実行不可。</br>
+    **title**、**is_significant** は変更できない。
 
     [PATH]
 
@@ -179,6 +192,9 @@ async def patch_task(
     - **status**: タスクステータス
     - **deadline**: タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
+
     service = TaskService()
     task = await service.patch(session=session, id=id, patch_params=patch_params)
     return task
@@ -207,13 +223,17 @@ async def delete_task(
     token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
     """
-    タスク1件の削除。
+    タスク1件の削除。</br>
+    PROVISIONALユーザーは実行不可。
 
     [PATH]
 
     - **id**: タスクID[reqired]
 
     """
+    checker = CkPermission(session=session, token=token)
+    await checker.activate_and_upper_general()
+
     service = TaskService()
     task = await service.delete(session=session, id=id)
     return task

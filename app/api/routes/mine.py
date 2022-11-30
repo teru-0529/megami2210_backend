@@ -82,6 +82,7 @@ async def get_profile(
 ) -> ProfilePublic:
     """
     ログイン中のアカウント情報を入手する。</br>
+    すべてのユーザーが、アクティベート前でも実行可能。
 
     """
     service = AccountService()
@@ -122,7 +123,8 @@ async def patch_profile(
 ) -> ProfilePublic:
     """
     ログイン中のアカウントの更新。</br>
-    **user_name**、**account_type** は管理者管轄項目のため変更不可、**password** の変更は別APIで実施。:
+    すべてのユーザーが、アクティベート前でも実行可能。</br>
+    **user_name**、**account_type** は管理者管轄項目のため変更できない。**password** の変更は別APIで実施する。
 
     [BODY]
 
@@ -170,7 +172,9 @@ async def change_password(
 ) -> None:
     """
     パスワードの変更。</br>
-    変更することでアカウントはActive状態になる。
+    変更することでアカウントはActive状態になる。</br>
+    すべてのユーザーが実行可能。
+
 
     [BODY]
 

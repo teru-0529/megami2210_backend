@@ -16,6 +16,8 @@ from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_403_FORBIDDEN,
     HTTP_404_NOT_FOUND,
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
@@ -180,8 +182,29 @@ class TestCreate:
         assert created_task.deadline == new_task.deadline
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.post(
+            app.url_path_for("tasks:create"),
+            data='{"title":"dummy"}',
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, provisional_client: AsyncClient
+    ) -> None:
+        res = await provisional_client.post(
+            app.url_path_for("tasks:create"),
+            data='{"title":"dummy"}',
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -258,7 +281,14 @@ class TestGet:
         assert get_task == fixed_task
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.get(app.url_path_for("tasks:get", id=1))
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -443,7 +473,16 @@ class TestQuery:
         assert ids == param[4]
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.post(
+            app.url_path_for("tasks:query"), params={}, data="{}"
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -644,8 +683,29 @@ class TestPatch:
         assert updated_task == expected
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.patch(
+            app.url_path_for("tasks:patch", id=1),
+            data='{"description":"dummy"}',
+        )
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, provisional_client: AsyncClient
+    ) -> None:
+        res = await provisional_client.patch(
+            app.url_path_for("tasks:patch", id=1),
+            data='{"description":"dummy"}',
+        )
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
@@ -751,8 +811,23 @@ class TestDelete:
         assert res.status_code == HTTP_404_NOT_FOUND
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-    # FIXME:認証エラー
-    # FIXME:認可エラー
+
+    # 異常ケース（アクティベーションエラー）
+    async def test_ng_activation(
+        self, app: FastAPI, non_active_client: AsyncClient
+    ) -> None:
+        res = await non_active_client.delete(app.url_path_for("tasks:delete", id=1))
+        assert res.status_code == HTTP_401_UNAUTHORIZED
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（認可エラー）
+    async def test_ng_permission(
+        self, app: FastAPI, provisional_client: AsyncClient
+    ) -> None:
+        res = await provisional_client.delete(app.url_path_for("tasks:delete", id=1))
+        assert res.status_code == HTTP_403_FORBIDDEN
+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケースパラメータ
