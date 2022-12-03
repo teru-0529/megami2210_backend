@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
+# クエリパラメータ
 q_offset: int = Query(
     default=0,
     title="Offset of result data",

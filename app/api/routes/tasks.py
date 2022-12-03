@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # tasks.py
+# from typing import Union #TODO:
 
 from fastapi import APIRouter, Body, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from app.api.schemas.tasks import (
     TaskPublic,
     TaskPublicList,
     TaskUpdate,
-    p_id,
+    p_task_id,
     q_exclude_asaignee,
 )
 from app.core.database import get_session
@@ -28,6 +29,7 @@ router = APIRouter()
 @router.post(
     "/",
     response_model=TaskPublic,
+    # response_model=Union[TaskPublic, TaskCreate],TODO:
     name="tasks:create",
     response_description="Create new task successful",
     status_code=HTTP_201_CREATED,
@@ -133,7 +135,7 @@ async def query_tasks(
     },
 )
 async def get_task_by_id(
-    id: int = p_id,
+    id: int = p_task_id,
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:
@@ -171,7 +173,7 @@ async def get_task_by_id(
     },
 )
 async def patch_task(
-    id: int = p_id,
+    id: int = p_task_id,
     patch_params: TaskUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
@@ -218,7 +220,7 @@ async def patch_task(
     },
 )
 async def delete_task(
-    id: int = p_id,
+    id: int = p_task_id,
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
 ) -> TaskPublic:

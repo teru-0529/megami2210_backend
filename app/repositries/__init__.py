@@ -22,7 +22,7 @@ class QueryParam:
     ) -> None:
         ls = sort.split(",")
         if "+id" not in ls:
-            ls.append("+id")  # デフォルトのソート条件を追加 TODO:
+            ls.append("+id")  # デフォルトのソート条件を追加
 
         ls = [(v.strip()[0], v.strip()[1:]) for v in ls]  # 符号/値、のタプルに分割
 

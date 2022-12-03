@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.routes.mine import oauth2_scheme
 from app.api.schemas.accounts import (
     AccountCreate,
-    InitPass,
     PasswordReset,
     ProfileBaseUpdate,
     ProfilePublic,
@@ -222,7 +221,7 @@ async def delete(
                 "application/json": {"example": {"detail": "Resource not found."}}
             },
         },
-        200: {"model": InitPass, "description": "Reset password successful"},
+        200: {"model": PasswordReset, "description": "Reset password successful"},
     },
 )
 async def reset_password(
@@ -230,7 +229,7 @@ async def reset_password(
     pass_reset: PasswordReset = Body(...),
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
-) -> InitPass:
+) -> PasswordReset:
     """
     パスワードのリセット。</br>
     アカウントを非Active化し初期パスワード再発行する。変更することでアカウントが再度アクティベートされる。</br>

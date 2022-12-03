@@ -14,7 +14,6 @@ from starlette.status import (
 
 from app.api.schemas.accounts import (
     AccountCreate,
-    InitPass,
     PasswordChange,
     PasswordReset,
     ProfileBaseUpdate,
@@ -165,11 +164,8 @@ class AccountService:
 
         """ログインユーザーのプロフィール取得"""
 
-        try:
-            account_id = auth_service.get_id_from_token(token=token)
-            profile = await self.get_by_id(session=session, id=account_id)
-        except Exception:  # pragma: no cover FIXME:
-            raise not_authorized_exception
+        account_id = auth_service.get_id_from_token(token=token)
+        profile = await self.get_by_id(session=session, id=account_id)
 
         print(profile)
         return ProfileInDB.from_orm(profile)
@@ -182,10 +178,7 @@ class AccountService:
 
         """ログインユーザーのプロフィール更新"""
 
-        try:
-            account_id = auth_service.get_id_from_token(token=token)
-        except Exception:  # pragma: no cover FIXME:
-            raise not_authorized_exception
+        account_id = auth_service.get_id_from_token(token=token)
         update_dict = patch_params.dict(exclude_unset=True)
         return await self.update(
             session=session, id=account_id, update_dict=update_dict
@@ -200,22 +193,19 @@ class AccountService:
         """ログインユーザーのパスワード変更"""
 
         repo = AccountRepository()
-        try:
-            account_id = auth_service.get_id_from_token(token=token)
-            await repo.password_change(
-                session=session,
-                id=account_id,
-                new_password=pass_change.new_password.get_secret_value(),
-            )
-            await session.commit()
-        except Exception:  # pragma: no cover FIXME:
-            raise not_authorized_exception
+        account_id = auth_service.get_id_from_token(token=token)
+        await repo.password_change(
+            session=session,
+            id=account_id,
+            new_password=pass_change.new_password.get_secret_value(),
+        )
+        await session.commit()
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def password_reset(
         self, *, session: AsyncSession, id: str, pass_reset: PasswordReset
-    ) -> InitPass:
+    ) -> PasswordReset:
 
         """パスワードリセット"""
 
@@ -229,7 +219,7 @@ class AccountService:
         await repo.password_reset(session=session, id=id, password=init_password)
         await session.commit()
 
-        return InitPass(init_password=init_password)
+        return PasswordReset(init_password=init_password)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER]例外文字列の判定
