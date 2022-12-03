@@ -16,6 +16,7 @@ from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
+    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
     HTTP_403_FORBIDDEN,
     HTTP_404_NOT_FOUND,
@@ -35,7 +36,7 @@ async def fixed_task(session: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="fixed task",
         description="fixed task",
-        asaignee_id="T-001",
+        asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
     service = TaskService()
@@ -49,7 +50,7 @@ async def task_for_update(session: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="updated task",
         description="updated task",
-        asaignee_id="T-001",
+        asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
     service = TaskService()
@@ -63,7 +64,7 @@ async def task_for_delete(session: AsyncSession) -> TaskInDB:
     new_task = TaskCreate(
         title="updated task",
         description="updated task",
-        asaignee_id="T-001",
+        asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
     service = TaskService()
@@ -137,7 +138,7 @@ class TestCreate:
         "<body:full>": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="T-001",
+            asaignee_id="T-901",
             is_significant=True,
             deadline=date(2050, 12, 31),
         ),
@@ -150,13 +151,13 @@ class TestCreate:
         "<body:is_significant>デフォルト値": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="T-001",
+            asaignee_id="T-901",
             deadline=date(2050, 12, 31),
         ),
         "<body:deadline>:任意入力": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="T-001",
+            asaignee_id="T-901",
             is_significant=False,
         ),
     }
@@ -261,6 +262,22 @@ class TestCreate:
         )
         assert res.status_code == param[1]
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（外部キーエラー）
+    async def test_ng_foreignkey(
+        self, app: FastAPI, general_client: AsyncClient
+    ) -> None:
+        new_task = TaskCreate(
+            title="test task",
+            asaignee_id="T-501",
+        )
+        res = await general_client.post(
+            app.url_path_for("tasks:create"),
+            data=new_task.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_400_BAD_REQUEST
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -323,7 +340,7 @@ class TestGet:
 
 
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
-class TestQuery:
+class TestSearch:
 
     # 正常ケースパラメータ
     valid_params = {
@@ -384,9 +401,9 @@ class TestQuery:
             2,
             [6, 15],
         ),
-        "<body:asaignee_id_in>:(T-002,T-001)": (
+        "<body:asaignee_id_in>:(T-902,T-901)": (
             {},
-            '{"asaignee_id_in": ["T-002","T-001"]}',
+            '{"asaignee_id_in": ["T-902","T-901"]}',
             8,
             8,
             [8, 9, 10, 11, 12, 16, 18, 19],
@@ -549,17 +566,17 @@ class TestQuery:
         ),
         "<body:asaignee_id_in>:要素数超過": (
             {},
-            '{"asaignee_id_in": ["T-001","T-002","T-003","T-004"]}',
+            '{"asaignee_id_in": ["T-901","T-902","T-903","T-904"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:項目長不足": (
             {},
-            '{"asaignee_id_in": ["10","T-002"]}',
+            '{"asaignee_id_in": ["10","T-902"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:項目長超過": (
             {},
-            '{"asaignee_id_in": ["100000","T-002"]}',
+            '{"asaignee_id_in": ["100000","T-902"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:型不正": (
@@ -574,7 +591,7 @@ class TestQuery:
         ),
         "<body:asaignee_id>:同時指定不正([IN][EXIST])": (
             {},
-            '{"asaignee_id_in": ["T-001","T-002"],"asaignee_id_ex": true}',
+            '{"asaignee_id_in": ["T-901","T-902"],"asaignee_id_ex": true}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:status_in>:要素数不足": (
@@ -650,13 +667,13 @@ class TestPatch:
     valid_params = {
         "<body:description>": TaskUpdate(description="test_description"),
         "<body:description>:null": TaskUpdate(description=None),
-        "<body:asaignee_id>": TaskUpdate(asaignee_id="T-005"),
+        "<body:asaignee_id>": TaskUpdate(asaignee_id="T-901"),
         "<body:asaignee_id>:null": TaskUpdate(asaignee_id=None),
         "<body:status>": TaskUpdate(status=TaskStatus.done),
         "<body:deadline>": TaskUpdate(deadline=date(2023, 12, 31)),
         "<body:deadline>:null": TaskUpdate(deadline=None),
         "複合ケース": TaskUpdate(
-            asaignee_id="T-003", status=TaskStatus.doing, deadline=date(2023, 8, 20)
+            asaignee_id="T-902", status=TaskStatus.doing, deadline=date(2023, 8, 20)
         ),
     }
 
@@ -784,6 +801,18 @@ class TestPatch:
             data=param[1],
         )
         assert res.status_code == param[2]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（外部キーエラー）
+    async def test_ng_foreignkey(
+        self, app: FastAPI, general_client: AsyncClient, task_for_update: TaskInDB
+    ) -> None:
+        res = await general_client.patch(
+            app.url_path_for("tasks:patch", id=task_for_update.id),
+            data='{"asaignee_id":"T-501"}',
+        )
+        assert res.status_code == HTTP_400_BAD_REQUEST
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+

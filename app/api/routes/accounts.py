@@ -91,7 +91,7 @@ async def create(
         200: {"model": ProfilePublic, "description": "Get profile successful"},
     },
 )
-async def get_by_id(
+async def get_profile(
     id: str = p_account_id,
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
@@ -138,7 +138,7 @@ async def get_by_id(
         200: {"model": ProfilePublic, "description": "Update profile successful"},
     },
 )
-async def patch_base_profile(
+async def patch_profile(
     id: str = p_account_id,
     patch_params: ProfileBaseUpdate = Body(...),
     session: AsyncSession = Depends(get_session),

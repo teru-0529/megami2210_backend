@@ -26,7 +26,7 @@ def create_tasks_table() -> None:
         sa.Column("id", sa.Integer, primary_key=True, comment="タスクID"),
         # sa.Column(
         #     "registrant_id", sa.String(5), nullable=True, comment="登録者ID"
-        # ),  # FIXME:
+        # ),  # TODO:
         sa.Column("title", sa.String(30), nullable=False, comment="タイトル"),
         sa.Column("description", sa.Text, nullable=True, comment="内容"),
         sa.Column("asaignee_id", sa.String(5), nullable=True, comment="担当者ID"),
@@ -72,17 +72,17 @@ def create_tasks_table() -> None:
     #     ondelete="SET NULL",
     #     source_schema="todo",
     #     referent_schema="account",
-    # )  # FIXME:
-    # op.create_foreign_key(
-    #     "fk_asaignee_id",
-    #     "tasks",
-    #     "profiles",
-    #     ["asaignee_id"],
-    #     ["account_id"],
-    #     ondelete="SET NULL",
-    #     source_schema="todo",
-    #     referent_schema="account",
-    # )  # FIXME:
+    # )  # TODO:
+    op.create_foreign_key(
+        "fk_asaignee_id",
+        "tasks",
+        "profiles",
+        ["asaignee_id"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="todo",
+        referent_schema="account",
+    )
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+

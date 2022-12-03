@@ -4,8 +4,13 @@
 from typing import List
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import (
+    HTTP_400_BAD_REQUEST,
+    HTTP_404_NOT_FOUND,
+    HTTP_422_UNPROCESSABLE_ENTITY,
+)
 
 from app.api.schemas.tasks import (
     TaskCreate,
@@ -38,15 +43,19 @@ class TaskService:
         """タスク登録"""
         task = td_Task(**new_task.dict())
         repo = TaskRepository()
-        created_task: td_Task = await repo.create(session=session, task=task)
+        try:
+            created_task: td_Task = await repo.create(session=session, task=task)
+            await session.commit()
+        except IntegrityError as e:
+            await session.rollback()
+            self.ch_exception_detail(e)
 
-        await session.commit()
         await session.refresh(created_task)
         return TaskInDB.from_orm(created_task)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    async def query(
+    async def search(
         self,
         offset: int,
         limit: int,
@@ -61,7 +70,7 @@ class TaskService:
             offset=offset, limit=limit, sort=sort, filter=filter
         )
         repo = TaskRepository()
-        query_tasks: List[td_Task] = await repo.query(
+        query_tasks: List[td_Task] = await repo.search(
             session=session, query_param=query_param
         )
         tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
@@ -87,9 +96,13 @@ class TaskService:
         """タスク更新"""
         update_dict = patch_params.dict(exclude_unset=True)
         repo = TaskRepository()
-        updated_task: td_Task = await repo.update(
-            session=session, id=id, patch_params=update_dict
-        )
+        try:
+            updated_task: td_Task = await repo.update(
+                session=session, id=id, patch_params=update_dict
+            )
+        except IntegrityError as e:
+            await session.rollback()
+            self.ch_exception_detail(e)
         if not updated_task:
             await session.rollback()
             raise not_found_exception
@@ -145,3 +158,27 @@ class TaskService:
         if filter.deadline_to is not None:
             queryParm.append_filter(td_Task.deadline <= filter.deadline_to)
         return queryParm
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]例外文字列の判定
+    def ch_exception_detail(self, e: IntegrityError) -> None:
+        args = e.orig.args[0]
+        if self.exists_params(
+            args,
+            [
+                "asyncpg.exceptions.ForeignKeyViolationError",
+                "violates foreign key constraint",
+                "fk_asaignee_id",
+            ],
+        ):
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail="violates foreign key constraint: [fk_asaignee_id].",
+            )
+        raise e  # pragma: no cover
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]例外文字列の判定（指定文字列を含むか否か）
+    def exists_params(self, args: str, params: List[str]) -> bool:
+        filtered = [x for x in params if x in args]
+        return filtered == params

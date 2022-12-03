@@ -73,10 +73,10 @@ class TaskRepository:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    async def query(
+    async def search(
         self, *, session: AsyncSession, query_param: QueryParam
     ) -> List[td_Task]:
-        """タスク照会"""
+        """タスク検索"""
         query = (
             select(td_Task)
             .where(*query_param.filter)

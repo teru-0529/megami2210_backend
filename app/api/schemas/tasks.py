@@ -32,13 +32,6 @@ b_title: Field = Field(
 b_description: Field = Field(
     title="Description", description="タスクの詳細内容", example="データベースモデルを作成する。"
 )
-# f_asagnee_id: Field = Field(
-#     title="AsaigneeId",
-#     description="タスクの担当者",
-#     min_length=5,
-#     max_length=5,
-#     example="T-001",
-# )
 b_status: Field = Field(
     title="TaskStatus", description=TaskStatus.description(), example=TaskStatus.todo
 )
@@ -52,16 +45,16 @@ b_deadline: Field = Field(
 )
 
 # ボディパラメータ(クエリメソッド用)
-bq_title_cn: Field = Field(
+s_title_cn: Field = Field(
     title="Title-[CONTAINS]",
     description="<クエリ条件> タスクの名称(含む)",
     example="タスク",
     max_length=30,
 )
-bq_description_cn: Field = Field(
+s_description_cn: Field = Field(
     title="Description-[CONTAINS]", description="<クエリ条件> タスク詳細(含む)", example="作成"
 )
-bq_asagnee_id_in: Field = Field(
+s_asagnee_id_in: Field = Field(
     title="AsagneeId-[IN]",
     description="<クエリ条件> タスク担当者(いずれか)",
     example=["T-001", "T-002"],
@@ -70,24 +63,24 @@ bq_asagnee_id_in: Field = Field(
     min_length=5,
     max_length=5,
 )
-bq_asagnee_id_ex: Field = Field(
+s_asagnee_id_ex: Field = Field(
     title="AsagneeId-[EXIST]",
     description="<クエリ条件> タスク担当者(設定有無)",
     example=True,
 )
-bq_status_in: Field = Field(
+s_status_in: Field = Field(
     title="Status-[IN]",
     description="<クエリ条件> タスクステータス(いずれか)",
     example=["TODO", "DOING"],
     min_items=1,
 )
-bq_is_significant_eq: Field = Field(
+s_is_significant_eq: Field = Field(
     title="IsSignificant-[EQUAL]", description="<クエリ条件> 重要フラグ(一致)", example=True
 )
-bq_deadline_from: Field = Field(
+s_deadline_from: Field = Field(
     title="Deadline-[FROM]", description="<クエリ条件> タスク期限(FROM)", example="2022-11-01"
 )
-bq_deadline_to: Field = Field(
+s_deadline_to: Field = Field(
     title="Deadline-[TO]", description="<クエリ条件> タスク期限(TO)", example="2022-11-30"
 )
 
@@ -95,7 +88,7 @@ bq_deadline_to: Field = Field(
 
 
 class TaskBase(CoreModel):
-    # registrant_id: Optional[str] = b_account_id("登録者ID")  # FIXME:
+    # registrant_id: Optional[str] = b_account_id("登録者ID")  # TODO:
     title: str = b_title
     description: Optional[str] = b_description
     asaignee_id: Optional[str] = b_account_id("担当者ID")
@@ -165,14 +158,14 @@ class TaskPublicList(QueryModel):
 
 
 class TaskFilter(CoreModel, extra=Extra.forbid):
-    title_cn: Optional[str] = bq_title_cn
-    description_cn: Optional[str] = bq_description_cn
-    asaignee_id_in: Optional[List[str]] = bq_asagnee_id_in
-    asaignee_id_ex: Optional[bool] = bq_asagnee_id_ex
-    status_in: Optional[List[TaskStatus]] = bq_status_in
-    is_significant_eq: Optional[bool] = bq_is_significant_eq
-    deadline_from: Optional[date] = bq_deadline_from
-    deadline_to: Optional[date] = bq_deadline_to
+    title_cn: Optional[str] = s_title_cn
+    description_cn: Optional[str] = s_description_cn
+    asaignee_id_in: Optional[List[str]] = s_asagnee_id_in
+    asaignee_id_ex: Optional[bool] = s_asagnee_id_ex
+    status_in: Optional[List[TaskStatus]] = s_status_in
+    is_significant_eq: Optional[bool] = s_is_significant_eq
+    deadline_from: Optional[date] = s_deadline_from
+    deadline_to: Optional[date] = s_deadline_to
 
     @validator("asaignee_id_ex")
     def asaignee_id_duplicate(cls, v, values):

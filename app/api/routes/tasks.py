@@ -34,7 +34,7 @@ router = APIRouter()
     response_description="Create new task successful",
     status_code=HTTP_201_CREATED,
 )
-async def create_task(
+async def create(
     request: Request,
     response: Response,
     new_task: TaskCreate = Body(...),
@@ -74,7 +74,7 @@ async def create_task(
     status_code=HTTP_200_OK,
     tags=["query"],
 )
-async def query_tasks(
+async def search(
     offset: int = q_offset,
     limit: int = q_limit,
     sort: str = q_sort,
@@ -111,7 +111,7 @@ async def query_tasks(
     await checker.activate_only()
 
     service = TaskService()
-    tasks = await service.query(
+    tasks = await service.search(
         offset, limit, sort, execute_assaignee, session=session, filter=filter
     )
     return tasks
@@ -134,7 +134,7 @@ async def query_tasks(
         200: {"model": TaskPublic, "description": "Get task successful"},
     },
 )
-async def get_task_by_id(
+async def get(
     id: int = p_task_id,
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
@@ -172,7 +172,7 @@ async def get_task_by_id(
         200: {"model": TaskPublic, "description": "Update task successful"},
     },
 )
-async def patch_task(
+async def patch(
     id: int = p_task_id,
     patch_params: TaskUpdate = Body(...),
     session: AsyncSession = Depends(get_session),
@@ -219,7 +219,7 @@ async def patch_task(
         200: {"model": TaskPublic, "description": "Delete task successful"},
     },
 )
-async def delete_task(
+async def delete(
     id: int = p_task_id,
     session: AsyncSession = Depends(get_session),
     token: str = Depends(oauth2_scheme),
