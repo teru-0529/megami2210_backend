@@ -23,6 +23,7 @@ from app.api.schemas.tasks import (
 from app.models.table_models import td_Task
 from app.repositries import QueryParam
 from app.repositries.tasks import TaskRepository
+from app.services import auth_service
 
 # 対象無し例外
 not_found_exception: HTTPException = HTTPException(
@@ -38,10 +39,12 @@ class TaskService:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def create(
-        self, *, session: AsyncSession, new_task: TaskCreate
+        self, *, session: AsyncSession, token: str, new_task: TaskCreate
     ) -> TaskPublic:
         """タスク登録"""
+        account_id = auth_service.get_id_from_token(token=token)
         task = td_Task(**new_task.dict())
+        task.registrant_id = account_id
         repo = TaskRepository()
         try:
             created_task: td_Task = await repo.create(session=session, task=task)

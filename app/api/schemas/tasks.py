@@ -57,7 +57,7 @@ s_description_cn: Field = Field(
 s_asagnee_id_in: Field = Field(
     title="AsagneeId-[IN]",
     description="<クエリ条件> タスク担当者(いずれか)",
-    example=["T-001", "T-002"],
+    example=["T-901", "T-902"],
     min_items=1,
     max_items=3,
     min_length=5,
@@ -88,7 +88,7 @@ s_deadline_to: Field = Field(
 
 
 class TaskBase(CoreModel):
-    # registrant_id: Optional[str] = b_account_id("登録者ID")  # TODO:
+    registrant_id: Optional[str] = b_account_id("登録者ID")
     title: str = b_title
     description: Optional[str] = b_description
     asaignee_id: Optional[str] = b_account_id("担当者ID")

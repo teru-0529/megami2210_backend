@@ -17,7 +17,7 @@ p_account_id: str = Path(
     description="アカウントID",
     min_length=5,
     max_length=5,
-    example="T-001",
+    example="T-901",
 )
 
 b_user_name: Field = Field(
@@ -52,7 +52,7 @@ def b_account_id(description: str = "アカウントID") -> Field:
         description=description,
         min_length=5,
         max_length=5,
-        example="T-001",
+        example="T-901",
     )
 
 

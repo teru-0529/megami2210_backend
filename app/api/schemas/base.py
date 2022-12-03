@@ -29,7 +29,7 @@ q_sort: str = Query(
     title="Sort condition",
     description="ソートキー ※[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC",
     regex="^[\+\-][a-z\_]+(?:,[\+\-][a-z\_]+)*$",  # noqa: W605
-    example='"+deadline,-id"',
+    example="+deadline,-id",
 )
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+

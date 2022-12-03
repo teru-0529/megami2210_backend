@@ -44,7 +44,7 @@ async def create(
     """
     タスクの新規作成。</br>
     PROVISIONALユーザーは実行不可。</br>
-    登録時、**id**は自動採番、**status**は`TODO`固定。
+    登録時、**id**は自動採番、**registrant_id**はログインユーザーのIDを設定、**status**は`TODO`固定値。
 
     [BODY]
 
@@ -58,7 +58,7 @@ async def create(
     await checker.activate_and_upper_general()
 
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     response.headers["Location"] = request.url_for("tasks:get", id=created_task.id)
     return created_task
 
@@ -67,10 +67,10 @@ async def create(
 
 
 @router.post(
-    "/queried",
+    "/search",
     response_model=TaskPublicList,
-    name="tasks:query",
-    response_description="Query tasks successful",
+    name="tasks:search",
+    response_description="Search tasks successful",
     status_code=HTTP_200_OK,
     tags=["query"],
 )

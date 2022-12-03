@@ -192,8 +192,8 @@ class AccountService:
 
         """ログインユーザーのパスワード変更"""
 
-        repo = AccountRepository()
         account_id = auth_service.get_id_from_token(token=token)
+        repo = AccountRepository()
         await repo.password_change(
             session=session,
             id=account_id,

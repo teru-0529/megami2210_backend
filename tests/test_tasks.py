@@ -24,51 +24,60 @@ from starlette.status import (
 )
 
 from app.api.schemas.tasks import TaskCreate, TaskInDB, TaskPublicList, TaskUpdate
+from app.api.schemas.accounts import ProfileInDB
 from app.models.segment_values import TaskStatus
 from app.services.tasks import TaskService
+from app.services import auth_service
 
 pytestmark = pytest.mark.asyncio
 is_regression = True
 
 
 @pytest_asyncio.fixture
-async def fixed_task(session: AsyncSession) -> TaskInDB:
+async def fixed_task(session: AsyncSession, general_account: ProfileInDB) -> TaskInDB:
     new_task = TaskCreate(
         title="fixed task",
         description="fixed task",
         asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
+    token = auth_service.create_token_for_user(account=general_account)
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     yield created_task
     await service.delete(session=session, id=created_task.id)
 
 
 @pytest_asyncio.fixture
-async def task_for_update(session: AsyncSession) -> TaskInDB:
+async def task_for_update(
+    session: AsyncSession, general_account: ProfileInDB
+) -> TaskInDB:
     new_task = TaskCreate(
         title="updated task",
         description="updated task",
         asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
+    token = auth_service.create_token_for_user(account=general_account)
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     yield created_task
     await service.delete(session=session, id=created_task.id)
 
 
 @pytest_asyncio.fixture
-async def task_for_delete(session: AsyncSession) -> TaskInDB:
+async def task_for_delete(
+    session: AsyncSession, general_account: ProfileInDB
+) -> TaskInDB:
     new_task = TaskCreate(
         title="updated task",
         description="updated task",
         asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
+    token = auth_service.create_token_for_user(account=general_account)
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     return created_task
 
 
@@ -78,7 +87,7 @@ async def task_for_delete(session: AsyncSession) -> TaskInDB:
 @pytest.fixture
 def import_task(s_engine: Engine) -> DataFrame:
     datas: DataFrame = read_csv(
-        "tests/data/test_task_data.csv", encoding="utf-8", dtype={3: str}
+        "tests/data/test_task_data.csv", encoding="utf-8", dtype={4: str}
     )
     datas.to_sql(
         name="tasks",
@@ -110,7 +119,7 @@ class TestRouteExists:
 
     async def test_query(self, app: FastAPI, client: AsyncClient) -> None:
         try:
-            await client.get(app.url_path_for("tasks:query"))
+            await client.get(app.url_path_for("tasks:search"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
@@ -479,7 +488,7 @@ class TestSearch:
     ) -> None:
 
         res = await provisional_client.post(
-            app.url_path_for("tasks:query"), params=param[0], data=param[1]
+            app.url_path_for("tasks:search"), params=param[0], data=param[1]
         )
         assert res.status_code == HTTP_200_OK
         result = TaskPublicList(**res.json())
@@ -496,7 +505,7 @@ class TestSearch:
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
         res = await non_active_client.post(
-            app.url_path_for("tasks:query"), params={}, data="{}"
+            app.url_path_for("tasks:search"), params={}, data="{}"
         )
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
@@ -652,7 +661,7 @@ class TestSearch:
         param: tuple[any, str, int],
     ) -> None:
         res = await provisional_client.post(
-            app.url_path_for("tasks:query"), params=param[0], data=param[1]
+            app.url_path_for("tasks:search"), params=param[0], data=param[1]
         )
         assert res.status_code == param[2]
 
