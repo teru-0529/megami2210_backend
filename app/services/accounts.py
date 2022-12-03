@@ -168,16 +168,8 @@ class AccountService:
         try:
             account_id = auth_service.get_id_from_token(token=token)
             profile = await self.get_by_id(session=session, id=account_id)
-        except Exception:  # pragma: no cover
+        except Exception:  # pragma: no cover FIXME:
             raise not_authorized_exception
-        if not profile:  # pragma: no cover
-            raise not_authorized_exception
-            # if not current_account.is_active: #FIXME:
-            #     raise HTTPException(
-            #         status_code=HTTP_401_UNAUTHORIZED,
-            #         detail="Not an active user.",
-            #         headers={"WWW-Authenticate": "Bearer"},
-            #     )
 
         print(profile)
         return ProfileInDB.from_orm(profile)
@@ -192,7 +184,7 @@ class AccountService:
 
         try:
             account_id = auth_service.get_id_from_token(token=token)
-        except Exception:  # pragma: no cover
+        except Exception:  # pragma: no cover FIXME:
             raise not_authorized_exception
         update_dict = patch_params.dict(exclude_unset=True)
         return await self.update(
@@ -216,7 +208,7 @@ class AccountService:
                 new_password=pass_change.new_password.get_secret_value(),
             )
             await session.commit()
-        except Exception:  # pragma: no cover
+        except Exception:  # pragma: no cover FIXME:
             raise not_authorized_exception
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
