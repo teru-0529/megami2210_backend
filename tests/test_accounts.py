@@ -678,7 +678,6 @@ class TestResetPassword:
             ),
             data=update_param.json(exclude_unset=True),
         )
-        print(res.json())
         assert res.status_code == HTTP_200_OK
 
         # リセット後はリセットパスワードでログインできること

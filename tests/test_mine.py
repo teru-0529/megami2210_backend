@@ -96,7 +96,6 @@ class TestCreateToken:
             audience=JWT_AUDIENCE,
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES,
         )
-        print(token)
         creds = jwt.decode(
             token, str(SECRET_KEY), audience=JWT_AUDIENCE, algorithms=[JWT_ALGORITHM]
         )
@@ -163,7 +162,6 @@ class TestCreateToken:
                 audience=param[1],
                 expires_in=ACCESS_TOKEN_EXPIRE_MINUTES,
             )
-            print(token)
             jwt.decode(
                 token,
                 str(SECRET_KEY),
@@ -487,40 +485,36 @@ class TestChangePassword:
     async def test_ok(
         self,
         app: FastAPI,
-        non_active_client: AsyncClient,
-        non_active_account: ProfileInDB,
+        general_client: AsyncClient,
+        general_account: ProfileInDB,
     ) -> None:
         update_param = PasswordChange(new_password="new_password")
 
         login_data = {
-            "username": non_active_account.account_id,
+            "username": general_account.account_id,
             "password": update_param.new_password,
         }
 
         # 変更前は新パスワードでログインできないこと
-        non_active_client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await non_active_client.post(
-            app.url_path_for("mine:login"), data=login_data
-        )
+        general_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await general_client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
-        non_active_client.headers["content-type"] = ""
-        res = await non_active_client.patch(
+        general_client.headers["content-type"] = ""
+        res = await general_client.patch(
             app.url_path_for("mine:change-password"),
             data=update_param.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_200_OK
 
         # 変更後は新パスワードでログインできること
-        non_active_client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await non_active_client.post(
-            app.url_path_for("mine:login"), data=login_data
-        )
+        general_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await general_client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_200_OK
 
         # 変更後のアカウントがアクティベート状態であること
-        non_active_client.headers["content-type"] = ""
-        res = await non_active_client.get(app.url_path_for("mine:get-profile"))
+        general_client.headers["content-type"] = ""
+        res = await general_client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
         profile.is_active is True

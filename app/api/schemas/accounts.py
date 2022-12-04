@@ -4,7 +4,7 @@
 from typing import Optional
 
 from fastapi import Path
-from pydantic import EmailStr, Extra, Field, validator, SecretStr
+from pydantic import EmailStr, Extra, Field, SecretStr, validator
 
 from app.api.schemas.base import CoreModel
 from app.models.segment_values import AccountTypes
@@ -12,7 +12,7 @@ from app.models.segment_values import AccountTypes
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 # パスパラメータ
-p_account_id: str = Path(
+p_account_id: Path = Path(
     title="AccountId",
     description="アカウントID",
     min_length=5,
@@ -73,7 +73,7 @@ class ProfileBase(CoreModel):
     account_type: AccountTypes = b_account_type
     is_active: bool = b_is_active
     verified_email: bool = b_verified_email
-    init_password: Optional[SecretStr] = b_password()
+    # init_password: Optional[SecretStr] = b_password()
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -133,7 +133,7 @@ class ProfilePublic(ProfileBase):
 
 
 class ProfilePublicWithInitPass(ProfilePublic):
-    init_password: str = b_password("初期パスワード")
+    init_password: Optional[str] = b_password("初期パスワード")
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+

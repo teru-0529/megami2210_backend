@@ -19,6 +19,7 @@ from app.api.schemas.accounts import (
     ProfileBaseUpdate,
     ProfileInDB,
     ProfilePublic,
+    ProfilePublicWithInitPass,
     ProfileUpdate,
 )
 from app.api.schemas.token import AccessToken
@@ -48,7 +49,7 @@ class AccountService:
 
     async def create(
         self, *, session: AsyncSession, id: str, new_account: AccountCreate
-    ) -> ProfilePublic:
+    ) -> ProfilePublicWithInitPass:
 
         """アカウント登録"""
         profile = ac_Profile(**new_account.dict(exclude={"init_password"}))
@@ -77,8 +78,7 @@ class AccountService:
 
         await session.refresh(created_profile)
         result = ProfileInDB.from_orm(created_profile)
-        result.init_password = init_password
-        return result
+        return ProfilePublicWithInitPass(init_password=init_password, **result.dict())
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -167,7 +167,6 @@ class AccountService:
         account_id = auth_service.get_id_from_token(token=token)
         profile = await self.get_by_id(session=session, id=account_id)
 
-        print(profile)
         return ProfileInDB.from_orm(profile)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----

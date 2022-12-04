@@ -23,14 +23,21 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB, TaskPublicList, TaskUpdate
 from app.api.schemas.accounts import ProfileInDB
+from app.api.schemas.tasks import (
+    TaskCreate,
+    TaskInDB,
+    TaskPublicList,
+    TaskUpdate,
+    TaskWithAccount,
+)
 from app.models.segment_values import TaskStatus
-from app.services.tasks import TaskService
 from app.services import auth_service
+from app.services.accounts import AccountService
+from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
-is_regression = True
+is_regression = False
 
 
 @pytest_asyncio.fixture
@@ -46,6 +53,26 @@ async def fixed_task(session: AsyncSession, general_account: ProfileInDB) -> Tas
     created_task = await service.create(session=session, token=token, new_task=new_task)
     yield created_task
     await service.delete(session=session, id=created_task.id)
+
+
+@pytest_asyncio.fixture
+async def fixed_task_with_account(
+    session: AsyncSession, fixed_task: TaskInDB
+) -> TaskWithAccount:
+    service = AccountService()
+    registrant = await service.get_by_id(session=session, id=fixed_task.registrant_id)
+    asaignee = await service.get_by_id(session=session, id=fixed_task.asaignee_id)
+    task_with_account = TaskWithAccount(
+        id=fixed_task.id,
+        registrant=registrant,
+        title=fixed_task.title,
+        description=fixed_task.description,
+        asaignee=asaignee,
+        status=fixed_task.status,
+        is_significant=fixed_task.is_significant,
+        deadline=fixed_task.deadline,
+    )
+    yield task_with_account
 
 
 @pytest_asyncio.fixture
@@ -294,7 +321,7 @@ class TestCreate:
 @pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
 
-    # 正常ケースパラメータ
+    # 正常ケース
     async def test_ok(
         self, app: FastAPI, provisional_client: AsyncClient, fixed_task: TaskInDB
     ) -> None:
@@ -305,6 +332,24 @@ class TestGet:
         assert res.status_code == HTTP_200_OK
         get_task = TaskInDB(**res.json())
         assert get_task == fixed_task
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 正常ケース()
+    async def test_ok_with_account(
+        self,
+        app: FastAPI,
+        provisional_client: AsyncClient,
+        fixed_task_with_account: TaskWithAccount,
+    ) -> None:
+
+        res = await provisional_client.get(
+            app.url_path_for("tasks:get", id=fixed_task_with_account.id),
+            params={"sub-resources": "account"},
+        )
+        assert res.status_code == HTTP_200_OK
+        get_task = TaskWithAccount(**res.json())
+        assert get_task == fixed_task_with_account
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -354,6 +399,13 @@ class TestSearch:
     # 正常ケースパラメータ
     valid_params = {
         "パラメータ無し": ({}, "{}", 20, 10, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "サブリソース(アカウント)": (
+            {"sub-resources": "account"},
+            "{}",
+            20,
+            10,
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ),
         "<query:limit>:(100)": (
             {"limit": 100},
             "{}",

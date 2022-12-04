@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # accouts.py
+# TODO:search
 
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,7 +79,7 @@ async def create(
 
 
 @router.get(
-    "/{id}/",
+    "/{id}/profile",
     name="accounts:get-profile",
     responses={
         404: {

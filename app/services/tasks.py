@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # tasks.py
 
-from typing import List
+from typing import List, Tuple, Union
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,7 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
+from app.api.schemas.accounts import ProfileInDB
 from app.api.schemas.tasks import (
     TaskCreate,
     TaskFilter,
@@ -19,8 +20,9 @@ from app.api.schemas.tasks import (
     TaskPublic,
     TaskPublicList,
     TaskUpdate,
+    TaskWithAccount,
 )
-from app.models.table_models import td_Task
+from app.models.table_models import ac_Profile, td_Task
 from app.repositries import QueryParam
 from app.repositries.tasks import TaskRepository
 from app.services import auth_service
@@ -63,33 +65,52 @@ class TaskService:
         offset: int,
         limit: int,
         sort: str,
-        execute_assaignee: bool,  # TODO:
+        sub_resources: str,
         *,
         session: AsyncSession,
         filter: TaskFilter
     ) -> TaskPublicList:
         """タスク照会"""
+        inclide_account = (
+            "account" in sub_resources.split(",") if sub_resources else False
+        )
+
         query_param = self.New_QueryParam(
             offset=offset, limit=limit, sort=sort, filter=filter
         )
         repo = TaskRepository()
-        query_tasks: List[td_Task] = await repo.search(
-            session=session, query_param=query_param
+        searched_tasks: List[
+            Tuple[td_Task, ac_Profile, ac_Profile]
+        ] = await repo.search(
+            session=session, query_param=query_param, inclide_account=inclide_account
         )
-        tasks: List[TaskPublic] = [TaskInDB.from_orm(task) for task in query_tasks]
+        tasks: List[Union[TaskInDB, TaskWithAccount]] = [
+            self.result(task, inclide_account).dict() for task in searched_tasks
+        ]
         count: int = await repo.count(session=session, query_param=query_param)
-        return TaskPublicList(tasks=tasks, count=count)
+        # ※リスト要素が可変の場合にdictに変換してから投入する必要がある（要確認）
+        result = TaskPublicList(tasks=[], count=count)
+        result = result.copy(update={"tasks": tasks})
+        return result
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    async def get_by_id(self, *, session: AsyncSession, id: int) -> TaskPublic:
+    async def get_by_id(
+        self, sub_resources: str, *, session: AsyncSession, id: int
+    ) -> Union[TaskPublic, TaskWithAccount]:
         """タスク取得"""
+        inclide_account = (
+            "account" in sub_resources.split(",") if sub_resources else False
+        )
+
         repo = TaskRepository()
-        task: td_Task = await repo.get_by_id(session=session, id=id)
+        task: td_Task = await repo.get_by_id(
+            session=session, id=id, inclide_account=inclide_account
+        )
         if not task:
             raise not_found_exception
 
-        return TaskInDB.from_orm(task)
+        return self.result(task, inclide_account)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -185,3 +206,16 @@ class TaskService:
     def exists_params(self, args: str, params: List[str]) -> bool:
         filtered = [x for x in params if x in args]
         return filtered == params
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]検索結果からレスポンスモデルを構築する
+    def result(
+        self, task: Tuple[td_Task, ac_Profile, ac_Profile], inclide_account: bool
+    ) -> Union[TaskPublic, TaskWithAccount]:
+        if inclide_account:
+            result = TaskWithAccount.from_orm(task[0])
+            result.registrant = ProfileInDB.from_orm(task[1]) if task[1] else None
+            result.asaignee = ProfileInDB.from_orm(task[2]) if task[2] else None
+            return result
+        else:
+            return TaskInDB.from_orm(task[0])

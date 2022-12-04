@@ -2,30 +2,43 @@
 # tasks.py
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from fastapi import Path, Query
 from pydantic import Extra, Field, validator
 
-from app.api.schemas.base import CoreModel, IDModelMixin, QueryModel
-from app.api.schemas.accounts import b_account_id
-from app.models.segment_values import TaskStatus
+from app.api.schemas.accounts import ProfilePublic, b_account_id
+from app.api.schemas.base import CoreModel, QueryModel
+from app.models.segment_values import Base, TaskStatus
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+class SubResource(Base):
+    ACCOUNT = "account"
+
+    def description() -> str:
+        return """
+レスポンスに含めるサブリソース:
+  * `ACCOUNT` - アカウント
+    """
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 # パスパラメータ
-p_task_id: int = Path(title="TaskId", description="タスクID", ge=1, example=10)
+p_task_id: Path = Path(title="TaskId", description="タスクID", ge=1, example=10)
 
-# クエリパラメータ# TODO:
-q_exclude_asaignee: bool = Query(
-    default=False,
-    title="ExcludeAsaignee",
-    description="担当者情報の詳細情報をレスポンスから除外する場合にTrue",
-    example=True,
+# クエリパラメータ
+q_sub_resources: Query = Query(
+    default=None,
+    title="Include sub resources",
+    description="レスポンスに含めるサブリソース",
+    example="account",
+    alias="sub-resources",
 )
 
 # ボディパラメータ
+b_task_id: Field = Field(title="TaskId", description="タスクID", ge=1, example=10)
 b_title: Field = Field(
     title="TaskTitle", description="タスクの名称", example="create db model", max_length=30
 )
@@ -71,7 +84,7 @@ s_asagnee_id_ex: Field = Field(
 s_status_in: Field = Field(
     title="Status-[IN]",
     description="<クエリ条件> タスクステータス(いずれか)",
-    example=["TODO", "DOING"],
+    example=[TaskStatus.todo, TaskStatus.doing],
     min_items=1,
 )
 s_is_significant_eq: Field = Field(
@@ -88,6 +101,7 @@ s_deadline_to: Field = Field(
 
 
 class TaskBase(CoreModel):
+    id: int = b_task_id
     registrant_id: Optional[str] = b_account_id("登録者ID")
     title: str = b_title
     description: Optional[str] = b_description
@@ -135,7 +149,7 @@ class TaskUpdate(CoreModel, extra=Extra.forbid):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class TaskInDB(IDModelMixin, TaskBase):
+class TaskInDB(TaskBase):
     class Config:
         orm_mode = True
 
@@ -143,15 +157,34 @@ class TaskInDB(IDModelMixin, TaskBase):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class TaskPublic(IDModelMixin, TaskBase):
+class TaskPublic(TaskBase):
     pass
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+class TaskWithAccount(CoreModel):
+    id: int = b_task_id
+    registrant: Optional[ProfilePublic] = Field(
+        title="ProfilePublic", description="登録者"
+    )
+    title: str = b_title
+    description: Optional[str] = b_description
+    asaignee: Optional[ProfilePublic] = Field(title="ProfilePublic", description="担当者")
+    status: TaskStatus = b_status
+    is_significant: bool = b_is_significant
+    deadline: Optional[date] = b_deadline
+
+    class Config:
+        orm_mode = True
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class TaskPublicList(QueryModel):
-    tasks: List[TaskPublic]
+    tasks: List[Union[TaskInDB, TaskWithAccount]] = Field(description="タスクリスト")
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
