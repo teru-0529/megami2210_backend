@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 # クエリパラメータ
-q_offset: int = Query(
+q_offset: Query = Query(
     default=0,
     title="Offset of result data",
     description="結果抽出時のオフセット値",
@@ -15,7 +15,7 @@ q_offset: int = Query(
     example=0,
 )
 
-q_limit: int = Query(
+q_limit: Query = Query(
     default=10,
     title="Limit of result data",
     description="結果抽出時の最大件数",
@@ -24,13 +24,16 @@ q_limit: int = Query(
     example=10,
 )
 
-q_sort: str = Query(
-    default="+id",
-    title="Sort condition",
-    description="ソートキー ※[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC",
-    regex="^[\+\-][a-z\_]+(?:,[\+\-][a-z\_]+)*$",  # noqa: W605
-    example="+deadline,-id",
-)
+
+def q_sort(default: str, example: str) -> Query:
+    return Query(
+        default=default,
+        title="Sort condition",
+        description="ソートキー ※[+deadline,-asaignee_id] のように複数指定可能。+:ASC、-:DESC",
+        regex="^[\+\-][a-z\_]+(?:,[\+\-][a-z\_]+)*$",  # noqa: W605
+        example=example,
+    )
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 

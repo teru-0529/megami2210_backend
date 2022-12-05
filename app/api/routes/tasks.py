@@ -82,7 +82,7 @@ async def create(
 async def search(
     offset: int = q_offset,
     limit: int = q_limit,
-    sort: str = q_sort,
+    sort: str = q_sort(default="+id", example="+deadline,-id"),
     sub_resources: str = q_sub_resources,
     filter: TaskFilter = Body(...),
     session: AsyncSession = Depends(get_session),

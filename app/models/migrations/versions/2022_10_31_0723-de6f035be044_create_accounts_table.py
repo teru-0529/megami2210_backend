@@ -72,7 +72,7 @@ def create_profiles_table() -> None:
             sa.Boolean,
             nullable=False,
             server_default="False",
-            comment="初期パスワード変更済み",
+            comment="アクティベート済み",
         ),
         *timestamps(),
         schema="account",

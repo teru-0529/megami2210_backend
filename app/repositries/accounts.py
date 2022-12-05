@@ -1,14 +1,15 @@
 #!/usr/bin/python3
 # accouts.py
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import func, select, table
 from sqlalchemy.engine import Result
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.table_models import ac_Auth, ac_Profile
+from app.repositries import QueryParam
 from app.services import auth_service
 from app.services.authentication import AuthError
 
@@ -162,3 +163,35 @@ class AccountRepository:
         result: Result = await session.execute(query)
         auth: Optional[Tuple[ac_Auth]] = result.first()
         return auth[0] if auth else None
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def count(self, *, session: AsyncSession, query_param: QueryParam) -> int:
+        """プロフィール件数取得"""
+        query = select(func.count())
+        if query_param.filter:
+            query = query.where(*query_param.filter)
+        else:
+            query = query.select_from(table("profiles", schema="account"))
+        result: Result = await session.execute(query)
+        return result.scalar()
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def search(
+        self,
+        *,
+        session: AsyncSession,
+        query_param: QueryParam,
+    ) -> List[ac_Profile]:
+        """プロフィール検索"""
+        query = (
+            select(ac_Profile)
+            .where(*query_param.filter)
+            .offset(query_param.offset)
+            .limit(query_param.limit)
+            .order_by(*query_param.sort)
+        )
+        result: Result = await session.execute(query)
+        profiles: List[Tuple[ac_Profile]] = result.all()
+        return [profile[0] for profile in profiles]

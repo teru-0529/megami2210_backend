@@ -10,6 +10,7 @@ from starlette.status import (
     HTTP_401_UNAUTHORIZED,
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
+    HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
 from app.api.schemas.accounts import (
@@ -21,9 +22,12 @@ from app.api.schemas.accounts import (
     ProfilePublic,
     ProfilePublicWithInitPass,
     ProfileUpdate,
+    ProfileFilter,
+    ProfilePublicList,
 )
 from app.api.schemas.token import AccessToken
 from app.models.table_models import ac_Auth, ac_Profile
+from app.repositries import QueryParam
 from app.repositries.accounts import AccountRepository
 from app.services import auth_service
 
@@ -219,6 +223,73 @@ class AccountService:
         await session.commit()
 
         return PasswordReset(init_password=init_password)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def search(
+        self,
+        offset: int,
+        limit: int,
+        sort: str,
+        *,
+        session: AsyncSession,
+        filter: ProfileFilter
+    ) -> ProfilePublicList:
+        """プロフィール照会"""
+
+        query_param = self.New_QueryParam(
+            offset=offset, limit=limit, sort=sort, filter=filter
+        )
+        repo = AccountRepository()
+        searched_profiles: List[ac_Profile] = await repo.search(
+            session=session, query_param=query_param
+        )
+        profiles: List[ProfilePublic] = [
+            ProfileInDB.from_orm(profile) for profile in searched_profiles
+        ]
+        count: int = await repo.count(session=session, query_param=query_param)
+        return ProfilePublicList(profiles=profiles, count=count)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]クエリパラメータクラスの作成
+    def New_QueryParam(
+        self, *, offset: int, limit: int, sort: str, filter: ProfileFilter
+    ) -> QueryParam:
+        try:
+            queryParm = QueryParam(
+                columns=ac_Profile.__table__.columns,
+                offset=offset,
+                limit=limit,
+                sort=sort,
+                default_key="+account_id",
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
+            )
+        if filter.account_id_sw is not None:
+            queryParm.append_filter(
+                ac_Profile.account_id.startswith(filter.account_id_sw)
+            )
+        if filter.user_name_cn is not None:
+            queryParm.append_filter(ac_Profile.user_name.contains(filter.user_name_cn))
+        if filter.nickname_cn is not None:
+            queryParm.append_filter(ac_Profile.nickname.contains(filter.nickname_cn))
+        if filter.nickname_ex is True:
+            queryParm.append_filter(ac_Profile.nickname.is_not(None))
+        if filter.nickname_ex is False:
+            queryParm.append_filter(ac_Profile.nickname.is_(None))
+        if filter.email_dm is not None:
+            queryParm.append_filter(ac_Profile.email.endswith("@" + filter.email_dm))
+        if filter.verified_email_eq is not None:
+            queryParm.append_filter(
+                ac_Profile.verified_email.is_(filter.verified_email_eq)
+            )
+        if filter.account_type_in is not None:
+            queryParm.append_filter(ac_Profile.account_type.in_(filter.account_type_in))
+        if filter.is_active_eq is not None:
+            queryParm.append_filter(ac_Profile.is_active.is_(filter.is_active_eq))
+        return queryParm
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER]例外文字列の判定

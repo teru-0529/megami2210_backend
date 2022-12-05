@@ -60,16 +60,16 @@ b_deadline: Field = Field(
 # ボディパラメータ(クエリメソッド用)
 s_title_cn: Field = Field(
     title="Title-[CONTAINS]",
-    description="<クエリ条件> タスクの名称(含む)",
+    description="<クエリ条件> タスクの名称(指定文字列を含む)",
     example="タスク",
     max_length=30,
 )
 s_description_cn: Field = Field(
-    title="Description-[CONTAINS]", description="<クエリ条件> タスク詳細(含む)", example="作成"
+    title="Description-[CONTAINS]", description="<クエリ条件> タスク詳細(指定文字列を含む)", example="作成"
 )
 s_asagnee_id_in: Field = Field(
     title="AsagneeId-[IN]",
-    description="<クエリ条件> タスク担当者(いずれか)",
+    description="<クエリ条件> タスク担当者(リスト内のいずれかと一致)",
     example=["T-901", "T-902"],
     min_items=1,
     max_items=3,
@@ -83,7 +83,7 @@ s_asagnee_id_ex: Field = Field(
 )
 s_status_in: Field = Field(
     title="Status-[IN]",
-    description="<クエリ条件> タスクステータス(いずれか)",
+    description="<クエリ条件> タスクステータス(リスト内のいずれかと一致)",
     example=[TaskStatus.todo, TaskStatus.doing],
     min_items=1,
 )
@@ -200,9 +200,15 @@ class TaskFilter(CoreModel, extra=Extra.forbid):
     deadline_from: Optional[date] = s_deadline_from
     deadline_to: Optional[date] = s_deadline_to
 
+    @validator("asaignee_id_in")
+    def asaignee_id_in_duplicate(cls, v, values):
+        if "asaignee_id_ex" in values and values["asaignee_id_ex"] is not None:
+            raise ValueError("keyword[asaignee_id] is duplicate.")
+        return v
+
     @validator("asaignee_id_ex")
-    def asaignee_id_duplicate(cls, v, values):
-        if v is not None and values["asaignee_id_in"] is not None:
+    def asaignee_id_ex_duplicate(cls, v, values):
+        if "asaignee_id_in" in values and values["asaignee_id_in"] is not None:
             raise ValueError("keyword[asaignee_id] is duplicate.")
         return v
 

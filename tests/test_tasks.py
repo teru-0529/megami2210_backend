@@ -37,7 +37,7 @@ from app.services.accounts import AccountService
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
-is_regression = False
+is_regression = True
 
 
 @pytest_asyncio.fixture

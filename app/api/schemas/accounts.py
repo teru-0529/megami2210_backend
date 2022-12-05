@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 # accounts.py
 
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import Path
 from pydantic import EmailStr, Extra, Field, SecretStr, validator
 
-from app.api.schemas.base import CoreModel
+from app.api.schemas.base import CoreModel, QueryModel
 from app.models.segment_values import AccountTypes
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -62,6 +62,49 @@ def b_password(description: str = "サインインパスワード") -> Field:
     )
 
 
+# ボディパラメータ(クエリメソッド用)
+s_account_id_sw: Field = Field(
+    title="AccountId-[START_WITH]",
+    description="<クエリ条件> アカウントID(指定文字列で始まる)",
+    max_length=5,
+    example="T-9",
+)
+s_user_name_cn: Field = Field(
+    title="UserName-[CONTAINS]",
+    description="<クエリ条件> 氏名(指定文字列を含む)",
+    max_length=20,
+    example="徳川",
+)
+s_nickname_cn: Field = Field(
+    title="Nickname-[CONTAINS]",
+    description="<クエリ条件> ニックネーム(指定文字列を含む)",
+    max_length=20,
+    example="魔王",
+)
+s_nickname_ex: Field = Field(
+    title="Nickname-[EXIST]",
+    description="<クエリ条件> ニックネーム(設定有無)",
+    example=True,
+)
+s_email_dm: Field = Field(
+    title="Email-[DOMAIN]",
+    description="<クエリ条件> メールアドレス(ドメイン一致)",
+    example="semgoku.com",
+)
+s_verified_email_eq: Field = Field(
+    title="VerifiedEmail-[EQUAL]", description="<クエリ条件> メール送達確認済み(一致)", example=True
+)
+s_account_type_in: Field = Field(
+    title="AccountType-[IN]",
+    description="<クエリ条件> アカウント種別(リスト内のいずれかと一致)",
+    example=[AccountTypes.administrator, AccountTypes.general],
+    min_items=1,
+)
+s_is_active_eq: Field = Field(
+    title="IsActive-[EQUAL]", description="<クエリ条件> アクティベート済み(一致)", example=True
+)
+
+
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
@@ -73,7 +116,6 @@ class ProfileBase(CoreModel):
     account_type: AccountTypes = b_account_type
     is_active: bool = b_is_active
     verified_email: bool = b_verified_email
-    # init_password: Optional[SecretStr] = b_password()
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -148,3 +190,36 @@ class PasswordChange(CoreModel, extra=Extra.forbid):
 
 class PasswordReset(CoreModel, extra=Extra.forbid):
     init_password: Optional[str] = b_password("初期パスワード")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class ProfilePublicList(QueryModel):
+    profiles: List[ProfileInDB] = Field(description="プロフィールリスト")
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class ProfileFilter(CoreModel, extra=Extra.forbid):
+    account_id_sw: Optional[str] = s_account_id_sw
+    user_name_cn: Optional[str] = s_user_name_cn
+    nickname_cn: Optional[str] = s_nickname_cn
+    nickname_ex: Optional[bool] = s_nickname_ex
+    email_dm: Optional[str] = s_email_dm
+    verified_email_eq: Optional[bool] = s_verified_email_eq
+    account_type_in: Optional[List[AccountTypes]] = s_account_type_in
+    is_active_eq: Optional[bool] = s_is_active_eq
+
+    @validator("nickname_ex")
+    def asaignee_id_ex_duplicate(cls, v, values):
+        if "nickname_cn" in values and values["nickname_cn"] is not None:
+            raise ValueError("keyword[nickname] is duplicate.")
+        return v
+
+    @validator("nickname_cn")
+    def asaignee_id_cn_duplicate(cls, v, values):
+        if "nickname_ex" in values and values["nickname_ex"] is not None:
+            raise ValueError("keyword[nickname] is duplicate.")
+        return v

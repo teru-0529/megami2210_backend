@@ -155,7 +155,11 @@ class TaskService:
     ) -> QueryParam:
         try:
             queryParm = QueryParam(
-                columns=td_Task.__table__.columns, offset=offset, limit=limit, sort=sort
+                columns=td_Task.__table__.columns,
+                offset=offset,
+                limit=limit,
+                sort=sort,
+                default_key="+id",
             )
         except ValueError as e:
             raise HTTPException(
