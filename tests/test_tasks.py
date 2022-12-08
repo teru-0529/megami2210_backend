@@ -37,7 +37,6 @@ from app.services.accounts import AccountService
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
-is_regression = True
 
 
 @pytest_asyncio.fixture
@@ -130,7 +129,6 @@ def import_task(s_engine: Engine) -> DataFrame:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestRouteExists:
     async def test_create(self, app: FastAPI, client: AsyncClient) -> None:
         try:
@@ -166,7 +164,6 @@ class TestRouteExists:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestCreate:
 
     # 正常ケースパラメータ
@@ -202,6 +199,7 @@ class TestCreate:
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, general_client: AsyncClient, new_task: TaskCreate
     ) -> None:
@@ -221,6 +219,7 @@ class TestCreate:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -233,6 +232,7 @@ class TestCreate:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認可エラー）
+    @pytest.mark.ng
     async def test_ng_permission(
         self, app: FastAPI, provisional_client: AsyncClient
     ) -> None:
@@ -286,6 +286,7 @@ class TestCreate:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -301,6 +302,7 @@ class TestCreate:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（外部キーエラー）
+    @pytest.mark.ng
     async def test_ng_foreignkey(
         self, app: FastAPI, general_client: AsyncClient
     ) -> None:
@@ -318,10 +320,10 @@ class TestCreate:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, provisional_client: AsyncClient, fixed_task: TaskInDB
     ) -> None:
@@ -335,7 +337,8 @@ class TestGet:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
-    # 正常ケース()
+    # 正常ケース(サブリソースを含めて取得)
+    @pytest.mark.ok
     async def test_ok_with_account(
         self,
         app: FastAPI,
@@ -354,6 +357,7 @@ class TestGet:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -380,6 +384,7 @@ class TestGet:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -393,7 +398,6 @@ class TestGet:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestSearch:
 
     # 正常ケースパラメータ
@@ -531,6 +535,7 @@ class TestSearch:
         "param", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self,
         app: FastAPI,
@@ -553,6 +558,7 @@ class TestSearch:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -706,6 +712,7 @@ class TestSearch:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -721,7 +728,6 @@ class TestSearch:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatch:
 
     # 正常ケースパラメータ
@@ -742,6 +748,7 @@ class TestPatch:
         "update_params", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self,
         app: FastAPI,
@@ -763,6 +770,7 @@ class TestPatch:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -775,6 +783,7 @@ class TestPatch:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認可エラー）
+    @pytest.mark.ng
     async def test_ng_permission(
         self, app: FastAPI, provisional_client: AsyncClient
     ) -> None:
@@ -851,6 +860,7 @@ class TestPatch:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -866,6 +876,7 @@ class TestPatch:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（外部キーエラー）
+    @pytest.mark.ng
     async def test_ng_foreignkey(
         self, app: FastAPI, general_client: AsyncClient, task_for_update: TaskInDB
     ) -> None:
@@ -879,10 +890,10 @@ class TestPatch:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, general_client: AsyncClient, task_for_delete: TaskInDB
     ) -> None:
@@ -903,6 +914,7 @@ class TestDelete:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -912,6 +924,7 @@ class TestDelete:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認可エラー）
+    @pytest.mark.ng
     async def test_ng_permission(
         self, app: FastAPI, provisional_client: AsyncClient
     ) -> None:
@@ -938,6 +951,7 @@ class TestDelete:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,

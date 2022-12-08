@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # accounts.py
 
-from typing import List
+from typing import List, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -18,17 +18,19 @@ from app.api.schemas.accounts import (
     PasswordChange,
     PasswordReset,
     ProfileBaseUpdate,
+    ProfileFilter,
     ProfileInDB,
     ProfilePublic,
+    ProfilePublicList,
     ProfilePublicWithInitPass,
     ProfileUpdate,
-    ProfileFilter,
-    ProfilePublicList,
 )
+from app.api.schemas.tasks import TaskInDB, TaskWithWatchNote, WatchTask
 from app.api.schemas.token import AccessToken
-from app.models.table_models import ac_Auth, ac_Profile
+from app.models.table_models import ac_Auth, ac_Profile, td_Task, td_Watcher
 from app.repositries import QueryParam
 from app.repositries.accounts import AccountRepository
+from app.repositries.tasks import TaskRepository
 from app.services import auth_service
 
 # 未認証例外
@@ -251,6 +253,66 @@ class AccountService:
         return ProfilePublicList(profiles=profiles, count=count)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def put_watch_task(
+        self, *, session: AsyncSession, token: str, id: int, watch_task: WatchTask
+    ) -> None:
+
+        """監視タスク登録"""
+        account_id = auth_service.get_id_from_token(token=token)
+        watcher = td_Watcher(watcher_id=account_id, task_id=id, note=watch_task.note)
+
+        repo = TaskRepository()
+        try:
+            await repo.create_watcher(session=session, watcher=watcher)
+            await session.commit()
+        except IntegrityError as e:
+            await session.rollback()
+            self.ch_exception_detail(e)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def delete_watch_task(
+        self, *, session: AsyncSession, token: str, id: str
+    ) -> None:
+
+        """監視タスク削除"""
+        account_id = auth_service.get_id_from_token(token=token)
+        repo = TaskRepository()
+        exist_task_id = await repo.delete_watcher(
+            session=session, watcher_id=account_id, task_id=id
+        )
+        if not exist_task_id:
+            await session.rollback()
+            raise not_found_exception
+
+        await session.commit()
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def get_watch_tasks(
+        self, *, session: AsyncSession, token: str
+    ) -> List[TaskWithWatchNote]:
+
+        """監視タスク取得"""
+        account_id = auth_service.get_id_from_token(token=token)
+        repo = TaskRepository()
+        watch_tasks: List[Tuple[td_Watcher, td_Task]] = await repo.get_watch_tasks(
+            session=session, watcher_id=account_id
+        )
+        return [self.New_TaskWithWatchNote(task) for task in watch_tasks]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]ノート付タスククラスの作成
+
+    def New_TaskWithWatchNote(
+        self, src: Tuple[td_Watcher, td_Task]
+    ) -> TaskWithWatchNote:
+        task_dict = TaskInDB.from_orm(src[1]).dict()
+        task_dict["note"] = src[0].note
+        return TaskWithWatchNote(**task_dict)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER]クエリパラメータクラスの作成
     def New_QueryParam(
         self, *, offset: int, limit: int, sort: str, filter: ProfileFilter
@@ -327,6 +389,19 @@ class AccountService:
         ):
             raise HTTPException(
                 status_code=HTTP_409_CONFLICT, detail="duplicate key: [email]."
+            )
+        elif self.exists_params(
+            args,
+            [
+                "asyncpg.exceptions.ForeignKeyViolationError",
+                "violates foreign key constraint",
+                "watcher",
+                "fk_task_id",
+            ],
+        ):
+            raise HTTPException(
+                status_code=HTTP_404_NOT_FOUND,
+                detail="Task resource not found by specified Id.",
             )
         raise e  # pragma: no cover
 

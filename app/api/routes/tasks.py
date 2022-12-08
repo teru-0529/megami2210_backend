@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 # tasks.py
-# TODO:watcher
 
 from typing import Union
 
@@ -15,8 +14,8 @@ from app.api.schemas.tasks import (
     TaskFilter,
     TaskPublic,
     TaskPublicList,
-    TaskWithAccount,
     TaskUpdate,
+    TaskWithAccount,
     p_task_id,
     q_sub_resources,
 )

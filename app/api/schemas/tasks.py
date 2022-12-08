@@ -9,19 +9,7 @@ from pydantic import Extra, Field, validator
 
 from app.api.schemas.accounts import ProfilePublic, b_account_id
 from app.api.schemas.base import CoreModel, QueryModel
-from app.models.segment_values import Base, TaskStatus
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-class SubResource(Base):
-    ACCOUNT = "account"
-
-    def description() -> str:
-        return """
-レスポンスに含めるサブリソース:
-  * `ACCOUNT` - アカウント
-    """
-
+from app.models.segment_values import TaskStatus
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -54,8 +42,9 @@ b_is_significant: Field = Field(
 b_deadline: Field = Field(
     title="Deadline",
     description="タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能",
-    example="2022-12-31",
+    example="2025-12-31",
 )
+b_note: Field = Field(title="Note", description="ノート", example="要チェック！")
 
 # ボディパラメータ(クエリメソッド用)
 s_title_cn: Field = Field(
@@ -221,3 +210,17 @@ class TaskFilter(CoreModel, extra=Extra.forbid):
         ):
             raise ValueError("[deadline_from] must faster than [deadline_to].")
         return to
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class WatchTask(CoreModel):
+    note: Optional[str] = b_note
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class TaskWithWatchNote(TaskBase):
+    note: str = b_note

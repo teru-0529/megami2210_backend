@@ -8,7 +8,7 @@ from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.models.table_models import td_Task, ac_Profile
+from app.models.table_models import ac_Profile, td_Task, td_Watcher
 from app.repositries import QueryParam
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -126,3 +126,63 @@ class TaskRepository:
             query = query.with_for_update()
         result: Result = await session.execute(query)
         return result.first()
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def create_watcher(
+        self, *, session: AsyncSession, watcher: td_Watcher
+    ) -> None:
+        """監視タスク登録"""
+
+        # UPSERT
+        stmt = """
+        INSERT INTO todo.watcher (watcher_id, task_id, note)
+        VALUES ('{0}', {1}, '{2}')
+        ON CONFLICT (watcher_id, task_id)
+        DO UPDATE SET note = '{2}';
+        """.format(
+            watcher.watcher_id, watcher.task_id, watcher.note
+        )
+
+        await session.execute(stmt)
+        await session.flush()
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def delete_watcher(
+        self, *, session: AsyncSession, watcher_id: str, task_id: int
+    ) -> bool:
+        """監視タスク削除"""
+
+        base_task = await self.get_by_id(session=session, id=task_id)
+        if not base_task:
+            return False
+
+        query = select(td_Watcher).filter(
+            td_Watcher.watcher_id == watcher_id, td_Watcher.task_id == task_id
+        )
+        result: Result = await session.execute(query)
+        base_watcher = result.first()
+        if base_watcher is None:
+            return True
+
+        base_watcher = base_watcher[0]
+        await session.delete(base_watcher)
+        await session.flush()
+        return True
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def get_watch_tasks(
+        self, *, session: AsyncSession, watcher_id: str
+    ) -> List[Tuple[td_Watcher, td_Task]]:
+        """監視タスク検索"""
+
+        query = (
+            select(td_Watcher, td_Task)
+            .outerjoin(td_Watcher, td_Watcher.task_id == td_Task.id)
+            .filter(td_Watcher.watcher_id == watcher_id)
+            .order_by("task_id")
+        )
+        result: Result = await session.execute(query)
+        return result.all()

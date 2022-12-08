@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # accounts.py
 
-from typing import Optional, List
+from typing import List, Optional
 
 from fastapi import Path
 from pydantic import EmailStr, Extra, Field, SecretStr, validator
