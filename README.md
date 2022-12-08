@@ -1,5 +1,5 @@
-# MEGUMI2210(TODO Application)
-todo管理システム（FastAPIバックエンド）
+# MEGUMI2210(My Application)
+（FastAPIバックエンド）
 
 * openAPI
 http://localhost:7000/docs

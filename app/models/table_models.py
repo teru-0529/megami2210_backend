@@ -14,6 +14,9 @@ BaseTD.prepare(s_engine, reflect=True, schema="todo")
 # Taskモデル
 td_Task = BaseTD.classes.tasks
 
+# Profileモデル
+td_Watcher = BaseTD.classes.watcher
+
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 # accountスキーマ
@@ -25,6 +28,3 @@ ac_Profile = BaseAC.classes.profiles
 
 # Authモデル
 ac_Auth = BaseAC.classes.authes
-
-# Profileモデル
-ac_WatchTask = BaseAC.classes.watch_tasks

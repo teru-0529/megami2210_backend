@@ -1,8 +1,8 @@
 """create accounts table
 
-Revision ID: e85dfc42f48d
-Revises: de6f035be044
-Create Date: 2022-11-19 00:10:53.096333
+Revision ID: de6f035be044
+Revises: 307da1eafeaa
+Create Date: 2022-10-31 07:23:41.753128
 
 """
 import os
@@ -20,10 +20,11 @@ sys.path.append(os.path.join(dir, ".venv", "lib", "python3.11", "site-packages")
 from app.services import auth_service  # noqa:E402
 
 # revision identifiers, used by Alembic.
-revision = "e85dfc42f48d"
-down_revision = "de6f035be044"
+revision = "de6f035be044"
+down_revision = "307da1eafeaa"
 branch_labels = None
 depends_on = None
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -71,7 +72,7 @@ def create_profiles_table() -> None:
             sa.Boolean,
             nullable=False,
             server_default="False",
-            comment="初期パスワード変更済み",
+            comment="アクティベート済み",
         ),
         *timestamps(),
         schema="account",
@@ -150,7 +151,6 @@ def create_authes_table() -> None:
         "profiles",
         ["account_id"],
         ["account_id"],
-        onupdate="CASCADE",
         ondelete="CASCADE",
         source_schema="account",
         referent_schema="account",
@@ -167,7 +167,7 @@ def create_authes_table() -> None:
         referent_schema="account",
     )
 
-    # パスワードのHash化処理
+    # 初期登録アカウントのパスワードのHash化処理
     hash_password, solt = auth_service.create_hash_password(
         plaintext_password="password"
     )
@@ -200,64 +200,12 @@ def create_authes_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-def create_watch_tasks_table() -> None:
-    op.create_table(
-        "watch_tasks",
-        sa.Column("account_id", sa.String(5), primary_key=True, comment="アカウントID"),
-        sa.Column("task_id", sa.Integer, primary_key=True, index=True, comment="タスクID"),
-        sa.Column(
-            "note",
-            sa.Text,
-            nullable=True,
-            comment="ノート",
-        ),
-        *timestamps(),
-        schema="account",
-    )
-    op.execute(
-        """
-        CREATE TRIGGER watch_tasks_modified
-            BEFORE UPDATE
-            ON account.watch_tasks
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-    op.create_foreign_key(
-        "fk_account_id",
-        "watch_tasks",
-        "profiles",
-        ["account_id"],
-        ["account_id"],
-        onupdate="CASCADE",
-        ondelete="CASCADE",
-        source_schema="account",
-        referent_schema="account",
-    )
-    op.create_foreign_key(
-        "fk_task_id",
-        "watch_tasks",
-        "tasks",
-        ["task_id"],
-        ["id"],
-        onupdate="CASCADE",
-        ondelete="CASCADE",
-        source_schema="account",
-        referent_schema="todo",
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
 def upgrade() -> None:
     create_profiles_table()
     create_authes_table()
-    create_watch_tasks_table()
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS account.watch_tasks CASCADE;")
     op.execute("DROP TABLE IF EXISTS account.authes CASCADE;")
     op.execute("DROP TABLE IF EXISTS account.profiles CASCADE;")
     op.execute("DROP TYPE IF EXISTS account.accopunt_type;")

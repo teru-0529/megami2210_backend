@@ -16,58 +16,94 @@ from starlette.routing import NoMatchFound
 from starlette.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
+    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
     HTTP_403_FORBIDDEN,
     HTTP_404_NOT_FOUND,
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from app.api.schemas.tasks import TaskCreate, TaskInDB, TaskPublicList, TaskUpdate
+from app.api.schemas.accounts import ProfileInDB
+from app.api.schemas.tasks import (
+    TaskCreate,
+    TaskInDB,
+    TaskPublicList,
+    TaskUpdate,
+    TaskWithAccount,
+)
 from app.models.segment_values import TaskStatus
+from app.services import auth_service
+from app.services.accounts import AccountService
 from app.services.tasks import TaskService
 
 pytestmark = pytest.mark.asyncio
-is_regression = True
 
 
 @pytest_asyncio.fixture
-async def fixed_task(session: AsyncSession) -> TaskInDB:
+async def fixed_task(session: AsyncSession, general_account: ProfileInDB) -> TaskInDB:
     new_task = TaskCreate(
         title="fixed task",
         description="fixed task",
-        asaignee_id="T-001",
+        asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
+    token = auth_service.create_token_for_user(account=general_account)
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     yield created_task
     await service.delete(session=session, id=created_task.id)
 
 
 @pytest_asyncio.fixture
-async def task_for_update(session: AsyncSession) -> TaskInDB:
+async def fixed_task_with_account(
+    session: AsyncSession, fixed_task: TaskInDB
+) -> TaskWithAccount:
+    service = AccountService()
+    registrant = await service.get_by_id(session=session, id=fixed_task.registrant_id)
+    asaignee = await service.get_by_id(session=session, id=fixed_task.asaignee_id)
+    task_with_account = TaskWithAccount(
+        id=fixed_task.id,
+        registrant=registrant,
+        title=fixed_task.title,
+        description=fixed_task.description,
+        asaignee=asaignee,
+        status=fixed_task.status,
+        is_significant=fixed_task.is_significant,
+        deadline=fixed_task.deadline,
+    )
+    yield task_with_account
+
+
+@pytest_asyncio.fixture
+async def task_for_update(
+    session: AsyncSession, general_account: ProfileInDB
+) -> TaskInDB:
     new_task = TaskCreate(
         title="updated task",
         description="updated task",
-        asaignee_id="T-001",
+        asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
+    token = auth_service.create_token_for_user(account=general_account)
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     yield created_task
     await service.delete(session=session, id=created_task.id)
 
 
 @pytest_asyncio.fixture
-async def task_for_delete(session: AsyncSession) -> TaskInDB:
+async def task_for_delete(
+    session: AsyncSession, general_account: ProfileInDB
+) -> TaskInDB:
     new_task = TaskCreate(
         title="updated task",
         description="updated task",
-        asaignee_id="T-001",
+        asaignee_id="T-903",
         deadline=date(2030, 12, 31),
     )
+    token = auth_service.create_token_for_user(account=general_account)
     service = TaskService()
-    created_task = await service.create(session=session, new_task=new_task)
+    created_task = await service.create(session=session, token=token, new_task=new_task)
     return created_task
 
 
@@ -77,7 +113,7 @@ async def task_for_delete(session: AsyncSession) -> TaskInDB:
 @pytest.fixture
 def import_task(s_engine: Engine) -> DataFrame:
     datas: DataFrame = read_csv(
-        "tests/data/test_task_data.csv", encoding="utf-8", dtype={3: str}
+        "tests/data/test_task_data.csv", encoding="utf-8", dtype={4: str}
     )
     datas.to_sql(
         name="tasks",
@@ -93,7 +129,6 @@ def import_task(s_engine: Engine) -> DataFrame:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestRouteExists:
     async def test_create(self, app: FastAPI, client: AsyncClient) -> None:
         try:
@@ -109,7 +144,7 @@ class TestRouteExists:
 
     async def test_query(self, app: FastAPI, client: AsyncClient) -> None:
         try:
-            await client.get(app.url_path_for("tasks:query"))
+            await client.get(app.url_path_for("tasks:search"))
         except NoMatchFound:
             pytest.fail("route not exist")
 
@@ -129,7 +164,6 @@ class TestRouteExists:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestCreate:
 
     # 正常ケースパラメータ
@@ -137,7 +171,7 @@ class TestCreate:
         "<body:full>": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="T-001",
+            asaignee_id="T-901",
             is_significant=True,
             deadline=date(2050, 12, 31),
         ),
@@ -150,13 +184,13 @@ class TestCreate:
         "<body:is_significant>デフォルト値": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="T-001",
+            asaignee_id="T-901",
             deadline=date(2050, 12, 31),
         ),
         "<body:deadline>:任意入力": TaskCreate(
             title="test task",
             description="test description",
-            asaignee_id="T-001",
+            asaignee_id="T-901",
             is_significant=False,
         ),
     }
@@ -165,6 +199,7 @@ class TestCreate:
         "new_task", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, general_client: AsyncClient, new_task: TaskCreate
     ) -> None:
@@ -184,6 +219,7 @@ class TestCreate:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -196,6 +232,7 @@ class TestCreate:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認可エラー）
+    @pytest.mark.ng
     async def test_ng_permission(
         self, app: FastAPI, provisional_client: AsyncClient
     ) -> None:
@@ -249,6 +286,7 @@ class TestCreate:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -261,14 +299,31 @@ class TestCreate:
         )
         assert res.status_code == param[1]
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（外部キーエラー）
+    @pytest.mark.ng
+    async def test_ng_foreignkey(
+        self, app: FastAPI, general_client: AsyncClient
+    ) -> None:
+        new_task = TaskCreate(
+            title="test task",
+            asaignee_id="T-501",
+        )
+        res = await general_client.post(
+            app.url_path_for("tasks:create"),
+            data=new_task.json(exclude_unset=True),
+        )
+        assert res.status_code == HTTP_400_BAD_REQUEST
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGet:
 
-    # 正常ケースパラメータ
+    # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, provisional_client: AsyncClient, fixed_task: TaskInDB
     ) -> None:
@@ -282,7 +337,27 @@ class TestGet:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
+    # 正常ケース(サブリソースを含めて取得)
+    @pytest.mark.ok
+    async def test_ok_with_account(
+        self,
+        app: FastAPI,
+        provisional_client: AsyncClient,
+        fixed_task_with_account: TaskWithAccount,
+    ) -> None:
+
+        res = await provisional_client.get(
+            app.url_path_for("tasks:get", id=fixed_task_with_account.id),
+            params={"sub-resources": "account"},
+        )
+        assert res.status_code == HTTP_200_OK
+        get_task = TaskWithAccount(**res.json())
+        assert get_task == fixed_task_with_account
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -309,6 +384,7 @@ class TestGet:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -322,12 +398,18 @@ class TestGet:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
-class TestQuery:
+class TestSearch:
 
     # 正常ケースパラメータ
     valid_params = {
         "パラメータ無し": ({}, "{}", 20, 10, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "サブリソース(アカウント)": (
+            {"sub-resources": "account"},
+            "{}",
+            20,
+            10,
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ),
         "<query:limit>:(100)": (
             {"limit": 100},
             "{}",
@@ -384,9 +466,9 @@ class TestQuery:
             2,
             [6, 15],
         ),
-        "<body:asaignee_id_in>:(T-002,T-001)": (
+        "<body:asaignee_id_in>:(T-902,T-901)": (
             {},
-            '{"asaignee_id_in": ["T-002","T-001"]}',
+            '{"asaignee_id_in": ["T-902","T-901"]}',
             8,
             8,
             [8, 9, 10, 11, 12, 16, 18, 19],
@@ -453,6 +535,7 @@ class TestQuery:
         "param", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self,
         app: FastAPI,
@@ -462,7 +545,7 @@ class TestQuery:
     ) -> None:
 
         res = await provisional_client.post(
-            app.url_path_for("tasks:query"), params=param[0], data=param[1]
+            app.url_path_for("tasks:search"), params=param[0], data=param[1]
         )
         assert res.status_code == HTTP_200_OK
         result = TaskPublicList(**res.json())
@@ -475,11 +558,12 @@ class TestQuery:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
         res = await non_active_client.post(
-            app.url_path_for("tasks:query"), params={}, data="{}"
+            app.url_path_for("tasks:search"), params={}, data="{}"
         )
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
@@ -549,17 +633,17 @@ class TestQuery:
         ),
         "<body:asaignee_id_in>:要素数超過": (
             {},
-            '{"asaignee_id_in": ["T-001","T-002","T-003","T-004"]}',
+            '{"asaignee_id_in": ["T-901","T-902","T-903","T-904"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:項目長不足": (
             {},
-            '{"asaignee_id_in": ["10","T-002"]}',
+            '{"asaignee_id_in": ["10","T-902"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:項目長超過": (
             {},
-            '{"asaignee_id_in": ["100000","T-002"]}',
+            '{"asaignee_id_in": ["100000","T-902"]}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:asaignee_id_in>:型不正": (
@@ -574,7 +658,7 @@ class TestQuery:
         ),
         "<body:asaignee_id>:同時指定不正([IN][EXIST])": (
             {},
-            '{"asaignee_id_in": ["T-001","T-002"],"asaignee_id_ex": true}',
+            '{"asaignee_id_in": ["T-901","T-902"],"asaignee_id_ex": true}',
             HTTP_422_UNPROCESSABLE_ENTITY,
         ),
         "<body:status_in>:要素数不足": (
@@ -628,6 +712,7 @@ class TestQuery:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -635,7 +720,7 @@ class TestQuery:
         param: tuple[any, str, int],
     ) -> None:
         res = await provisional_client.post(
-            app.url_path_for("tasks:query"), params=param[0], data=param[1]
+            app.url_path_for("tasks:search"), params=param[0], data=param[1]
         )
         assert res.status_code == param[2]
 
@@ -643,20 +728,19 @@ class TestQuery:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatch:
 
     # 正常ケースパラメータ
     valid_params = {
         "<body:description>": TaskUpdate(description="test_description"),
         "<body:description>:null": TaskUpdate(description=None),
-        "<body:asaignee_id>": TaskUpdate(asaignee_id="T-005"),
+        "<body:asaignee_id>": TaskUpdate(asaignee_id="T-901"),
         "<body:asaignee_id>:null": TaskUpdate(asaignee_id=None),
         "<body:status>": TaskUpdate(status=TaskStatus.done),
         "<body:deadline>": TaskUpdate(deadline=date(2023, 12, 31)),
         "<body:deadline>:null": TaskUpdate(deadline=None),
         "複合ケース": TaskUpdate(
-            asaignee_id="T-003", status=TaskStatus.doing, deadline=date(2023, 8, 20)
+            asaignee_id="T-902", status=TaskStatus.doing, deadline=date(2023, 8, 20)
         ),
     }
 
@@ -664,6 +748,7 @@ class TestPatch:
         "update_params", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self,
         app: FastAPI,
@@ -685,6 +770,7 @@ class TestPatch:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -697,6 +783,7 @@ class TestPatch:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認可エラー）
+    @pytest.mark.ng
     async def test_ng_permission(
         self, app: FastAPI, provisional_client: AsyncClient
     ) -> None:
@@ -773,6 +860,7 @@ class TestPatch:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -785,14 +873,27 @@ class TestPatch:
         )
         assert res.status_code == param[2]
 
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    # 異常ケース（外部キーエラー）
+    @pytest.mark.ng
+    async def test_ng_foreignkey(
+        self, app: FastAPI, general_client: AsyncClient, task_for_update: TaskInDB
+    ) -> None:
+        res = await general_client.patch(
+            app.url_path_for("tasks:patch", id=task_for_update.id),
+            data='{"asaignee_id":"T-501"}',
+        )
+        assert res.status_code == HTTP_400_BAD_REQUEST
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestDelete:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, general_client: AsyncClient, task_for_delete: TaskInDB
     ) -> None:
@@ -813,6 +914,7 @@ class TestDelete:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（アクティベーションエラー）
+    @pytest.mark.ng
     async def test_ng_activation(
         self, app: FastAPI, non_active_client: AsyncClient
     ) -> None:
@@ -822,6 +924,7 @@ class TestDelete:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認可エラー）
+    @pytest.mark.ng
     async def test_ng_permission(
         self, app: FastAPI, provisional_client: AsyncClient
     ) -> None:
@@ -848,6 +951,7 @@ class TestDelete:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,

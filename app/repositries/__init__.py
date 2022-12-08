@@ -18,11 +18,17 @@ class QueryParam:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     def __init__(
-        self, *, columns: List[str], offset: int, limit: int, sort: str
+        self,
+        *,
+        columns: List[str],
+        offset: int,
+        limit: int,
+        sort: str,
+        default_key: str = "+id"
     ) -> None:
         ls = sort.split(",")
-        if "+id" not in ls:
-            ls.append("+id")  # デフォルトのソート条件を追加 TODO:
+        if default_key not in ls:
+            ls.append(default_key)  # デフォルトのソート条件を追加
 
         ls = [(v.strip()[0], v.strip()[1:]) for v in ls]  # 符号/値、のタプルに分割
 

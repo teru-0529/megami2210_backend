@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # accounts.py
 
-from typing import List
+from typing import List, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -10,21 +10,27 @@ from starlette.status import (
     HTTP_401_UNAUTHORIZED,
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
+    HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
 from app.api.schemas.accounts import (
     AccountCreate,
-    InitPass,
     PasswordChange,
     PasswordReset,
     ProfileBaseUpdate,
+    ProfileFilter,
     ProfileInDB,
     ProfilePublic,
+    ProfilePublicList,
+    ProfilePublicWithInitPass,
     ProfileUpdate,
 )
+from app.api.schemas.tasks import TaskInDB, TaskWithWatchNote, WatchTask
 from app.api.schemas.token import AccessToken
-from app.models.table_models import ac_Auth, ac_Profile
+from app.models.table_models import ac_Auth, ac_Profile, td_Task, td_Watcher
+from app.repositries import QueryParam
 from app.repositries.accounts import AccountRepository
+from app.repositries.tasks import TaskRepository
 from app.services import auth_service
 
 # 未認証例外
@@ -49,7 +55,7 @@ class AccountService:
 
     async def create(
         self, *, session: AsyncSession, id: str, new_account: AccountCreate
-    ) -> ProfilePublic:
+    ) -> ProfilePublicWithInitPass:
 
         """アカウント登録"""
         profile = ac_Profile(**new_account.dict(exclude={"init_password"}))
@@ -78,8 +84,7 @@ class AccountService:
 
         await session.refresh(created_profile)
         result = ProfileInDB.from_orm(created_profile)
-        result.init_password = init_password
-        return result
+        return ProfilePublicWithInitPass(init_password=init_password, **result.dict())
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
@@ -165,21 +170,9 @@ class AccountService:
 
         """ログインユーザーのプロフィール取得"""
 
-        try:
-            account_id = auth_service.get_id_from_token(token=token)
-            profile = await self.get_by_id(session=session, id=account_id)
-        except Exception:  # pragma: no cover
-            raise not_authorized_exception
-        if not profile:  # pragma: no cover
-            raise not_authorized_exception
-            # if not current_account.is_active: #FIXME:
-            #     raise HTTPException(
-            #         status_code=HTTP_401_UNAUTHORIZED,
-            #         detail="Not an active user.",
-            #         headers={"WWW-Authenticate": "Bearer"},
-            #     )
+        account_id = auth_service.get_id_from_token(token=token)
+        profile = await self.get_by_id(session=session, id=account_id)
 
-        print(profile)
         return ProfileInDB.from_orm(profile)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
@@ -190,10 +183,7 @@ class AccountService:
 
         """ログインユーザーのプロフィール更新"""
 
-        try:
-            account_id = auth_service.get_id_from_token(token=token)
-        except Exception:  # pragma: no cover
-            raise not_authorized_exception
+        account_id = auth_service.get_id_from_token(token=token)
         update_dict = patch_params.dict(exclude_unset=True)
         return await self.update(
             session=session, id=account_id, update_dict=update_dict
@@ -207,23 +197,20 @@ class AccountService:
 
         """ログインユーザーのパスワード変更"""
 
+        account_id = auth_service.get_id_from_token(token=token)
         repo = AccountRepository()
-        try:
-            account_id = auth_service.get_id_from_token(token=token)
-            await repo.password_change(
-                session=session,
-                id=account_id,
-                new_password=pass_change.new_password.get_secret_value(),
-            )
-            await session.commit()
-        except Exception:  # pragma: no cover
-            raise not_authorized_exception
+        await repo.password_change(
+            session=session,
+            id=account_id,
+            new_password=pass_change.new_password.get_secret_value(),
+        )
+        await session.commit()
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     async def password_reset(
         self, *, session: AsyncSession, id: str, pass_reset: PasswordReset
-    ) -> InitPass:
+    ) -> PasswordReset:
 
         """パスワードリセット"""
 
@@ -237,7 +224,134 @@ class AccountService:
         await repo.password_reset(session=session, id=id, password=init_password)
         await session.commit()
 
-        return InitPass(init_password=init_password)
+        return PasswordReset(init_password=init_password)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def search(
+        self,
+        offset: int,
+        limit: int,
+        sort: str,
+        *,
+        session: AsyncSession,
+        filter: ProfileFilter
+    ) -> ProfilePublicList:
+        """プロフィール照会"""
+
+        query_param = self.New_QueryParam(
+            offset=offset, limit=limit, sort=sort, filter=filter
+        )
+        repo = AccountRepository()
+        searched_profiles: List[ac_Profile] = await repo.search(
+            session=session, query_param=query_param
+        )
+        profiles: List[ProfilePublic] = [
+            ProfileInDB.from_orm(profile) for profile in searched_profiles
+        ]
+        count: int = await repo.count(session=session, query_param=query_param)
+        return ProfilePublicList(profiles=profiles, count=count)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def put_watch_task(
+        self, *, session: AsyncSession, token: str, id: int, watch_task: WatchTask
+    ) -> None:
+
+        """監視タスク登録"""
+        account_id = auth_service.get_id_from_token(token=token)
+        watcher = td_Watcher(watcher_id=account_id, task_id=id, note=watch_task.note)
+
+        repo = TaskRepository()
+        try:
+            await repo.create_watcher(session=session, watcher=watcher)
+            await session.commit()
+        except IntegrityError as e:
+            await session.rollback()
+            self.ch_exception_detail(e)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def delete_watch_task(
+        self, *, session: AsyncSession, token: str, id: str
+    ) -> None:
+
+        """監視タスク削除"""
+        account_id = auth_service.get_id_from_token(token=token)
+        repo = TaskRepository()
+        exist_task_id = await repo.delete_watcher(
+            session=session, watcher_id=account_id, task_id=id
+        )
+        if not exist_task_id:
+            await session.rollback()
+            raise not_found_exception
+
+        await session.commit()
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+
+    async def get_watch_tasks(
+        self, *, session: AsyncSession, token: str
+    ) -> List[TaskWithWatchNote]:
+
+        """監視タスク取得"""
+        account_id = auth_service.get_id_from_token(token=token)
+        repo = TaskRepository()
+        watch_tasks: List[Tuple[td_Watcher, td_Task]] = await repo.get_watch_tasks(
+            session=session, watcher_id=account_id
+        )
+        return [self.New_TaskWithWatchNote(task) for task in watch_tasks]
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]ノート付タスククラスの作成
+
+    def New_TaskWithWatchNote(
+        self, src: Tuple[td_Watcher, td_Task]
+    ) -> TaskWithWatchNote:
+        task_dict = TaskInDB.from_orm(src[1]).dict()
+        task_dict["note"] = src[0].note
+        return TaskWithWatchNote(**task_dict)
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
+    # [INNER]クエリパラメータクラスの作成
+    def New_QueryParam(
+        self, *, offset: int, limit: int, sort: str, filter: ProfileFilter
+    ) -> QueryParam:
+        try:
+            queryParm = QueryParam(
+                columns=ac_Profile.__table__.columns,
+                offset=offset,
+                limit=limit,
+                sort=sort,
+                default_key="+account_id",
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=e.args
+            )
+        if filter.account_id_sw is not None:
+            queryParm.append_filter(
+                ac_Profile.account_id.startswith(filter.account_id_sw)
+            )
+        if filter.user_name_cn is not None:
+            queryParm.append_filter(ac_Profile.user_name.contains(filter.user_name_cn))
+        if filter.nickname_cn is not None:
+            queryParm.append_filter(ac_Profile.nickname.contains(filter.nickname_cn))
+        if filter.nickname_ex is True:
+            queryParm.append_filter(ac_Profile.nickname.is_not(None))
+        if filter.nickname_ex is False:
+            queryParm.append_filter(ac_Profile.nickname.is_(None))
+        if filter.email_dm is not None:
+            queryParm.append_filter(ac_Profile.email.endswith("@" + filter.email_dm))
+        if filter.verified_email_eq is not None:
+            queryParm.append_filter(
+                ac_Profile.verified_email.is_(filter.verified_email_eq)
+            )
+        if filter.account_type_in is not None:
+            queryParm.append_filter(ac_Profile.account_type.in_(filter.account_type_in))
+        if filter.is_active_eq is not None:
+            queryParm.append_filter(ac_Profile.is_active.is_(filter.is_active_eq))
+        return queryParm
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
     # [INNER]例外文字列の判定
@@ -275,6 +389,19 @@ class AccountService:
         ):
             raise HTTPException(
                 status_code=HTTP_409_CONFLICT, detail="duplicate key: [email]."
+            )
+        elif self.exists_params(
+            args,
+            [
+                "asyncpg.exceptions.ForeignKeyViolationError",
+                "violates foreign key constraint",
+                "watcher",
+                "fk_task_id",
+            ],
+        ):
+            raise HTTPException(
+                status_code=HTTP_404_NOT_FOUND,
+                detail="Task resource not found by specified Id.",
             )
         raise e  # pragma: no cover
 

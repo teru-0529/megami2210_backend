@@ -21,3 +21,12 @@ base:
 
 test: ## execute tests
 	docker-compose run --rm --entrypoint "poetry run pytest -vv --cov=app --cov-report=html" api
+
+test_ok: ## execute tests
+	docker-compose run --rm --entrypoint "poetry run pytest -m "ok" -vv" api
+
+test_ng: ## execute tests
+	docker-compose run --rm --entrypoint "poetry run pytest -m "ng" -vv" api
+
+test_product: ## execute tests
+	docker-compose run --rm --entrypoint "poetry run pytest -m "product" -vv" api

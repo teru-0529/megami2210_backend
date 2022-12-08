@@ -71,3 +71,6 @@ https://qiita.com/matsulib/items/2bcf59c2b2cb5eb5c5c4
 
 #### テスト時のengineの作り方
 https://qiita.com/takkeybook/items/bc8c1b6712362db53267
+
+#### sqlalchemyのfilterいろいろ
+https://mycodingjp.blogspot.com/2019/07/flask-sqlalchemy.html

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# test_authtoken.py
+# test_mine.py
 
 import jwt
 import pytest
@@ -33,7 +33,6 @@ from app.services.accounts import AccountService
 from tests.conftest import assert_profile
 
 pytestmark = pytest.mark.asyncio
-is_regression = True
 
 
 @pytest_asyncio.fixture
@@ -54,7 +53,6 @@ async def duplicate_dummy_profile(session: AsyncSession) -> ProfileInDB:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestRouteExists:
     async def test_login(self, app: FastAPI, client: AsyncClient) -> None:
         try:
@@ -84,10 +82,10 @@ class TestRouteExists:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestCreateToken:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(self, general_account: ProfileInDB) -> None:
 
         token = auth_service.create_token_for_user(
@@ -96,7 +94,6 @@ class TestCreateToken:
             audience=JWT_AUDIENCE,
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES,
         )
-        print(token)
         creds = jwt.decode(
             token, str(SECRET_KEY), audience=JWT_AUDIENCE, algorithms=[JWT_ALGORITHM]
         )
@@ -107,6 +104,7 @@ class TestCreateToken:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース(ユーザー無し)
+    @pytest.mark.ng
     async def test_ng_none_account(self) -> None:
         token = auth_service.create_token_for_user(
             account=None,
@@ -152,6 +150,7 @@ class TestCreateToken:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self, general_account: ProfileInDB, param: tuple[str, str, BaseException]
     ) -> None:
@@ -163,7 +162,6 @@ class TestCreateToken:
                 audience=param[1],
                 expires_in=ACCESS_TOKEN_EXPIRE_MINUTES,
             )
-            print(token)
             jwt.decode(
                 token,
                 str(SECRET_KEY),
@@ -175,10 +173,10 @@ class TestCreateToken:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestLogin:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, client: AsyncClient, non_active_account: ProfileInDB
     ) -> None:
@@ -232,6 +230,7 @@ class TestLogin:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -254,10 +253,10 @@ class TestLogin:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGetIdFromToken:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(self, general_account: ProfileInDB) -> None:
         token = auth_service.create_token_for_user(
             account=general_account, secret_key=str(SECRET_KEY)
@@ -293,6 +292,7 @@ class TestGetIdFromToken:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         general_account: ProfileInDB,
@@ -311,10 +311,10 @@ class TestGetIdFromToken:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestGetProfile:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self, app: FastAPI, general_client: AsyncClient, general_account: ProfileInDB
     ) -> None:
@@ -327,6 +327,7 @@ class TestGetProfile:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認証エラー）
+    @pytest.mark.ng
     async def test_ng_authentication(self, app: FastAPI, client: AsyncClient) -> None:
         res = await client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_401_UNAUTHORIZED
@@ -344,6 +345,7 @@ class TestGetProfile:
         "jwt_prefix", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -362,7 +364,6 @@ class TestGetProfile:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestPatchProfile:
 
     # 正常ケースパラメータ
@@ -376,6 +377,7 @@ class TestPatchProfile:
         "update_params", list(valid_params.values()), ids=list(valid_params.keys())
     )
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self,
         app: FastAPI,
@@ -398,6 +400,7 @@ class TestPatchProfile:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認証エラー）
+    @pytest.mark.ng
     async def test_ng_authentication(self, app: FastAPI, client: AsyncClient) -> None:
         res = await client.patch(app.url_path_for("mine:patch-profile"), data="{}")
         assert res.status_code == HTTP_401_UNAUTHORIZED
@@ -440,6 +443,7 @@ class TestPatchProfile:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
@@ -464,6 +468,7 @@ class TestPatchProfile:
     @pytest.mark.parametrize(
         "param", list(invalid_db_params.values()), ids=list(invalid_db_params.keys())
     )
+    @pytest.mark.ng
     async def test_db_ng_case(
         self,
         app: FastAPI,
@@ -480,47 +485,43 @@ class TestPatchProfile:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-@pytest.mark.skipif(not is_regression, reason="not regression phase")
 class TestChangePassword:
 
     # 正常ケース
+    @pytest.mark.ok
     async def test_ok(
         self,
         app: FastAPI,
-        non_active_client: AsyncClient,
-        non_active_account: ProfileInDB,
+        general_client: AsyncClient,
+        general_account: ProfileInDB,
     ) -> None:
         update_param = PasswordChange(new_password="new_password")
 
         login_data = {
-            "username": non_active_account.account_id,
+            "username": general_account.account_id,
             "password": update_param.new_password,
         }
 
         # 変更前は新パスワードでログインできないこと
-        non_active_client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await non_active_client.post(
-            app.url_path_for("mine:login"), data=login_data
-        )
+        general_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await general_client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_401_UNAUTHORIZED
 
-        non_active_client.headers["content-type"] = ""
-        res = await non_active_client.patch(
+        general_client.headers["content-type"] = ""
+        res = await general_client.patch(
             app.url_path_for("mine:change-password"),
             data=update_param.json(exclude_unset=True),
         )
         assert res.status_code == HTTP_200_OK
 
         # 変更後は新パスワードでログインできること
-        non_active_client.headers["content-type"] = "application/x-www-form-urlencoded"
-        res = await non_active_client.post(
-            app.url_path_for("mine:login"), data=login_data
-        )
+        general_client.headers["content-type"] = "application/x-www-form-urlencoded"
+        res = await general_client.post(app.url_path_for("mine:login"), data=login_data)
         assert res.status_code == HTTP_200_OK
 
         # 変更後のアカウントがアクティベート状態であること
-        non_active_client.headers["content-type"] = ""
-        res = await non_active_client.get(app.url_path_for("mine:get-profile"))
+        general_client.headers["content-type"] = ""
+        res = await general_client.get(app.url_path_for("mine:get-profile"))
         assert res.status_code == HTTP_200_OK
         profile = ProfileInDB(**res.json())
         profile.is_active is True
@@ -528,6 +529,7 @@ class TestChangePassword:
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 
     # 異常ケース（認証エラー）
+    @pytest.mark.ng
     async def test_ng_authentication(self, app: FastAPI, client: AsyncClient) -> None:
         res = await client.patch(app.url_path_for("mine:change-password"), data="{}")
         assert res.status_code == HTTP_401_UNAUTHORIZED
@@ -558,6 +560,7 @@ class TestChangePassword:
         "param", list(invalid_params.values()), ids=list(invalid_params.keys())
     )
     # 異常ケース（バリデーションエラー）
+    @pytest.mark.ng
     async def test_ng_validation(
         self,
         app: FastAPI,
