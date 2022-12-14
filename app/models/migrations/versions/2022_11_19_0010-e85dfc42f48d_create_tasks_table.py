@@ -43,12 +43,7 @@ def create_tasks_table() -> None:
             server_default="False",
             comment="重要タスク",
         ),
-        sa.Column(
-            "deadline",
-            sa.Date,
-            nullable=True,
-            comment="締切日",
-        ),
+        sa.Column("deadline", sa.Date, nullable=True, comment="締切日"),
         *timestamps(),
         schema="todo",
     )
@@ -89,14 +84,9 @@ def create_tasks_table() -> None:
 def create_watcher_table() -> None:
     op.create_table(
         "watcher",
-        sa.Column("watcher_id", sa.String(5), primary_key=True, comment="観測者ID"),
+        sa.Column("watcher_id", sa.String(5), primary_key=True, comment="監視者ID"),
         sa.Column("task_id", sa.Integer, primary_key=True, index=True, comment="タスクID"),
-        sa.Column(
-            "note",
-            sa.Text,
-            nullable=True,
-            comment="ノート",
-        ),
+        sa.Column("note", sa.Text, nullable=True, comment="摘要"),
         *timestamps(),
         schema="todo",
     )

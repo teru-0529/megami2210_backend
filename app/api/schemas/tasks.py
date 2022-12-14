@@ -44,7 +44,7 @@ b_deadline: Field = Field(
     description="タスク期限日(YYYY-MM-DD) ※当日以降の日付を指定可能",
     example="2025-12-31",
 )
-b_note: Field = Field(title="Note", description="ノート", example="要チェック！")
+b_note: Field = Field(title="Note", description="摘要", example="要チェック！")
 
 # ボディパラメータ(クエリメソッド用)
 s_title_cn: Field = Field(

@@ -74,3 +74,30 @@ https://qiita.com/takkeybook/items/bc8c1b6712362db53267
 
 #### sqlalchemyのfilterいろいろ
 https://mycodingjp.blogspot.com/2019/07/flask-sqlalchemy.html
+
+#### チェック制約
+https://soudai.hatenablog.com/entry/2019/01/15/014228
+https://www.postgresql.jp/document/13/html/ddl-constraints.html
+
+company　取引先
+supplier　仕入先
+customer　得意先
+stock　在庫
+product　商品
+ordering　発注
+receiving　受注
+bill　請求
+payment　支払
+shipping　出庫
+warehousing　入庫
+selling price　売価
+cost price　原価
+Earnings　売上
+Purchase　仕入
+
+details　明細
+
+accounts receivable　売掛金
+accounts payable　買掛金
+
+transition history　変動履歴

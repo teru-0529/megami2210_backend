@@ -7,7 +7,6 @@ Create Date: 2022-10-31 07:23:04.853106
 """
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision = "307da1eafeaa"
 down_revision = None
@@ -35,6 +34,10 @@ def create_updated_at_trigger() -> None:
 
 
 def upgrade() -> None:
+    op.execute("CREATE SCHEMA selling;")
+    op.execute("CREATE SCHEMA purchase;")
+    op.execute("CREATE SCHEMA inventory;")
+    op.execute("CREATE SCHEMA mst;")
     op.execute("CREATE SCHEMA todo;")
     op.execute("CREATE SCHEMA account;")
     create_updated_at_trigger()
@@ -44,3 +47,7 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS set_modified_at CASCADE;")
     op.execute("DROP SCHEMA IF EXISTS todo CASCADE;")
     op.execute("DROP SCHEMA IF EXISTS account CASCADE;")
+    op.execute("DROP SCHEMA IF EXISTS mst CASCADE;")
+    op.execute("DROP SCHEMA IF EXISTS inventory CASCADE;")
+    op.execute("DROP SCHEMA IF EXISTS purchase CASCADE;")
+    op.execute("DROP SCHEMA IF EXISTS selling CASCADE;")
