@@ -639,7 +639,7 @@ def create_products_table(status_type: ENUM) -> None:
         """
     )
     op.create_foreign_key(
-        "fk_company_id",
+        "fk_supplier_id",
         "products",
         "suppliers",
         ["supplier_id"],

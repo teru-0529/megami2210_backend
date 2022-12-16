@@ -5,11 +5,10 @@ Revises: 76241be00f1b
 Create Date: 2022-12-14 22:41:16.215287
 
 """
+import sqlalchemy as sa
 from alembic import op
 
-import sqlalchemy as sa
 from app.models.migrations.util import timestamps
-
 
 # revision identifiers, used by Alembic.
 revision = "4ed3531f2a5e"
@@ -27,7 +26,7 @@ def create_receivings_table() -> None:
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
         *timestamps(),
         schema="selling",
-    )
+    )  # FIXME:
 
     op.execute(
         """
@@ -39,15 +38,12 @@ def create_receivings_table() -> None:
         """
     )
 
-    # 在庫変動履歴の自動作成
+    # 受注番号の自動採番
     op.execute(
         """
         CREATE FUNCTION selling.create_receivings() RETURNS TRIGGER AS $$
-        DECLARE
-            t_receiving_no character(10);
         BEGIN
-            t_receiving_no:='RO-'||to_char(nextval('selling.receiving_no_seed'),'FM0000000');
-            NEW.receiving_no:=t_receiving_no;
+            NEW.receiving_no:='RO-'||to_char(nextval('selling.receiving_no_seed'),'FM0000000');
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -55,7 +51,7 @@ def create_receivings_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_moving_history
+        CREATE TRIGGER insert_receivings
             BEFORE INSERT
             ON selling.receivings
             FOR EACH ROW
