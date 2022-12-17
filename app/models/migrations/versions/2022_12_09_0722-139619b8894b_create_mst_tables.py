@@ -68,6 +68,7 @@ def create_companies_table(status_type: ENUM) -> None:
         *timestamps(),
         schema="mst",
     )
+
     # 「ステータス」が「取引中」の場合は、「取引銀行コード」「取引支店コード」「取引銀行名称」「取引口座番号」が必須
     ck_active: str = """
     CASE
@@ -78,13 +79,31 @@ def create_companies_table(status_type: ENUM) -> None:
         ELSE TRUE
     END
     """
-
     op.create_check_constraint(
         "ck_status_active",
         "companies",
         ck_active,
         schema="mst",
     )
+    op.create_check_constraint(
+        "ck_postal_code",
+        "companies",
+        "postal_code ~* '^[0-9]{3}-[0-9]{4}$'",
+        schema="mst",
+    )
+    op.create_check_constraint(
+        "ck_phone_no",
+        "companies",
+        "phone_no ~* '^0[0-9]{9,10}$'",
+        schema="mst",
+    )
+    op.create_check_constraint(
+        "ck_fax_no",
+        "companies",
+        "fax_no ~* '^0[0-9]{9,10}$'",
+        schema="mst",
+    )
+
     op.execute(
         """
         CREATE TRIGGER companies_modified
@@ -213,7 +232,9 @@ def create_costomers_table() -> None:
     costomers_table = op.create_table(
         "costomers",
         sa.Column("company_id", sa.String(4), primary_key=True, comment="企業ID"),
-        sa.Column("cutoff_day", sa.Integer, nullable=False, comment="締日"),
+        sa.Column(
+            "cutoff_day", sa.Integer, nullable=False, server_default="99", comment="締日"
+        ),
         sa.Column(
             "month_of_payment_term",
             sa.Integer,
@@ -221,7 +242,13 @@ def create_costomers_table() -> None:
             server_default="1",
             comment="入金猶予月数",
         ),
-        sa.Column("payment_day", sa.Integer, nullable=False, comment="入金予定日"),
+        sa.Column(
+            "payment_day",
+            sa.Integer,
+            nullable=False,
+            server_default="99",
+            comment="入金予定日",
+        ),
         sa.Column("sales_pic", sa.String(5), nullable=True, comment="営業担当者ID"),
         sa.Column("contact_person", sa.String(20), nullable=True, comment="相手先担当者名"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
@@ -326,7 +353,9 @@ def create_suppliers_table() -> None:
     suppliers_table = op.create_table(
         "suppliers",
         sa.Column("company_id", sa.String(4), primary_key=True, comment="企業ID"),
-        sa.Column("cutoff_day", sa.Integer, nullable=False, comment="締日"),
+        sa.Column(
+            "cutoff_day", sa.Integer, nullable=False, server_default="99", comment="締日"
+        ),
         sa.Column(
             "month_of_payment_term",
             sa.Integer,
@@ -334,7 +363,13 @@ def create_suppliers_table() -> None:
             server_default="1",
             comment="支払猶予月数",
         ),
-        sa.Column("payment_day", sa.Integer, nullable=False, comment="支払予定日"),
+        sa.Column(
+            "payment_day",
+            sa.Integer,
+            nullable=False,
+            server_default="99",
+            comment="支払予定日",
+        ),
         sa.Column("purchase_pic", sa.String(5), nullable=True, comment="仕入担当者ID"),
         sa.Column("contact_person", sa.String(20), nullable=True, comment="相手先担当者名"),
         sa.Column(
@@ -372,6 +407,12 @@ def create_suppliers_table() -> None:
         "ck_payment_day",
         "suppliers",
         "payment_day > 0 and payment_day < 100",
+        schema="mst",
+    )
+    op.create_check_constraint(
+        "ck_days_to_arrive",
+        "suppliers",
+        "days_to_arrive > 0",
         schema="mst",
     )
     # 「発注方針」が「定期発注」の場合は、「発注曜日」が必須、「発注方針」が「随時発注」の場合は、「発注曜日」を指定してはいけない
@@ -502,6 +543,26 @@ def create_destination_address_table() -> None:
         *timestamps(),
         schema="mst",
     )
+
+    op.create_check_constraint(
+        "ck_postal_code",
+        "destination_address",
+        "postal_code ~* '^[0-9]{3}-[0-9]{4}$'",
+        schema="mst",
+    )
+    op.create_check_constraint(
+        "ck_phone_no",
+        "destination_address",
+        "phone_no ~* '^0[0-9]{9,10}$'",
+        schema="mst",
+    )
+    op.create_check_constraint(
+        "ck_fax_no",
+        "destination_address",
+        "fax_no ~* '^0[0-9]{9,10}$'",
+        schema="mst",
+    )
+
     op.execute(
         """
         CREATE TRIGGER destination_address_modified
@@ -629,6 +690,13 @@ def create_products_table(status_type: ENUM) -> None:
         "selling_price >= cost_price",
         schema="mst",
     )
+    op.create_check_constraint(
+        "ck_days_to_arrive",
+        "products",
+        "days_to_arrive > 0",
+        schema="mst",
+    )
+
     op.execute(
         """
         CREATE TRIGGER products_modified
@@ -766,7 +834,13 @@ def create_sites_table() -> None:
         "sites",
         sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
         sa.Column("name", sa.String(30), nullable=False, comment="倉庫名"),
-        sa.Column("is_free", sa.Boolean, nullable=False, comment="フリー在庫用倉庫"),
+        sa.Column(
+            "is_free",
+            sa.Boolean,
+            nullable=False,
+            server_default="false",
+            comment="フリー在庫用倉庫",
+        ),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
         *timestamps(),
         schema="mst",

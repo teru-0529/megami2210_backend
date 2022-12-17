@@ -34,8 +34,20 @@ def create_transition_histories_table() -> None:
         ),
         sa.Column("site_id", sa.String(2), nullable=False, comment="倉庫ID"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
-        sa.Column("transaction_quantity", sa.Integer, nullable=False, comment="取引数"),
-        sa.Column("transaction_amount", sa.Numeric, nullable=False, comment="取引金額"),
+        sa.Column(
+            "transaction_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="取引数",
+        ),
+        sa.Column(
+            "transaction_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="取引金額",
+        ),
         sa.Column(
             "transition_type",
             sa.Enum(
@@ -108,18 +120,35 @@ def create_transition_estimates_table() -> None:
     op.create_table(
         "transition_estimates",
         sa.Column("no", sa.Integer, primary_key=True, comment="受払予定NO"),
-        sa.Column("transaction_date", sa.Date, nullable=False, comment="取引予定日"),
+        sa.Column(
+            "transaction_date",
+            sa.Date,
+            nullable=False,
+            server_default=sa.func.now(),
+            comment="取引予定日",
+        ),
         sa.Column("site_id", sa.String(2), nullable=False, comment="倉庫ID"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
-        sa.Column("transaction_quantity", sa.Integer, nullable=False, comment="取引予定数"),
-        sa.Column("transaction_amount", sa.Numeric, nullable=False, comment="取引予定金額"),
+        sa.Column(
+            "transaction_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="取引予定数",
+        ),
+        sa.Column(
+            "transaction_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="取引予定金額",
+        ),
         sa.Column(
             "transition_type",
             sa.Enum(
                 *StockTransitionType.list(), name="transition_type", schema="inventory"
             ),
             nullable=False,
-            index=True,
             comment="在庫変動区分",
         ),
         sa.Column(
@@ -152,6 +181,12 @@ def create_transition_estimates_table() -> None:
         source_schema="inventory",
         referent_schema="mst",
     )
+    op.create_index(
+        "ix_transition_type",
+        "transition_estimates",
+        ["transition_type", "transaction_no"],
+        schema="inventory",
+    )
 
     op.execute(
         """
@@ -181,7 +216,13 @@ def create_moving_histories_table() -> None:
         sa.Column("site_id_from", sa.String(2), nullable=False, comment="移動元倉庫ID"),
         sa.Column("site_id_to", sa.String(2), nullable=False, comment="移動先倉庫ID"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
-        sa.Column("moving_quantity", sa.Integer, nullable=False, comment="移動数"),
+        sa.Column(
+            "moving_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="移動数",
+        ),
         *timestamps(),
         schema="inventory",
     )
@@ -190,6 +231,12 @@ def create_moving_histories_table() -> None:
         "ck_site_id",
         "moving_histories",
         "site_id_from != site_id_to",
+        schema="inventory",
+    )
+    op.create_check_constraint(
+        "ck_moving_quantity",
+        "moving_histories",
+        "moving_quantity > 0",
         schema="inventory",
     )
     op.create_foreign_key(
@@ -268,9 +315,27 @@ def create_monthry_summaries_every_site_table() -> None:
         sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
         sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("init_quantity", sa.Integer, nullable=False, comment="月初在庫数"),
-        sa.Column("warehousing_quantity", sa.Integer, nullable=False, comment="入庫数"),
-        sa.Column("shipping_quantity", sa.Integer, nullable=False, comment="出庫数"),
+        sa.Column(
+            "init_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="月初在庫数",
+        ),
+        sa.Column(
+            "warehousing_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="入庫数",
+        ),
+        sa.Column(
+            "shipping_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="出庫数",
+        ),
         *timestamps(),
         schema="inventory",
     )
@@ -383,13 +448,51 @@ def create_monthry_summaries_table() -> None:
         "monthry_summaries",
         sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("init_quantity", sa.Integer, nullable=False, comment="月初在庫数"),
-        sa.Column("warehousing_quantity", sa.Integer, nullable=False, comment="入庫数"),
-        sa.Column("shipping_quantity", sa.Integer, nullable=False, comment="出庫数"),
-        sa.Column("init_amount", sa.Numeric, nullable=False, comment="月初在庫額"),
-        sa.Column("warehousing_amount", sa.Numeric, nullable=False, comment="入庫金額"),
-        sa.Column("shipping_amount", sa.Numeric, nullable=False, comment="出庫金額"),
-        sa.Column("cost_price", sa.Numeric, nullable=False, comment="原価"),
+        sa.Column(
+            "init_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="月初在庫数",
+        ),
+        sa.Column(
+            "warehousing_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="入庫数",
+        ),
+        sa.Column(
+            "shipping_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="出庫数",
+        ),
+        sa.Column(
+            "init_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="月初在庫額",
+        ),
+        sa.Column(
+            "warehousing_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="入庫金額",
+        ),
+        sa.Column(
+            "shipping_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="出庫金額",
+        ),
+        sa.Column(
+            "cost_price", sa.Numeric, nullable=False, server_default="0.0", comment="原価"
+        ),
         *timestamps(),
         schema="inventory",
     )
@@ -398,6 +501,12 @@ def create_monthry_summaries_table() -> None:
         "ck_quantity",
         "monthry_summaries",
         "init_quantity + warehousing_quantity - shipping_quantity >= 0",
+        schema="inventory",
+    )
+    op.create_check_constraint(
+        "ck_amount",
+        "monthry_summaries",
+        "init_amount + warehousing_amount - shipping_amount >= 0.0",
         schema="inventory",
     )
     op.execute(
@@ -534,7 +643,9 @@ def create_current_summaries_every_site_table() -> None:
         "current_summaries_every_site",
         sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("quantity", sa.Integer, nullable=False, comment="在庫数"),
+        sa.Column(
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
+        ),
         *timestamps(),
         schema="inventory",
     )
@@ -613,9 +724,15 @@ def create_current_summaries_table() -> None:
     op.create_table(
         "current_summaries",
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("quantity", sa.Integer, nullable=False, comment="在庫数"),
-        sa.Column("amount", sa.Numeric, nullable=False, comment="在庫額"),
-        sa.Column("cost_price", sa.Numeric, nullable=False, comment="原価"),
+        sa.Column(
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
+        ),
+        sa.Column(
+            "amount", sa.Numeric, nullable=False, server_default="0.0", comment="在庫額"
+        ),
+        sa.Column(
+            "cost_price", sa.Numeric, nullable=False, server_default="0.0", comment="原価"
+        ),
         *timestamps(),
         schema="inventory",
     )
@@ -629,7 +746,7 @@ def create_current_summaries_table() -> None:
     op.create_check_constraint(
         "ck_amount",
         "current_summaries",
-        "amount >= 0",
+        "amount >= 0.0",
         schema="inventory",
     )
     op.execute(

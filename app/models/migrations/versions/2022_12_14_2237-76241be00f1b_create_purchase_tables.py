@@ -22,7 +22,13 @@ depends_on = None
 def create_orderings_table() -> None:
     op.create_table(
         "orderings",
-        sa.Column("ordering_no", sa.String(10), primary_key=True, comment="発注NO"),
+        sa.Column(
+            "ordering_no",
+            sa.String(10),
+            primary_key=True,
+            server_default="set_me",
+            comment="発注NO",
+        ),
         sa.Column(
             "order_date",
             sa.Date,
@@ -110,9 +116,27 @@ def create_ordering_details_table() -> None:
         sa.Column("detail_no", sa.Integer, primary_key=True, comment="発注明細NO"),
         sa.Column("ordering_no", sa.String(10), nullable=False, comment="発注NO"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
-        sa.Column("purchase_quantity", sa.Integer, nullable=False, comment="発注数"),
-        sa.Column("unit_purchase_price", sa.Numeric, nullable=False, comment="発注単価"),
-        sa.Column("estimate_arrival_date", sa.Date, nullable=False, comment="入荷予定日"),
+        sa.Column(
+            "purchase_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="発注数",
+        ),
+        sa.Column(
+            "unit_purchase_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="発注単価",
+        ),
+        sa.Column(
+            "estimate_arrival_date",
+            sa.Date,
+            nullable=False,
+            server_default="2999-12-31",
+            comment="入荷予定日",
+        ),
         *timestamps(),
         schema="purchase",
     )
@@ -178,62 +202,42 @@ def create_ordering_details_table() -> None:
         referent_schema="mst",
     )
 
-    # 在庫変動予定の登録
+    # 入荷予定日の計算
     op.execute(
         """
-        CREATE FUNCTION purchase.set_transition_estimates() RETURNS TRIGGER AS $$
+        CREATE FUNCTION purchase.culc_estimate_arrival_date() RETURNS TRIGGER AS $$
         DECLARE
-            t_transaction_no integer;
-            t_transaction_date date;
-            t_product_id character(10);
-            t_site_id character(2);
-            t_quantity integer;
-            t_amount numeric;
             t_interval_days integer;
             t_order_date date;
+            t_estimate_arrival_date date;
 
             product_rec RECORD;
-            ordering_rec RECORD;
         BEGIN
 
-            IF TG_OP = 'UPDATE' THEN
-                UPDATE inventory.transition_estimates
-                SET transaction_date = NEW.estimate_arrival_date
-                WHERE transaction_no = NEW.detail_no;
+            -- 商品単位の標準入荷日数取得
+            SELECT supplier_id, days_to_arrive INTO product_rec
+            FROM mst.products
+            WHERE product_id = NEW.product_id;
 
-            ELSEIF TG_OP = 'INSERT' THEN
-                -- 商品単位の標準入荷日数取得
-                SELECT supplier_id, days_to_arrive INTO product_rec
-                FROM mst.products WHERE product_id = NEW.product_id;
-
-                -- 商品単位の設定がない場合、仕入先単位の標準入荷日数取得
-                IF product_rec.days_to_arrive IS NULL THEN
-                    SELECT days_to_arrive INTO t_interval_days FROM mst.suppliers
-                    WHERE company_id = product_rec.supplier_id;
-                ELSE
-                    t_interval_days:=product_rec.days_to_arrive;
-                END IF;
-
-                -- 入荷予定倉庫、発注日取得
-                SELECT order_date, site_id INTO ordering_rec
-                FROM purchase.orderings WHERE ordering_no = NEW.ordering_no;
-
-                -- 入荷予定日の計算
-                t_transaction_date:= ordering_rec.order_date + CAST(
-                    CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
-                );
-                NEW.estimate_arrival_date:=t_transaction_date;
-
-                t_site_id:=ordering_rec.site_id;
-                t_transaction_no:=NEW.detail_no;
-                t_product_id:=NEW.product_id;
-                t_quantity:=NEW.purchase_quantity;
-                t_amount:=NEW.purchase_quantity * NEW.unit_purchase_price;
-
-                -- FIXME:区分値の整備
-                INSERT INTO inventory.transition_estimates
-                VALUES (default, t_transaction_date, t_site_id, t_product_id, t_quantity, t_amount, 'PURCHASE', t_transaction_no);
+            -- 商品単位の設定がない場合、仕入先単位の標準入荷日数取得
+            IF product_rec.days_to_arrive IS NULL THEN
+                SELECT days_to_arrive INTO t_interval_days
+                FROM mst.suppliers
+                WHERE company_id = product_rec.supplier_id;
+            ELSE
+                t_interval_days:=product_rec.days_to_arrive;
             END IF;
+
+            -- 発注日取得
+            SELECT order_date INTO t_order_date
+            FROM purchase.orderings
+            WHERE ordering_no = NEW.ordering_no;
+
+            -- 入荷予定日の計算
+            t_estimate_arrival_date:= t_order_date + CAST(
+                CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
+            );
+            NEW.estimate_arrival_date:=t_estimate_arrival_date;
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -242,7 +246,54 @@ def create_ordering_details_table() -> None:
     op.execute(
         """
         CREATE TRIGGER insert_ordering_details
-            BEFORE INSERT OR DELETE OR UPDATE
+            BEFORE INSERT
+            ON purchase.ordering_details
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.culc_estimate_arrival_date();
+        """
+    )
+
+    # 在庫変動予定の登録
+    op.execute(
+        """
+        CREATE FUNCTION purchase.set_transition_estimates() RETURNS TRIGGER AS $$
+        DECLARE
+            t_site_id character(2);
+        BEGIN
+            IF TG_OP = 'UPDATE' THEN
+                UPDATE inventory.transition_estimates
+                SET transaction_date = NEW.estimate_arrival_date
+                WHERE transaction_no = NEW.detail_no;
+
+            ELSEIF TG_OP = 'INSERT' THEN
+
+                -- 入荷予定倉庫取得
+                SELECT site_id INTO t_site_id
+                FROM purchase.orderings
+                WHERE ordering_no = NEW.ordering_no;
+
+                -- FIXME:区分値の整備
+                INSERT INTO inventory.transition_estimates
+                VALUES (
+                    default,
+                    NEW.estimate_arrival_date,
+                    t_site_id,
+                    NEW.product_id,
+                    NEW.purchase_quantity,
+                    NEW.purchase_quantity * NEW.unit_purchase_price,
+                    'PURCHASE',
+                    NEW.detail_no
+                );
+            END IF;
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER set_ordering_details
+            AFTER INSERT OR DELETE OR UPDATE
             ON purchase.ordering_details
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.set_transition_estimates();

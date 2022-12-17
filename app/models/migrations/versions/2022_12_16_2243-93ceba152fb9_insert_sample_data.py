@@ -20,8 +20,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    DUMMY_ORDER_NO = "dummy"
-    DUMMY_DATE = date(2000, 1, 1)
+    DUMMY_AMOUNT = 0.0
 
     meta = MetaData(bind=op.get_bind())
     # 受注登録FIXME:在庫変動予定
@@ -35,7 +34,7 @@ def upgrade() -> None:
                 "site_id": "N2",
                 "product_id": "S001-00003",
                 "transaction_quantity": -5,
-                "transaction_amount": 0.0,
+                "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
                 "transaction_no": 801,
             },
@@ -44,7 +43,7 @@ def upgrade() -> None:
                 "site_id": "N2",
                 "product_id": "S001-00002",
                 "transaction_quantity": -2,
-                "transaction_amount": 0.0,
+                "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
                 "transaction_no": 802,
             },
@@ -60,14 +59,12 @@ def upgrade() -> None:
         t_orderings,
         [
             {
-                "ordering_no": DUMMY_ORDER_NO,
                 "order_date": date(2023, 1, 20),
                 "supplier_id": "S001",
                 "site_id": "E3",
                 "purchase_pic": "T-901",
             },
             {
-                "ordering_no": DUMMY_ORDER_NO,
                 "order_date": date(2023, 1, 22),
                 "supplier_id": "S002",
                 "site_id": "E3",
@@ -83,21 +80,18 @@ def upgrade() -> None:
                 "product_id": "S001-00002",
                 "purchase_quantity": 3,
                 "unit_purchase_price": 12000.0,
-                "estimate_arrival_date": DUMMY_DATE,
             },
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00003",
                 "purchase_quantity": 2,
                 "unit_purchase_price": 8000.0,
-                "estimate_arrival_date": DUMMY_DATE,
             },
             {
                 "ordering_no": "PO-0000002",
                 "product_id": "S002-00001",
                 "purchase_quantity": 5,
                 "unit_purchase_price": 20000.0,
-                "estimate_arrival_date": DUMMY_DATE,
             },
         ],
     )
@@ -170,7 +164,7 @@ def upgrade() -> None:
                 "site_id": "E4",
                 "product_id": "S001-00001",
                 "transaction_quantity": -1,
-                "transaction_amount": -20000.0,
+                "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.ordering_return,
                 "transition_reason": None,
                 "transaction_no": 504,
@@ -180,7 +174,7 @@ def upgrade() -> None:
                 "site_id": "N1",
                 "product_id": "S001-00002",
                 "transaction_quantity": -2,
-                "transaction_amount": -40000.0,
+                "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
                 "transition_reason": None,
                 "transaction_no": 505,
@@ -210,7 +204,7 @@ def upgrade() -> None:
                 "site_id": "N1",
                 "product_id": "S001-00002",
                 "transaction_quantity": -1,
-                "transaction_amount": -20000.0,
+                "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
                 "transition_reason": None,
                 "transaction_no": 508,
@@ -247,7 +241,7 @@ def upgrade() -> None:
                 "site_id": "E2",
                 "product_id": "S001-00001",
                 "transaction_quantity": -1,
-                "transaction_amount": -20000.0,
+                "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
                 "transition_reason": None,
                 "transaction_no": 510,
