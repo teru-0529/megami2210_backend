@@ -122,7 +122,6 @@ def upgrade() -> None:
         -- 発注キャンセル+全入荷
         UPDATE purchase.ordering_details SET cancel_quantity = 1 where detail_no = 5;
         UPDATE purchase.ordering_details SET remaining_quantity = 0 where detail_no = 5;
-
         """
     )
 

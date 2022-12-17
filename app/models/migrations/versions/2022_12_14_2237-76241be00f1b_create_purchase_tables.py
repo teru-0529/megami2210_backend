@@ -247,7 +247,7 @@ def create_ordering_details_table() -> None:
         referent_schema="mst",
     )
     op.create_index(
-        "ix_transition_type",
+        "ix_ordering_details_ordering",
         "ordering_details",
         ["ordering_no", "detail_no"],
         schema="purchase",
