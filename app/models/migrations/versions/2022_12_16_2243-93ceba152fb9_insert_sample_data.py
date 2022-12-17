@@ -79,7 +79,7 @@ def upgrade() -> None:
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00002",
                 "purchase_quantity": 3,
-                "unit_purchase_price": 12000.0,
+                "unit_purchase_price": 11000.0,
             },
             {
                 "ordering_no": "PO-0000001",
@@ -88,12 +88,42 @@ def upgrade() -> None:
                 "unit_purchase_price": 8000.0,
             },
             {
+                "ordering_no": "PO-0000001",
+                "product_id": "S001-00001",
+                "purchase_quantity": 4,
+                "unit_purchase_price": 10000.0,
+            },
+            {
                 "ordering_no": "PO-0000002",
                 "product_id": "S002-00001",
                 "purchase_quantity": 5,
-                "unit_purchase_price": 20000.0,
+                "unit_purchase_price": 19000.0,
+            },
+            {
+                "ordering_no": "PO-0000002",
+                "product_id": "S002-00001",
+                "purchase_quantity": 2,
+                "unit_purchase_price": 22000.0,
             },
         ],
+    )
+
+    # 発注キャンセル、入荷登録FIXME:
+    op.execute(
+        """
+        -- 予定納期日の変更
+        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-02-05' where detail_no = 1;
+        -- 発注キャンセル
+        UPDATE purchase.ordering_details SET cancel_quantity = 2 where detail_no = 2;
+        -- 一部入荷
+        UPDATE purchase.ordering_details SET remaining_quantity = 3 where detail_no = 3;
+        -- 全入荷
+        UPDATE purchase.ordering_details SET remaining_quantity = 0 where detail_no = 4;
+        -- 発注キャンセル+全入荷
+        UPDATE purchase.ordering_details SET cancel_quantity = 1 where detail_no = 5;
+        UPDATE purchase.ordering_details SET remaining_quantity = 0 where detail_no = 5;
+
+        """
     )
 
     # 入庫・在庫移動・出庫

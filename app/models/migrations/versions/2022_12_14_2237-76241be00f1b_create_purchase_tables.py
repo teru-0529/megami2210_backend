@@ -124,6 +124,20 @@ def create_ordering_details_table() -> None:
             comment="発注数",
         ),
         sa.Column(
+            "remaining_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="発注残数",
+        ),
+        sa.Column(
+            "cancel_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="キャンセル数",
+        ),
+        sa.Column(
             "unit_purchase_price",
             sa.Numeric,
             nullable=False,
@@ -131,11 +145,18 @@ def create_ordering_details_table() -> None:
             comment="発注単価",
         ),
         sa.Column(
+            "standard_arrival_date",
+            sa.Date,
+            nullable=False,
+            server_default="2999-12-31",
+            comment="標準納期日",
+        ),
+        sa.Column(
             "estimate_arrival_date",
             sa.Date,
             nullable=False,
             server_default="2999-12-31",
-            comment="入荷予定日",
+            comment="予定納期日",
         ),
         *timestamps(),
         schema="purchase",
@@ -181,6 +202,30 @@ def create_ordering_details_table() -> None:
         "purchase.ck_product_with_supplier(ordering_no, product_id)",
         schema="purchase",
     )
+    op.create_check_constraint(
+        "ck_purchase_quantity",
+        "ordering_details",
+        "purchase_quantity > 0",
+        schema="purchase",
+    )
+    op.create_check_constraint(
+        "ck_remaining_quantity",
+        "ordering_details",
+        "remaining_quantity >= 0",
+        schema="purchase",
+    )
+    op.create_check_constraint(
+        "ck_cancel_quantity",
+        "ordering_details",
+        "cancel_quantity >= 0",
+        schema="purchase",
+    )
+    op.create_check_constraint(
+        "ck_quantity",
+        "ordering_details",
+        "purchase_quantity >= remaining_quantity + cancel_quantity",
+        schema="purchase",
+    )  # FIXME:入荷リソース作成
     op.create_foreign_key(
         "fk_ordering_no",
         "ordering_details",
@@ -201,43 +246,61 @@ def create_ordering_details_table() -> None:
         source_schema="purchase",
         referent_schema="mst",
     )
+    op.create_index(
+        "ix_transition_type",
+        "ordering_details",
+        ["ordering_no", "detail_no"],
+        schema="purchase",
+    )
 
     # 入荷予定日の計算
     op.execute(
         """
-        CREATE FUNCTION purchase.culc_estimate_arrival_date() RETURNS TRIGGER AS $$
+        CREATE FUNCTION purchase.culc_ordering_details() RETURNS TRIGGER AS $$
         DECLARE
             t_interval_days integer;
             t_order_date date;
-            t_estimate_arrival_date date;
+            t_standard_arrival_date date;
 
             product_rec RECORD;
         BEGIN
+            IF TG_OP = 'UPDATE' THEN
+                -- 発注残数に変更がない場合は、キャンセル数の差分から発注残数を設定
+                IF NEW.remaining_quantity = OLD.remaining_quantity THEN
+                    NEW.remaining_quantity = OLD.remaining_quantity - (NEW.cancel_quantity - OLD.cancel_quantity);
+                END IF;
 
-            -- 商品単位の標準入荷日数取得
-            SELECT supplier_id, days_to_arrive INTO product_rec
-            FROM mst.products
-            WHERE product_id = NEW.product_id;
+            ELSEIF TG_OP = 'INSERT' THEN
+                -- 商品単位の標準入荷日数取得
+                SELECT supplier_id, days_to_arrive INTO product_rec
+                FROM mst.products
+                WHERE product_id = NEW.product_id;
 
-            -- 商品単位の設定がない場合、仕入先単位の標準入荷日数取得
-            IF product_rec.days_to_arrive IS NULL THEN
-                SELECT days_to_arrive INTO t_interval_days
-                FROM mst.suppliers
-                WHERE company_id = product_rec.supplier_id;
-            ELSE
-                t_interval_days:=product_rec.days_to_arrive;
+                -- 商品単位の設定がない場合、仕入先単位の標準入荷日数取得
+                IF product_rec.days_to_arrive IS NULL THEN
+                    SELECT days_to_arrive INTO t_interval_days
+                    FROM mst.suppliers
+                    WHERE company_id = product_rec.supplier_id;
+                ELSE
+                    t_interval_days:=product_rec.days_to_arrive;
+                END IF;
+
+                -- 発注日取得
+                SELECT order_date INTO t_order_date
+                FROM purchase.orderings
+                WHERE ordering_no = NEW.ordering_no;
+
+                -- 標準入荷日の計算
+                t_standard_arrival_date:= t_order_date + CAST(
+                    CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
+                );
+                NEW.standard_arrival_date:=t_standard_arrival_date;
+                NEW.estimate_arrival_date:=t_standard_arrival_date;
+
+                -- 発注残数、キャンセル数の設定
+                NEW.remaining_quantity:=NEW.purchase_quantity;
+                NEW.cancel_quantity:=0;
             END IF;
-
-            -- 発注日取得
-            SELECT order_date INTO t_order_date
-            FROM purchase.orderings
-            WHERE ordering_no = NEW.ordering_no;
-
-            -- 入荷予定日の計算
-            t_estimate_arrival_date:= t_order_date + CAST(
-                CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
-            );
-            NEW.estimate_arrival_date:=t_estimate_arrival_date;
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -245,11 +308,11 @@ def create_ordering_details_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_ordering_details
-            BEFORE INSERT
+        CREATE TRIGGER before_set_ordering_details
+            BEFORE INSERT OR UPDATE
             ON purchase.ordering_details
             FOR EACH ROW
-        EXECUTE PROCEDURE purchase.culc_estimate_arrival_date();
+        EXECUTE PROCEDURE purchase.culc_ordering_details();
         """
     )
 
@@ -261,9 +324,18 @@ def create_ordering_details_table() -> None:
             t_site_id character(2);
         BEGIN
             IF TG_OP = 'UPDATE' THEN
-                UPDATE inventory.transition_estimates
-                SET transaction_date = NEW.estimate_arrival_date
-                WHERE transaction_no = NEW.detail_no;
+                -- 発注残数が0になった場合は受払予定を削除
+                IF NEW.remaining_quantity = 0 THEN
+                    DELETE FROM inventory.transition_estimates
+                    WHERE transaction_no = NEW.detail_no;
+
+                ELSE
+                    UPDATE inventory.transition_estimates
+                    SET transaction_date = NEW.estimate_arrival_date,
+                        transaction_quantity = NEW.remaining_quantity,
+                        transaction_amount = NEW.remaining_quantity * NEW.unit_purchase_price
+                    WHERE transaction_no = NEW.detail_no;
+                END IF;
 
             ELSEIF TG_OP = 'INSERT' THEN
 
@@ -279,8 +351,8 @@ def create_ordering_details_table() -> None:
                     NEW.estimate_arrival_date,
                     t_site_id,
                     NEW.product_id,
-                    NEW.purchase_quantity,
-                    NEW.purchase_quantity * NEW.unit_purchase_price,
+                    NEW.remaining_quantity,
+                    NEW.remaining_quantity * NEW.unit_purchase_price,
                     'PURCHASE',
                     NEW.detail_no
                 );
@@ -292,8 +364,8 @@ def create_ordering_details_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER set_ordering_details
-            AFTER INSERT OR DELETE OR UPDATE
+        CREATE TRIGGER after_set_ordering_details
+            AFTER INSERT OR UPDATE
             ON purchase.ordering_details
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.set_transition_estimates();
