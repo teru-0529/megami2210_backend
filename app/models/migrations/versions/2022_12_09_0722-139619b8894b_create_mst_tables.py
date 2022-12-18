@@ -466,7 +466,7 @@ def create_suppliers_table() -> None:
                 "company_id": "S001",
                 "cutoff_day": 5,
                 "month_of_payment_term": 1,
-                "payment_day": 15,
+                "payment_day": 99,
                 "purchase_pic": "T-902",
                 "contact_person": "桜木花道",
                 "order_policy": OrderPolicy.periodically,
@@ -476,8 +476,8 @@ def create_suppliers_table() -> None:
             },
             {
                 "company_id": "S002",
-                "cutoff_day": 5,
-                "month_of_payment_term": 1,
+                "cutoff_day": 99,
+                "month_of_payment_term": 2,
                 "payment_day": 15,
                 "purchase_pic": "T-902",
                 "contact_person": "流川楓",
@@ -490,7 +490,7 @@ def create_suppliers_table() -> None:
                 "company_id": "S003",
                 "cutoff_day": 25,
                 "month_of_payment_term": 1,
-                "payment_day": 99,
+                "payment_day": 5,
                 "purchase_pic": "T-902",
                 "contact_person": "赤木剛憲",
                 "order_policy": OrderPolicy.periodically,
@@ -523,6 +523,61 @@ def create_suppliers_table() -> None:
                 "note": "湘北",
             },
         ],
+    )
+
+    op.execute(
+        """
+        CREATE FUNCTION mst.calc_payment_deadline(
+            operation_date date,
+            supplier_id text,
+            OUT closing_date date,
+            OUT payment_deadline date,
+            OUT dummy text
+        ) AS $$
+        DECLARE
+            rec record;
+            cuurent_last_date date;
+            cutoff_day_interval interval;
+
+            payment_month_first_date date;
+            payment_month_last_date date;
+            payment_day_interval interval;
+
+        BEGIN
+            SELECT * INTO rec
+            FROM mst.suppliers
+            WHERE company_id = supplier_id;
+
+            -- 締日の計算
+            cuurent_last_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' +'-1 Day');
+            cutoff_day_interval:=CAST((rec.cutoff_day - 1) || ' Day' AS interval);
+
+            IF EXTRACT(day FROM cuurent_last_date) < rec.cutoff_day THEN
+                closing_date:=cuurent_last_date;
+                dummy:='※月末締';
+            ELSEIF rec.cutoff_day < EXTRACT(day FROM operation_date) THEN
+                closing_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' + cutoff_day_interval);
+                dummy:='翌月締';
+            ELSE
+                closing_date:=DATE(DATE_TRUNC('month', operation_date) + cutoff_day_interval);
+                dummy:='当月締';
+            END IF;
+
+            -- 支払期限日の計算
+            payment_month_first_date:=DATE(DATE_TRUNC('month', closing_date) + CAST(rec.month_of_payment_term || ' month' AS interval));
+            payment_month_last_date:=payment_month_first_date + CAST('1 month' AS interval) +CAST('-1 Day' AS interval);
+            payment_day_interval:=CAST((rec.payment_day - 1) || ' Day' AS interval);
+
+            IF EXTRACT(day FROM payment_month_last_date) < rec.payment_day THEN
+                payment_deadline:=payment_month_last_date;
+                dummy:=dummy || '、※支払期限は月末';
+            ELSE
+                payment_deadline:=payment_month_first_date + payment_day_interval;
+            END IF;
+
+        END;
+        $$ LANGUAGE plpgsql;
+        """
     )
 
 

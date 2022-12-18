@@ -23,11 +23,23 @@ def upgrade() -> None:
     DUMMY_AMOUNT = 0.0
 
     meta = MetaData(bind=op.get_bind())
-    # 受注登録FIXME:在庫変動予定
     meta.reflect(schema="inventory")
-    t_transition_estimates = Table("inventory.transition_estimates", meta)
+    # FIXME:在庫変動予定(受注-出荷予定)
+    inv_transition_estimates = Table("inventory.transition_estimates", meta)
+    # FIXME:在庫変動履歴(出荷、仕入返品、売上返品、その他取引)
+    inv_transition_histories = Table("inventory.transition_histories", meta)
+    inv_moving_histories = Table("inventory.moving_histories", meta)
+
+    meta = MetaData(bind=op.get_bind())
+    meta.reflect(schema="purchase")
+    pch_orderings = Table("purchase.orderings", meta)
+    pch_ordering_details = Table("purchase.ordering_details", meta)
+    pch_wearhousings = Table("purchase.wearhousings", meta)
+    pch_wearhousing_details = Table("purchase.wearhousing_details", meta)
+
+    # 受注-出荷予定FIXME:在庫変動予定
     op.bulk_insert(
-        t_transition_estimates,
+        inv_transition_estimates,
         [
             {
                 "transaction_date": date(2023, 1, 11),
@@ -50,13 +62,9 @@ def upgrade() -> None:
         ],
     )
 
-    # 発注登録
-    meta = MetaData(bind=op.get_bind())
-    meta.reflect(schema="purchase")
-    t_orderings = Table("purchase.orderings", meta)
-    t_ordering_details = Table("purchase.ordering_details", meta)
+    # 発注
     op.bulk_insert(
-        t_orderings,
+        pch_orderings,
         [
             {
                 "order_date": date(2023, 1, 20),
@@ -70,104 +78,248 @@ def upgrade() -> None:
                 "site_id": "E3",
                 "purchase_pic": "T-902",
             },
+            {
+                "order_date": date(2023, 1, 23),
+                "supplier_id": "S002",
+                "site_id": "E3",
+                "purchase_pic": "T-902",
+            },
         ],
     )
     op.bulk_insert(
-        t_ordering_details,
+        pch_ordering_details,
         [
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00002",
                 "purchase_quantity": 3,
-                "unit_purchase_price": 11000.0,
+                "purchase_unit_price": 11000.0,
             },
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00003",
                 "purchase_quantity": 2,
-                "unit_purchase_price": 8000.0,
+                "purchase_unit_price": 8000.0,
             },
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00001",
                 "purchase_quantity": 4,
-                "unit_purchase_price": 10000.0,
+                "purchase_unit_price": 10000.0,
             },
             {
                 "ordering_no": "PO-0000002",
                 "product_id": "S002-00001",
                 "purchase_quantity": 5,
-                "unit_purchase_price": 19000.0,
+                "purchase_unit_price": 19000.0,
             },
             {
-                "ordering_no": "PO-0000002",
+                "ordering_no": "PO-0000003",
                 "product_id": "S002-00001",
                 "purchase_quantity": 2,
-                "unit_purchase_price": 22000.0,
+                "purchase_unit_price": 22000.0,
             },
         ],
     )
 
-    # 発注キャンセル、入荷登録FIXME:
+    # 発注納期変更、発注キャンセル
     op.execute(
         """
         -- 予定納期日の変更
         UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-02-05' where detail_no = 1;
-        -- 発注キャンセル
+        -- 発注キャンセル(全量)
         UPDATE purchase.ordering_details SET cancel_quantity = 2 where detail_no = 2;
-        -- 一部入荷
-        UPDATE purchase.ordering_details SET remaining_quantity = 3 where detail_no = 3;
-        -- 全入荷
-        UPDATE purchase.ordering_details SET remaining_quantity = 0 where detail_no = 4;
-        -- 発注キャンセル+全入荷
-        UPDATE purchase.ordering_details SET cancel_quantity = 1 where detail_no = 5;
-        UPDATE purchase.ordering_details SET remaining_quantity = 0 where detail_no = 5;
+        -- 発注キャンセル(一部)
+        UPDATE purchase.ordering_details SET cancel_quantity = 1 where detail_no = 3;
         """
     )
 
-    # 入庫・在庫移動・出庫
-    meta.reflect(schema="inventory")
-    t_transition_histories = Table("inventory.transition_histories", meta)
-    # FIXME:在庫変動履歴
-    t_moving_histories = Table("inventory.moving_histories", meta)
-    # FIXME:在庫移動履歴
+    # 入荷
     op.bulk_insert(
-        t_transition_histories,
+        pch_wearhousings,
         [
             {
-                "transaction_date": date(2023, 10, 20),
-                "site_id": "N1",
-                "product_id": "S001-00002",
-                "transaction_quantity": 1,
-                "transaction_amount": 18000.0,
-                "transition_type": StockTransitionType.purchase,
-                "transition_reason": None,
-                "transaction_no": 501,
+                "wearhousing_date": date(2023, 1, 30),
+                "supplier_id": "S001",
+                "wearhousing_pic": "T-901",
             },
             {
-                "transaction_date": date(2023, 12, 10),
-                "site_id": "N1",
-                "product_id": "S001-00002",
-                "transaction_quantity": 2,
-                "transaction_amount": 48000.0,
-                "transition_type": StockTransitionType.purchase,
-                "transition_reason": None,
-                "transaction_no": 502,
+                "wearhousing_date": date(2023, 2, 6),
+                "supplier_id": "S001",
+                "wearhousing_pic": "T-901",
             },
             {
-                "transaction_date": date(2023, 12, 12),
-                "site_id": "E3",
-                "product_id": "S001-00001",
-                "transaction_quantity": 5,
-                "transaction_amount": 100000.0,
-                "transition_type": StockTransitionType.purchase,
-                "transition_reason": None,
-                "transaction_no": 503,
+                "wearhousing_date": date(2023, 2, 6),
+                "supplier_id": "S002",
+                "wearhousing_pic": "T-902",
             },
-        ],  # FIXME:入庫
+            {
+                "wearhousing_date": date(2023, 2, 7),
+                "supplier_id": "S002",
+                "wearhousing_pic": "T-902",
+            },
+        ],
     )
     op.bulk_insert(
-        t_moving_histories,
+        pch_wearhousing_details,
+        [
+            {
+                "wearhousing_no": "WH-0000001",
+                "order_detail_no": 3,
+                "wearhousing_quantity": 3,
+                "wearhousing_unit_price": 10000.0,
+                "site_id": "N2",
+            },
+            {
+                "wearhousing_no": "WH-0000002",
+                "order_detail_no": 1,
+                "wearhousing_quantity": 3,
+                "wearhousing_unit_price": 10500.0,
+                "site_id": "N2",
+            },
+            {
+                "wearhousing_no": "WH-0000003",
+                "order_detail_no": 4,
+                "wearhousing_quantity": 3,
+                "wearhousing_unit_price": 19000.0,
+                "site_id": "N2",
+            },
+            {
+                "wearhousing_no": "WH-0000004",
+                "order_detail_no": 4,
+                "wearhousing_quantity": 2,
+                "wearhousing_unit_price": 17000.0,
+                "site_id": "N2",
+            },
+            {
+                "wearhousing_no": "WH-0000004",
+                "order_detail_no": 5,
+                "wearhousing_quantity": 1,
+                "wearhousing_unit_price": 22000.0,
+                "site_id": "N2",
+            },
+        ],
+    )
+
+    # 発注-入荷
+    op.bulk_insert(
+        pch_orderings,
+        [
+            {
+                "order_date": date(2023, 10, 10),
+                "supplier_id": "S001",
+                "site_id": "N1",
+                "purchase_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_ordering_details,
+        [
+            {
+                "ordering_no": "PO-0000004",
+                "product_id": "S001-00002",
+                "purchase_quantity": 1,
+                "purchase_unit_price": 12000.0,
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_wearhousings,
+        [
+            {
+                "wearhousing_date": date(2023, 10, 20),
+                "supplier_id": "S001",
+                "wearhousing_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_wearhousing_details,
+        [
+            {
+                "wearhousing_no": "WH-0000005",
+                "order_detail_no": 6,
+                "wearhousing_quantity": 1,
+                "wearhousing_unit_price": 12000.0,
+                "site_id": "N1",
+            },
+        ],
+    )
+
+    # 発注-入荷
+    op.bulk_insert(
+        pch_orderings,
+        [
+            {
+                "order_date": date(2023, 11, 25),
+                "supplier_id": "S001",
+                "site_id": "N1",
+                "purchase_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_ordering_details,
+        [
+            {
+                "ordering_no": "PO-0000005",
+                "product_id": "S001-00001",
+                "purchase_quantity": 5,
+                "purchase_unit_price": 10000.0,
+            },
+            {
+                "ordering_no": "PO-0000005",
+                "product_id": "S001-00002",
+                "purchase_quantity": 2,
+                "purchase_unit_price": 11000.0,
+            },
+        ],
+    )
+    op.execute(
+        """
+        -- 予定納期日の変更
+        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-12-12' where detail_no = 7;
+        """
+    )
+    op.bulk_insert(
+        pch_wearhousings,
+        [
+            {
+                "wearhousing_date": date(2023, 12, 5),
+                "supplier_id": "S001",
+                "wearhousing_pic": "T-901",
+            },
+            {
+                "wearhousing_date": date(2023, 12, 12),
+                "supplier_id": "S001",
+                "wearhousing_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_wearhousing_details,
+        [
+            {
+                "wearhousing_no": "WH-0000006",
+                "order_detail_no": 8,
+                "wearhousing_quantity": 2,
+                "wearhousing_unit_price": 10000.0,
+                "site_id": "N1",
+            },
+            {
+                "wearhousing_no": "WH-0000007",
+                "order_detail_no": 7,
+                "wearhousing_quantity": 5,
+                "wearhousing_unit_price": 11000.0,
+                "site_id": "E3",
+            },
+        ],
+    )
+
+    # 検品（在庫移動）FIXME:
+    op.bulk_insert(
+        inv_moving_histories,
         [
             {
                 "transaction_date": date(2023, 12, 12),
@@ -183,10 +335,12 @@ def upgrade() -> None:
                 "product_id": "S001-00001",
                 "moving_quantity": 3,
             },
-        ],  # FIXME:在庫移動
+        ],
     )
+
+    # 仕入返品FIXME:
     op.bulk_insert(
-        t_transition_histories,
+        inv_transition_histories,
         [
             {
                 "transaction_date": date(2023, 12, 14),
@@ -198,8 +352,15 @@ def upgrade() -> None:
                 "transition_reason": None,
                 "transaction_no": 504,
             },
+        ],
+    )
+
+    # 販売FIXME:
+    op.bulk_insert(
+        inv_transition_histories,
+        [
             {
-                "transaction_date": date(2024, 1, 5),
+                "transaction_date": date(2024, 1, 3),
                 "site_id": "N1",
                 "product_id": "S001-00002",
                 "transaction_quantity": -2,
@@ -208,16 +369,59 @@ def upgrade() -> None:
                 "transition_reason": None,
                 "transaction_no": 505,
             },
+        ],
+    )
+
+    # 発注-入荷
+    op.bulk_insert(
+        pch_orderings,
+        [
             {
-                "transaction_date": date(2024, 1, 10),
+                "order_date": date(2024, 1, 5),
+                "supplier_id": "S001",
                 "site_id": "N1",
-                "product_id": "S001-00002",
-                "transaction_quantity": 3,
-                "transaction_amount": 65000.0,
-                "transition_type": StockTransitionType.purchase,
-                "transition_reason": None,
-                "transaction_no": 506,
+                "purchase_pic": "T-901",
             },
+        ],
+    )
+    op.bulk_insert(
+        pch_ordering_details,
+        [
+            {
+                "ordering_no": "PO-0000006",
+                "product_id": "S001-00002",
+                "purchase_quantity": 3,
+                "purchase_unit_price": 12000.0,
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_wearhousings,
+        [
+            {
+                "wearhousing_date": date(2024, 1, 15),
+                "supplier_id": "S001",
+                "wearhousing_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_wearhousing_details,
+        [
+            {
+                "wearhousing_no": "WH-0000008",
+                "order_detail_no": 9,
+                "wearhousing_quantity": 3,
+                "wearhousing_unit_price": 11500.0,
+                "site_id": "N1",
+            },
+        ],
+    )
+
+    # その他（棚卸）FIXME:
+    op.bulk_insert(
+        inv_transition_histories,
+        [
             {
                 "transaction_date": date(2024, 1, 18),
                 "site_id": "N1",
@@ -228,6 +432,13 @@ def upgrade() -> None:
                 "transition_reason": "棚卸の結果、帳簿在庫増",
                 "transaction_no": 507,
             },
+        ],
+    )
+
+    # 即時販売FIXME:
+    op.bulk_insert(
+        inv_transition_histories,
+        [
             {
                 "transaction_date": date(2024, 1, 20),
                 "site_id": "N1",
@@ -240,8 +451,10 @@ def upgrade() -> None:
             },
         ],
     )
+
+    # 予約販売FIXME:
     op.bulk_insert(
-        t_moving_histories,
+        inv_moving_histories,
         [
             {
                 "transaction_date": date(2024, 1, 22),
@@ -250,10 +463,12 @@ def upgrade() -> None:
                 "product_id": "S001-00001",
                 "moving_quantity": 2,
             },
-        ],  # FIXME:販売待ち
+        ],
     )
+
+    # 売上返品FIXME:
     op.bulk_insert(
-        t_transition_histories,
+        inv_transition_histories,
         [
             {
                 "transaction_date": date(2024, 1, 25),
@@ -265,6 +480,13 @@ def upgrade() -> None:
                 "transition_reason": None,
                 "transaction_no": 509,
             },
+        ],
+    )
+
+    # 予約販売FIXME:
+    op.bulk_insert(
+        inv_transition_histories,
+        [
             {
                 "transaction_date": date(2024, 1, 30),
                 "site_id": "E2",
