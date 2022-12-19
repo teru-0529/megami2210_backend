@@ -21,6 +21,314 @@ depends_on = None
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
+def create_monthry_summaries_every_site_table() -> None:
+    op.create_table(
+        "monthry_summaries_every_site",
+        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
+        sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
+        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
+        sa.Column(
+            "init_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="月初在庫数",
+        ),
+        sa.Column(
+            "warehousing_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="入庫数",
+        ),
+        sa.Column(
+            "shipping_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="出庫数",
+        ),
+        sa.Column(
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
+        ),
+        *timestamps(),
+        schema="inventory",
+    )
+
+    op.create_check_constraint(
+        "ck_quantity",
+        "monthry_summaries_every_site",
+        "quantity >= 0",
+        schema="inventory",
+    )
+    op.create_index(
+        "ix_monthry_summaries_every_site_product",
+        "monthry_summaries_every_site",
+        ["product_id", "year_month", "site_id"],
+        schema="inventory",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER monthry_summaries_every_site_modified
+            BEFORE UPDATE
+            ON inventory.monthry_summaries_every_site
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION inventory.calc_monthry_summaries_every_site() RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.quantity:=NEW.init_quantity + NEW.warehousing_quantity - NEW.shipping_quantity;
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER upsert_monthry_summaries_every_site
+            BEFORE INSERT OR UPDATE
+            ON inventory.monthry_summaries_every_site
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.calc_monthry_summaries_every_site();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+# INFO:
+def create_monthry_summaries_table() -> None:
+    op.create_table(
+        "monthry_summaries",
+        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
+        sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
+        sa.Column(
+            "init_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="月初在庫数",
+        ),
+        sa.Column(
+            "warehousing_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="入庫数",
+        ),
+        sa.Column(
+            "shipping_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="出庫数",
+        ),
+        sa.Column(
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
+        ),
+        sa.Column(
+            "init_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="月初在庫額",
+        ),
+        sa.Column(
+            "warehousing_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="入庫金額",
+        ),
+        sa.Column(
+            "shipping_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="出庫金額",
+        ),
+        sa.Column(
+            "amount", sa.Numeric, nullable=False, server_default="0.0", comment="在庫額"
+        ),
+        sa.Column(
+            "cost_price", sa.Numeric, nullable=False, server_default="0.0", comment="原価"
+        ),
+        *timestamps(),
+        schema="inventory",
+    )
+
+    op.create_check_constraint(
+        "ck_quantity",
+        "monthry_summaries",
+        "quantity >= 0",
+        schema="inventory",
+    )
+    op.create_check_constraint(
+        "ck_amount",
+        "monthry_summaries",
+        "amount >= 0.0",
+        schema="inventory",
+    )
+    op.create_index(
+        "ix_monthry_summaries_product",
+        "monthry_summaries",
+        ["product_id", "year_month"],
+        schema="inventory",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER monthry_summaries_modified
+            BEFORE UPDATE
+            ON inventory.monthry_summaries
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION inventory.calc_monthry_summaries() RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.quantity:=NEW.init_quantity + NEW.warehousing_quantity - NEW.shipping_quantity;
+            NEW.amount:=NEW.init_amount + NEW.warehousing_amount - NEW.shipping_amount;
+            IF NEW.quantity = 0 THEN
+                NEW.cost_price:=0.0;
+            ELSE
+                NEW.cost_price:=ROUND(NEW.amount / NEW.quantity, 2);
+            END IF;
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER upsert_monthry_summaries
+            BEFORE INSERT OR UPDATE
+            ON inventory.monthry_summaries
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.calc_monthry_summaries();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_current_summaries_every_site_table() -> None:
+    op.create_table(
+        "current_summaries_every_site",
+        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
+        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
+        sa.Column(
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
+        ),
+        *timestamps(),
+        schema="inventory",
+    )
+
+    op.create_check_constraint(
+        "ck_quantity",
+        "current_summaries_every_site",
+        "quantity >= 0",
+        schema="inventory",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER current_summaries_every_site_modified
+            BEFORE UPDATE
+            ON inventory.current_summaries_every_site
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_current_summaries_table() -> None:
+    op.create_table(
+        "current_summaries",
+        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
+        sa.Column(
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
+        ),
+        sa.Column(
+            "amount", sa.Numeric, nullable=False, server_default="0.0", comment="在庫額"
+        ),
+        sa.Column(
+            "cost_price", sa.Numeric, nullable=False, server_default="0.0", comment="原価"
+        ),
+        *timestamps(),
+        schema="inventory",
+    )
+
+    op.create_check_constraint(
+        "ck_quantity",
+        "current_summaries",
+        "quantity >= 0",
+        schema="inventory",
+    )
+    op.create_check_constraint(
+        "ck_amount",
+        "current_summaries",
+        "amount >= 0.0",
+        schema="inventory",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER current_summaries_modified
+            BEFORE UPDATE
+            ON inventory.current_summaries
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION inventory.calc_current_summaries() RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.quantity = 0 THEN
+                NEW.cost_price:=0.0;
+            ELSE
+                NEW.cost_price:=ROUND(NEW.amount / NEW.quantity, 2);
+            END IF;
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER upsert_current_summaries
+            BEFORE INSERT OR UPDATE
+            ON inventory.current_summaries
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.calc_current_summaries();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def create_transition_histories_table() -> None:
     op.create_table(
         "transition_histories",
@@ -66,6 +374,7 @@ def create_transition_histories_table() -> None:
         *timestamps(),
         schema="inventory",
     )
+
     # 「在庫変動区分」が「その他取引」の場合は、「在庫変動理由」が必須、「その他取引」以外の場合は「在庫変動理由」を指定してはいけない
     ck_transition_reason: str = """
     CASE
@@ -117,10 +426,250 @@ def create_transition_histories_table() -> None:
         """
     )
 
+    # 登録後、月次在庫サマリーを自動作成
+    op.execute(
+        """
+        CREATE FUNCTION inventory.set_summaries() RETURNS TRIGGER AS $$
+        DECLARE
+            yyyymm character(6);
+            t_product_id character(10);
+            t_site_id character(2);
+            t_init_quantity integer;
+            t_warehousing_quantity integer;
+            t_shipping_quantity integer;
+            t_init_amount numeric;
+            t_warehousing_amount numeric;
+            t_shipping_amount numeric;
+            t_cost_price numeric;
+
+            t_quantity integer;
+            t_amount numeric;
+            t_shipping numeric;
+
+            recent_rec RECORD;
+            last_rec RECORD;
+        BEGIN
+            yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
+            t_site_id:=NEW.site_id;
+            t_product_id:=NEW.product_id;
+
+            ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+            -- 月次サマリー（倉庫別）TODO:
+            SELECT * INTO recent_rec
+                FROM inventory.monthry_summaries_every_site
+                WHERE product_id = t_product_id AND year_month = yyyymm AND site_id = t_site_id
+                FOR UPDATE;
+
+            IF recent_rec IS NULL THEN
+                SELECT * INTO last_rec
+                    FROM inventory.monthry_summaries_every_site
+                    WHERE product_id = t_product_id AND site_id = t_site_id
+                    ORDER BY year_month DESC
+                    LIMIT 1;
+
+                IF last_rec IS NULL THEN
+                    t_init_quantity:=0;
+                ELSE
+                    t_init_quantity:=last_rec.quantity;
+                END IF;
+
+                t_warehousing_quantity:=0;
+                t_shipping_quantity:=0;
+            ELSE
+                t_init_quantity:=recent_rec.init_quantity;
+                t_warehousing_quantity:=recent_rec.warehousing_quantity;
+                t_shipping_quantity:=recent_rec.shipping_quantity;
+            END IF;
+
+            IF NEW.transaction_quantity > 0 THEN
+                t_warehousing_quantity:=t_warehousing_quantity + NEW.transaction_quantity;
+            ELSE
+                t_shipping_quantity:=t_shipping_quantity - NEW.transaction_quantity;
+            END IF;
+
+            IF recent_rec IS NULL THEN
+                INSERT INTO inventory.monthry_summaries_every_site
+                VALUES (
+                    t_product_id,
+                    yyyymm,
+                    t_site_id,
+                    t_init_quantity,
+                    t_warehousing_quantity,
+                    t_shipping_quantity
+                );
+            ELSE
+                UPDATE inventory.monthry_summaries_every_site
+                SET warehousing_quantity = t_warehousing_quantity,
+                    shipping_quantity = t_shipping_quantity
+                WHERE product_id = t_product_id AND year_month = yyyymm AND site_id = t_site_id;
+            END IF;
+
+            ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+            -- 月次サマリーTODO:
+            SELECT * INTO recent_rec
+                FROM inventory.monthry_summaries
+                WHERE product_id = t_product_id AND year_month = yyyymm
+                FOR UPDATE;
+
+            IF recent_rec IS NULL THEN
+                SELECT * INTO last_rec
+                    FROM inventory.monthry_summaries
+                    WHERE product_id = t_product_id
+                    ORDER BY year_month DESC
+                    LIMIT 1;
+
+                IF last_rec IS NULL THEN
+                    t_init_quantity:=0;
+                    t_init_amount:=0.00;
+                    t_cost_price:=0.00;
+                ELSE
+                    t_init_quantity:=last_rec.quantity;
+                    t_init_amount:=last_rec.amount;
+                    IF t_init_quantity = 0 THEN
+                        t_cost_price:=0.00;
+                    ELSE
+                        t_cost_price:=ROUND(t_init_amount / t_init_quantity, 2);
+                    END IF;
+                END IF;
+
+                t_warehousing_quantity:=0;
+                t_shipping_quantity:=0;
+                t_warehousing_amount:=0.00;
+                t_shipping_amount:=0.00;
+            ELSE
+                t_init_quantity:=recent_rec.init_quantity;
+                t_warehousing_quantity:=recent_rec.warehousing_quantity;
+                t_shipping_quantity:=recent_rec.shipping_quantity;
+                t_init_amount:=recent_rec.init_amount;
+                t_warehousing_amount:=recent_rec.warehousing_amount;
+                t_shipping_amount:=recent_rec.shipping_amount;
+                t_cost_price:=recent_rec.cost_price;
+            END IF;
+
+            IF NEW.transition_type='SELLING' THEN
+                NEW.transaction_amount:=NEW.transaction_quantity * t_cost_price;
+            END IF;
+
+            IF NEW.transaction_quantity > 0 THEN
+                t_warehousing_quantity:=t_warehousing_quantity + NEW.transaction_quantity;
+            ELSE
+                t_shipping_quantity:=t_shipping_quantity - NEW.transaction_quantity;
+            END IF;
+            IF NEW.transaction_amount > 0.0 THEN
+                t_warehousing_amount:=t_warehousing_amount + NEW.transaction_amount;
+            ELSE
+                t_shipping_amount:=t_shipping_amount - NEW.transaction_amount;
+            END IF;
+
+            IF recent_rec IS NULL THEN
+                INSERT INTO inventory.monthry_summaries
+                VALUES (
+                    t_product_id,
+                    yyyymm,
+                    t_init_quantity,
+                    t_warehousing_quantity,
+                    t_shipping_quantity,
+                    0,
+                    t_init_amount,
+                    t_warehousing_amount,
+                    t_shipping_amount
+                );
+            ELSE
+                UPDATE inventory.monthry_summaries
+                SET warehousing_quantity = t_warehousing_quantity,
+                    shipping_quantity = t_shipping_quantity,
+                    warehousing_amount = t_warehousing_amount,
+                    shipping_amount = t_shipping_amount
+                WHERE product_id = t_product_id AND year_month = yyyymm;
+            END IF;
+
+            ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+            -- 在庫サマリー（倉庫別）TODO:
+
+            SELECT * INTO recent_rec
+                FROM inventory.current_summaries_every_site
+                WHERE product_id = t_product_id AND site_id = t_site_id
+                FOR UPDATE;
+
+            IF recent_rec IS NULL THEN
+                t_quantity:= NEW.transaction_quantity;
+            ELSE
+                t_quantity:=recent_rec.quantity + NEW.transaction_quantity;
+            END IF;
+
+            IF recent_rec IS NULL THEN
+                INSERT INTO inventory.current_summaries_every_site
+                VALUES (
+                    t_product_id,
+                    t_site_id,
+                    t_quantity
+                );
+            ELSE
+                UPDATE inventory.current_summaries_every_site
+                SET quantity = t_quantity
+                WHERE product_id = t_product_id AND site_id = t_site_id;
+            END IF;
+
+            ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+            -- 在庫サマリーTODO:
+
+            SELECT * INTO recent_rec
+                FROM inventory.current_summaries
+                WHERE product_id = t_product_id
+                FOR UPDATE;
+
+            IF recent_rec IS NULL THEN
+                t_quantity:= 0;
+                t_amount:=0.00;
+                t_cost_price:=0.0;
+            ELSE
+                t_quantity:=recent_rec.quantity;
+                t_amount:=recent_rec.amount;
+                t_cost_price:=recent_rec.cost_price;
+            END IF;
+
+            t_quantity:=t_quantity + NEW.transaction_quantity;
+            IF NEW.transition_type='SELLING' THEN
+                t_amount:=t_amount + NEW.transaction_quantity * t_cost_price;
+            ELSE
+                t_amount:=t_amount + NEW.transaction_amount;
+            END IF;
+
+            IF recent_rec IS NULL THEN
+                INSERT INTO inventory.current_summaries
+                VALUES (
+                    t_product_id,
+                    t_quantity,
+                    t_amount
+                );
+            ELSE
+                UPDATE inventory.current_summaries
+                SET quantity = t_quantity,
+                    amount = t_amount
+                WHERE product_id = t_product_id;
+            END IF;
+
+            ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_transition_histories
+            AFTER INSERT
+            ON inventory.transition_histories
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.set_summaries();
+        """
+    )
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_transition_estimates_table() -> None:
     op.create_table(
         "transition_estimates",
@@ -207,6 +756,7 @@ def create_transition_estimates_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_moving_histories_table() -> None:
     op.create_table(
         "moving_histories",
@@ -291,10 +841,10 @@ def create_moving_histories_table() -> None:
         """
     )
 
-    # 在庫変動履歴の自動作成
+    # 登録後、在庫変動履歴を自動作成FIXME:関数名
     op.execute(
         """
-        CREATE FUNCTION inventory.set_transition_histories_1st() RETURNS TRIGGER AS $$
+        CREATE FUNCTION inventory.create_transition_histories() RETURNS TRIGGER AS $$
         BEGIN
             INSERT INTO inventory.transition_histories
             VALUES (default, NEW.transaction_date, NEW.site_id_from, NEW.product_id, - NEW.moving_quantity , 0.0, 'MOVEMENT_SHIPPING', null, NEW.no);
@@ -308,11 +858,11 @@ def create_moving_histories_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_moving_history
-            BEFORE INSERT
+        CREATE TRIGGER hook_insert_moving_histories
+            AFTER INSERT
             ON inventory.moving_histories
             FOR EACH ROW
-        EXECUTE PROCEDURE inventory.set_transition_histories_1st();
+        EXECUTE PROCEDURE inventory.create_transition_histories();
         """
     )
 
@@ -320,602 +870,7 @@ def create_moving_histories_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-def create_monthry_summaries_every_site_table() -> None:
-    op.create_table(
-        "monthry_summaries_every_site",
-        sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
-        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
-        sa.Column(
-            "init_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="月初在庫数",
-        ),
-        sa.Column(
-            "warehousing_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="入庫数",
-        ),
-        sa.Column(
-            "shipping_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="出庫数",
-        ),
-        sa.Column(
-            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
-        ),
-        *timestamps(),
-        schema="inventory",
-    )
-
-    op.create_check_constraint(
-        "ck_quantity",
-        "monthry_summaries_every_site",
-        "quantity >= 0",
-        schema="inventory",
-    )
-    op.create_index(
-        "ix_monthry_summaries_every_site_product",
-        "monthry_summaries_every_site",
-        ["product_id", "year_month", "site_id"],
-        schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER monthry_summaries_every_site_modified
-            BEFORE UPDATE
-            ON inventory.monthry_summaries_every_site
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    # 月次在庫サマリーテーブルの自動作成
-    op.execute(
-        """
-        CREATE FUNCTION inventory.set_monthry_summaries_every_site() RETURNS TRIGGER AS $$
-        DECLARE
-            yyyymm character(6);
-            t_product_id character(10);
-            t_site_id character(2);
-            t_init_quantity integer;
-            t_warehousing_quantity integer;
-            t_shipping_quantity integer;
-
-            t_quantity integer;
-            t_amount numeric;
-            t_shipping numeric;
-
-            recent_rec RECORD;
-            last_rec RECORD;
-        BEGIN
-            yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
-            t_site_id:=NEW.site_id;
-            t_product_id:=NEW.product_id;
-
-            SELECT * INTO recent_rec
-                FROM inventory.monthry_summaries_every_site
-                WHERE year_month = yyyymm AND product_id = t_product_id AND site_id = t_site_id
-                FOR UPDATE;
-
-            IF recent_rec IS NULL THEN
-                SELECT * INTO last_rec
-                    FROM inventory.monthry_summaries_every_site
-                    WHERE product_id = t_product_id AND site_id = t_site_id
-                    ORDER BY year_month DESC
-                    LIMIT 1;
-
-                IF last_rec IS NULL THEN
-                    t_init_quantity:=0;
-                ELSE
-                    t_init_quantity:=last_rec.init_quantity + last_rec.warehousing_quantity - last_rec.shipping_quantity;
-                END IF;
-
-                t_warehousing_quantity:=0;
-                t_shipping_quantity:=0;
-            ELSE
-                t_init_quantity:=recent_rec.init_quantity;
-                t_warehousing_quantity:=recent_rec.warehousing_quantity;
-                t_shipping_quantity:=recent_rec.shipping_quantity;
-            END IF;
-
-            -- FIXME:返品
-            IF NEW.transition_type='MOVEMENT_SHIPPING' OR NEW.transition_type='SELLING' OR NEW.transition_type='ORDERING_RETURN' THEN
-                t_shipping_quantity:=t_shipping_quantity - NEW.transaction_quantity;
-            ELSE
-                t_warehousing_quantity:=t_warehousing_quantity + NEW.transaction_quantity;
-            END IF;
-
-            IF recent_rec IS NULL THEN
-                INSERT INTO inventory.monthry_summaries_every_site
-                VALUES (
-                    yyyymm, t_product_id, t_site_id, t_init_quantity, t_warehousing_quantity,
-                    t_shipping_quantity, 0
-                );
-            ELSE
-                UPDATE inventory.monthry_summaries_every_site
-                SET warehousing_quantity = t_warehousing_quantity,
-                    shipping_quantity = t_shipping_quantity
-                WHERE year_month = yyyymm AND product_id = t_product_id AND site_id = t_site_id;
-
-            END IF;
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER insert_transition_history_1st
-            AFTER INSERT
-            ON inventory.transition_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE inventory.set_monthry_summaries_every_site();
-        """
-    )
-
-    # 月次在庫サマリーテーブル導出項目
-    op.execute(
-        """
-        CREATE FUNCTION inventory.calc_monthry_summaries_every_site() RETURNS TRIGGER AS $$
-        DECLARE
-        BEGIN
-            NEW.quantity:=NEW.init_quantity + NEW.warehousing_quantity - NEW.shipping_quantity;
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER upsert_monthry_summaries_every_site
-            BEFORE INSERT OR UPDATE
-            ON inventory.monthry_summaries_every_site
-            FOR EACH ROW
-        EXECUTE PROCEDURE inventory.calc_monthry_summaries_every_site();
-        """
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-def create_monthry_summaries_table() -> None:
-    op.create_table(
-        "monthry_summaries",
-        sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
-        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column(
-            "init_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="月初在庫数",
-        ),
-        sa.Column(
-            "warehousing_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="入庫数",
-        ),
-        sa.Column(
-            "shipping_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="出庫数",
-        ),
-        sa.Column(
-            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
-        ),
-        sa.Column(
-            "init_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="月初在庫額",
-        ),
-        sa.Column(
-            "warehousing_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="入庫金額",
-        ),
-        sa.Column(
-            "shipping_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="出庫金額",
-        ),
-        sa.Column(
-            "amount", sa.Numeric, nullable=False, server_default="0.0", comment="在庫額"
-        ),
-        sa.Column(
-            "cost_price", sa.Numeric, nullable=False, server_default="0.0", comment="原価"
-        ),
-        *timestamps(),
-        schema="inventory",
-    )
-
-    op.create_check_constraint(
-        "ck_quantity",
-        "monthry_summaries",
-        "quantity >= 0",
-        schema="inventory",
-    )
-    op.create_check_constraint(
-        "ck_amount",
-        "monthry_summaries",
-        "amount >= 0.0",
-        schema="inventory",
-    )
-    op.create_index(
-        "ix_monthry_summaries_product",
-        "monthry_summaries",
-        ["product_id", "year_month"],
-        schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER monthry_summaries_modified
-            BEFORE UPDATE
-            ON inventory.monthry_summaries
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    # 月次在庫サマリーテーブルの自動作成
-    op.execute(
-        """
-        CREATE FUNCTION inventory.set_monthry_summaries() RETURNS TRIGGER AS $$
-        DECLARE
-            yyyymm character(6);
-            t_product_id character(10);
-            t_init_quantity integer;
-            t_warehousing_quantity integer;
-            t_shipping_quantity integer;
-            t_init_amount numeric;
-            t_warehousing_amount numeric;
-            t_shipping_amount numeric;
-            t_cost_price numeric;
-
-            t_quantity integer;
-            t_amount numeric;
-            t_shipping numeric;
-
-            recent_rec RECORD;
-            last_rec RECORD;
-        BEGIN
-            yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
-            t_product_id:=NEW.product_id;
-
-            SELECT * INTO recent_rec
-                FROM inventory.monthry_summaries
-                WHERE year_month = yyyymm AND product_id = t_product_id
-                FOR UPDATE;
-
-            IF recent_rec IS NULL THEN
-                SELECT * INTO last_rec
-                    FROM inventory.monthry_summaries
-                    WHERE product_id = t_product_id
-                    ORDER BY year_month DESC
-                    LIMIT 1;
-
-                IF last_rec IS NULL THEN
-                    t_init_quantity:=0;
-                    t_init_amount:=0.00;
-                    t_cost_price:=0.00;
-                ELSE
-                    t_init_quantity:=last_rec.init_quantity + last_rec.warehousing_quantity - last_rec.shipping_quantity;
-                    t_init_amount:=last_rec.init_amount + last_rec.warehousing_amount - last_rec.shipping_amount;
-                    IF t_init_quantity = 0 THEN
-                        t_cost_price:=0.00;
-                    ELSE
-                        t_cost_price:=ROUND(t_init_amount / t_init_quantity, 2);
-
-                    END IF;
-                END IF;
-
-                t_warehousing_quantity:=0;
-                t_shipping_quantity:=0;
-                t_warehousing_amount:=0.00;
-                t_shipping_amount:=0.00;
-            ELSE
-                t_init_quantity:=recent_rec.init_quantity;
-                t_warehousing_quantity:=recent_rec.warehousing_quantity;
-                t_shipping_quantity:=recent_rec.shipping_quantity;
-                t_init_amount:=recent_rec.init_amount;
-                t_warehousing_amount:=recent_rec.warehousing_amount;
-                t_shipping_amount:=recent_rec.shipping_amount;
-                t_cost_price:=recent_rec.cost_price;
-            END IF;
-
-            -- FIXME:返品
-            IF NEW.transition_type='SELLING' OR NEW.transition_type='ORDERING_RETURN' THEN
-                t_shipping_quantity:=t_shipping_quantity - NEW.transaction_quantity;
-                t_shipping:=NEW.transaction_quantity * t_cost_price;
-                IF t_shipping_amount - t_shipping < 0 THEN
-                    t_shipping_amount:=0.0;
-                ELSE
-                    t_shipping_amount:=t_shipping_amount - t_shipping;
-                END IF;
-                NEW.transaction_amount:=t_shipping;
-
-            ELSEIF NEW.transition_type='PURCHASE' OR NEW.transition_type='SALES_RETURN' OR NEW.transition_type='OTHER_TRANSITION' THEN
-                t_warehousing_quantity:=t_warehousing_quantity + NEW.transaction_quantity;
-                t_warehousing_amount:=t_warehousing_amount + NEW.transaction_amount;
-                t_quantity:=t_init_quantity + t_warehousing_quantity - t_shipping_quantity;
-                t_amount:=t_init_amount + t_warehousing_amount - t_shipping_amount;
-            END IF;
-
-            IF recent_rec IS NULL THEN
-                INSERT INTO inventory.monthry_summaries
-                VALUES (
-                    yyyymm, t_product_id, t_init_quantity, t_warehousing_quantity,
-                    t_shipping_quantity, 0, t_init_amount, t_warehousing_amount, t_shipping_amount, 0.0, 0.0
-                );
-            ELSE
-                UPDATE inventory.monthry_summaries
-                SET warehousing_quantity = t_warehousing_quantity,
-                    shipping_quantity = t_shipping_quantity,
-                    warehousing_amount = t_warehousing_amount,
-                    shipping_amount = t_shipping_amount
-                WHERE year_month = yyyymm AND product_id = t_product_id;
-
-            END IF;
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER insert_transition_history_3rd
-            AFTER INSERT
-            ON inventory.transition_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE inventory.set_monthry_summaries();
-        """
-    )
-
-    # 月次在庫サマリーテーブル導出項目
-    op.execute(
-        """
-        CREATE FUNCTION inventory.calc_monthry_summaries() RETURNS TRIGGER AS $$
-        DECLARE
-        BEGIN
-            NEW.quantity:=NEW.init_quantity + NEW.warehousing_quantity - NEW.shipping_quantity;
-            NEW.amount:=NEW.init_amount + NEW.warehousing_amount - NEW.shipping_amount;
-            NEW.cost_price:=ROUND(NEW.amount / NEW.quantity, 2);
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER upsert_monthry_summaries
-            BEFORE INSERT OR UPDATE
-            ON inventory.monthry_summaries
-            FOR EACH ROW
-        EXECUTE PROCEDURE inventory.calc_monthry_summaries();
-        """
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-def create_current_summaries_every_site_table() -> None:
-    op.create_table(
-        "current_summaries_every_site",
-        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
-        sa.Column(
-            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
-        ),
-        *timestamps(),
-        schema="inventory",
-    )
-
-    op.create_check_constraint(
-        "ck_quantity",
-        "current_summaries_every_site",
-        "quantity >= 0",
-        schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER current_summaries_every_site_modified
-            BEFORE UPDATE
-            ON inventory.current_summaries_every_site
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    # 在庫サマリーテーブルの自動作成
-    op.execute(
-        """
-        CREATE FUNCTION inventory.set_current_summaries_every_site() RETURNS TRIGGER AS $$
-        DECLARE
-            t_product_id character(10);
-            t_site_id character(2);
-            t_quantity integer;
-
-            recent_rec RECORD;
-        BEGIN
-            t_site_id:=NEW.site_id;
-            t_product_id:=NEW.product_id;
-
-            SELECT * INTO recent_rec
-                FROM inventory.current_summaries_every_site
-                WHERE product_id = t_product_id AND site_id = t_site_id
-                FOR UPDATE;
-
-            IF recent_rec IS NULL THEN
-                t_quantity:= NEW.transaction_quantity;
-            ELSE
-                t_quantity:=recent_rec.quantity + NEW.transaction_quantity;
-            END IF;
-
-            IF recent_rec IS NULL THEN
-                INSERT INTO inventory.current_summaries_every_site
-                VALUES (
-                    t_product_id, t_site_id, t_quantity
-                );
-            ELSE
-                UPDATE inventory.current_summaries_every_site
-                SET quantity = t_quantity
-                WHERE product_id = t_product_id AND site_id = t_site_id;
-            END IF;
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER insert_transition_history_2nd
-            AFTER INSERT
-            ON inventory.transition_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE inventory.set_current_summaries_every_site();
-        """
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-def create_current_summaries_table() -> None:
-    op.create_table(
-        "current_summaries",
-        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column(
-            "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
-        ),
-        sa.Column(
-            "amount", sa.Numeric, nullable=False, server_default="0.0", comment="在庫額"
-        ),
-        sa.Column(
-            "cost_price", sa.Numeric, nullable=False, server_default="0.0", comment="原価"
-        ),
-        *timestamps(),
-        schema="inventory",
-    )
-
-    op.create_check_constraint(
-        "ck_quantity",
-        "current_summaries",
-        "quantity >= 0",
-        schema="inventory",
-    )
-    op.create_check_constraint(
-        "ck_amount",
-        "current_summaries",
-        "amount >= 0.0",
-        schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER current_summaries_modified
-            BEFORE UPDATE
-            ON inventory.current_summaries
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    # 在庫サマリーテーブルの自動作成
-    op.execute(
-        """
-        CREATE FUNCTION inventory.set_current_summaries() RETURNS TRIGGER AS $$
-        DECLARE
-            t_product_id character(10);
-            t_quantity integer;
-            t_amount numeric;
-            t_cost_price numeric;
-
-            t_shipping numeric;
-
-            recent_rec RECORD;
-        BEGIN
-            t_product_id:=NEW.product_id;
-
-            SELECT * INTO recent_rec
-                FROM inventory.current_summaries
-                WHERE product_id = t_product_id
-                FOR UPDATE;
-
-            IF recent_rec IS NULL THEN
-                t_quantity:= 0;
-                t_amount:=0.00;
-                t_cost_price:=0.0;
-            ELSE
-                t_quantity:=recent_rec.quantity;
-                t_amount:=recent_rec.amount;
-                t_cost_price:=recent_rec.cost_price;
-            END IF;
-
-            IF NEW.transition_type='SELLING' OR NEW.transition_type='ORDERING_RETURN' THEN
-                t_quantity:=t_quantity + NEW.transaction_quantity;
-                t_amount:=t_amount + NEW.transaction_quantity * t_cost_price;
-
-            ELSEIF NEW.transition_type='PURCHASE' OR NEW.transition_type='SALES_RETURN' OR NEW.transition_type='OTHER_TRANSITION' THEN
-                t_quantity:=t_quantity + NEW.transaction_quantity;
-                t_amount:=t_amount + NEW.transaction_amount;
-                IF t_quantity = 0 THEN
-                    t_cost_price:=0.00;
-                ELSE
-                    t_cost_price:=ROUND(t_amount / t_quantity, 2);
-                END IF;
-
-            END IF;
-
-            IF recent_rec IS NULL THEN
-                INSERT INTO inventory.current_summaries
-                VALUES (t_product_id, t_quantity, t_amount, t_cost_price);
-            ELSE
-                UPDATE inventory.current_summaries
-                SET quantity = t_quantity,
-                    amount = t_amount,
-                    cost_price = t_cost_price
-                WHERE product_id = t_product_id;
-            END IF;
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER insert_transition_history_4th
-            AFTER INSERT
-            ON inventory.transition_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE inventory.set_current_summaries();
-        """
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
+# INFO:
 def create_view() -> None:
     op.execute(
         """
@@ -958,13 +913,14 @@ def create_view() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def upgrade() -> None:
-    create_transition_histories_table()
-    create_moving_histories_table()
     create_current_summaries_table()
     create_current_summaries_every_site_table()
     create_monthry_summaries_table()
     create_monthry_summaries_every_site_table()
+    create_transition_histories_table()
+    create_moving_histories_table()
     create_transition_estimates_table()
     create_view()
 

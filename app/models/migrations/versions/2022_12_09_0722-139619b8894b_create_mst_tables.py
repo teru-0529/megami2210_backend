@@ -34,6 +34,7 @@ def create_status_type() -> ENUM:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_companies_table(status_type: ENUM) -> None:
     companies_table = op.create_table(
         "companies",
@@ -228,6 +229,7 @@ def create_companies_table(status_type: ENUM) -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_costomers_table() -> None:
     costomers_table = op.create_table(
         "costomers",
@@ -349,6 +351,7 @@ def create_costomers_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_suppliers_table() -> None:
     suppliers_table = op.create_table(
         "suppliers",
@@ -525,6 +528,7 @@ def create_suppliers_table() -> None:
         ],
     )
 
+    # 支払締日、支払期限の計算
     op.execute(
         """
         CREATE FUNCTION mst.calc_payment_deadline(
@@ -584,6 +588,7 @@ def create_suppliers_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_destination_address_table() -> None:
     destination_address_table = op.create_table(
         "destination_address",
@@ -637,29 +642,6 @@ def create_destination_address_table() -> None:
         source_schema="mst",
         referent_schema="mst",
     )
-    op.execute(
-        """
-        CREATE VIEW mst.view_destination_address AS
-            SELECT
-                company_id,
-                0 AS seq_no,
-                postal_code,
-                address,
-                phone_no,
-                fax_no
-            FROM mst.companies
-            UNION
-            SELECT
-                company_id,
-                ROW_NUMBER() OVER(partition by "company_id" order by "id") AS seq_no,
-                postal_code,
-                address,
-                phone_no,
-                fax_no
-            FROM mst.destination_address
-            ORDER BY company_id, seq_no
-        """
-    )
 
     op.bulk_insert(
         destination_address_table,
@@ -692,6 +674,7 @@ def create_destination_address_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_products_table(status_type: ENUM) -> None:
     products_table = op.create_table(
         "products",
@@ -884,6 +867,7 @@ def create_products_table(status_type: ENUM) -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
 def create_sites_table() -> None:
     sites_table = op.create_table(
         "sites",
@@ -956,6 +940,37 @@ def create_sites_table() -> None:
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+# INFO:
+def create_view() -> None:
+    op.execute(
+        """
+        CREATE VIEW mst.view_destination_address AS
+            SELECT
+                company_id,
+                0 AS seq_no,
+                postal_code,
+                address,
+                phone_no,
+                fax_no
+            FROM mst.companies
+            UNION
+            SELECT
+                company_id,
+                ROW_NUMBER() OVER(partition by "company_id" order by "id") AS seq_no,
+                postal_code,
+                address,
+                phone_no,
+                fax_no
+            FROM mst.destination_address
+            ORDER BY company_id, seq_no
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def upgrade() -> None:
     status_type = create_status_type()
 
@@ -965,6 +980,7 @@ def upgrade() -> None:
     create_destination_address_table()
     create_products_table(status_type)
     create_sites_table()
+    create_view()
 
 
 def downgrade() -> None:

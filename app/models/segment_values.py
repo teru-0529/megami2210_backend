@@ -108,6 +108,48 @@ class StockTransitionType(Base):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+class PayableTransitionType(Base):
+    purchase = "PURCHASE"
+    ordering_return = "ORDERING_RETURN"
+    payment = "PAYMENT"
+    balance_out = "BALANCE_OUT"
+    other_transition = "OTHER_TRANSITION"
+
+    def description() -> str:
+        return """
+買掛変動区分:
+  * `PURCHASE` - 購入仕入
+  * `ORDERING_RETURN` - 仕入返品
+  * `PAYMENT` - 支払
+  * `BALANCE_OUT` - 相殺
+  * `OTHER_TRANSITION` - その他取引
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class paymentSituation(Base):
+    before_closing = "BEFORE_CLOSING"
+    closing = "CLOSING"
+    invoice_confirmed = "INVOICE_CONFIRMED"
+    payment_processed = "PAYMENT_PROCESSED"
+    overdue_payment = "OVERDUE_PAYMENT"
+
+    def description() -> str:
+        return """
+支払状況:
+  * `BEFORE_CLOSING` - 締処理前
+  * `CLOSING` - 締処理後
+  * `INVOICE_CONFIRMED` - 請求書確認済
+  * `PAYMENT_PROCESSED` - 支払処理済
+  * `OVERDUE_PAYMENT` - 支払期限超過
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class Weeks(Base):
     mon = "MON"
     tue = "TUE"
