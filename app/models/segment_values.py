@@ -17,6 +17,19 @@ class Base(str, Enum):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+class DateType(Base):
+    business_date = "BUSINESS_DATE"
+
+    def description() -> str:
+        return """
+日付種類:
+  * `BUSINESS_DATE` - 業務日付
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class TaskStatus(Base):
     todo = "TODO"
     doing = "DOING"
@@ -123,27 +136,6 @@ class PayableTransitionType(Base):
   * `PAYMENT` - 支払
   * `BALANCE_OUT` - 相殺
   * `OTHER_TRANSITION` - その他取引
-    """
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-class paymentSituation(Base):
-    before_closing = "BEFORE_CLOSING"
-    closing = "CLOSING"
-    invoice_confirmed = "INVOICE_CONFIRMED"
-    payment_processed = "PAYMENT_PROCESSED"
-    overdue_payment = "OVERDUE_PAYMENT"
-
-    def description() -> str:
-        return """
-支払状況:
-  * `BEFORE_CLOSING` - 締処理前
-  * `CLOSING` - 締処理後
-  * `INVOICE_CONFIRMED` - 請求書確認済
-  * `PAYMENT_PROCESSED` - 支払処理済
-  * `OVERDUE_PAYMENT` - 支払期限超過
     """
 
 

@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.models.migrations.util import timestamps
-from app.models.segment_values import paymentSituation, PayableTransitionType
+from app.models.segment_values import PayableTransitionType
 
 # revision identifiers, used by Alembic.
 revision = "76241be00f1b"
@@ -139,8 +139,14 @@ def create_accounts_payable_histories_table() -> None:
         sa.Column(
             "transaction_no",
             sa.Integer,
-            nullable=False,
+            nullable=True,
             comment="取引管理NO",
+        ),
+        sa.Column(
+            "payment_no",
+            sa.String(10),
+            nullable=False,
+            comment="支払NO",
         ),
         *timestamps(),
         schema="purchase",
@@ -187,17 +193,6 @@ def create_accounts_payable_histories_table() -> None:
         """
     )
 
-    # # 導出項目計算
-    # op.execute(
-    #     """
-    #     CREATE FUNCTION purchase.calc_accounts_payables() RETURNS TRIGGER AS $$
-    #     BEGIN
-    #         NEW.balance:=NEW.init_balance + NEW.purchase_amount - NEW.payment_amount;
-    #         return NEW;
-    #     END;
-    #     $$ LANGUAGE plpgsql;
-    #     """
-    # )
     # 登録後、月次買掛金サマリーを自動作成TODO:
     op.execute(
         """
@@ -245,7 +240,7 @@ def create_accounts_payable_histories_table() -> None:
 
             IF NEW.transition_type='PURCHASE' OR NEW.transition_type='ORDERING_RETURN' THEN
                 t_purchase_amount:=t_purchase_amount + NEW.transaction_amount;
-            ELSEIF NEW.transition_type='SELLING' THEN
+            ELSEIF NEW.transition_type='PAYMENT' THEN
                 t_payment_amount:=t_payment_amount - NEW.transaction_amount;
             ELSEIF NEW.transition_type='BALANCE_OUT' OR NEW.transition_type='OTHER_TRANSITION' THEN
                 t_other_amount:=t_other_amount + NEW.transaction_amount;
@@ -291,6 +286,18 @@ def create_accounts_payable_histories_table() -> None:
 # INFO:
 def create_payments_table() -> None:
     op.create_table(
+        "payment_proceeded",
+        sa.Column(
+            "payment_no",
+            sa.String(10),
+            primary_key=True,
+            server_default="set_me",
+            comment="支払NO",
+        ),
+        schema="purchase",
+    )
+
+    op.create_table(
         "payments",
         sa.Column(
             "payment_no",
@@ -335,20 +342,21 @@ def create_payments_table() -> None:
             comment="支払実施日時",
         ),
         sa.Column("payment_pic", sa.String(5), nullable=True, comment="支払実施者ID"),
-        sa.Column(
-            "situation",
-            sa.Enum(
-                *paymentSituation.list(), name="payment_situation", schema="purchase"
-            ),
-            nullable=False,
-            server_default=paymentSituation.before_closing,
-            comment="支払状況",
-        ),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
         *timestamps(),
         schema="purchase",
     )
 
+    op.create_foreign_key(
+        "fk_payment_no",
+        "payment_proceeded",
+        "payments",
+        ["payment_no"],
+        ["payment_no"],
+        ondelete="CASCADE",
+        source_schema="purchase",
+        referent_schema="purchase",
+    )
     op.create_foreign_key(
         "fk_supplier_id",
         "payments",
@@ -414,6 +422,54 @@ def create_payments_table() -> None:
             ON purchase.payments
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.calc_payments();
+        """
+    )
+
+    # 入金確認登録後、買掛変動履歴を自動作成TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.set_transition_histories() RETURNS TRIGGER AS $$
+        DECLARE
+            yyyymm character(6);
+            t_init_balance numeric;
+            t_purchase_amount numeric;
+            t_payment_amount numeric;
+            t_other_amount numeric;
+
+            recent_rec RECORD;
+            last_rec RECORD;
+        BEGIN
+            IF OLD.payment_datetime IS NULL AND NEW.payment_datetime IS NOT NULL THEN
+                -- 支払済NOの登録
+                INSERT INTO purchase.payment_proceeded VALUES (NEW.payment_no);
+
+                -- 買掛変動履歴の登録
+                INSERT INTO purchase.accounts_payable_histories
+                VALUES (
+                    default,
+                    CAST(NEW.payment_datetime AS DATE),
+                    NEW.supplier_id,
+                    - NEW.payment_price,
+                    'PAYMENT',
+                    null,
+                    null,
+                    NEW.payment_no
+                );
+
+            END IF;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_update_payments
+            AFTER UPDATE
+            ON purchase.payments
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.set_transition_histories();
         """
     )
 
@@ -1003,6 +1059,7 @@ def create_wearhousing_details_table() -> None:
             t_wearhousing_quantity integer;
             t_wearhousing_date date;
             t_payment_price numeric;
+            t_payment_no text;
 
             wearhousing_rec record;
         BEGIN
@@ -1061,6 +1118,12 @@ def create_wearhousing_details_table() -> None:
             END IF;
 
             -- 買掛変動履歴の登録
+            SELECT payment_no INTO t_payment_no
+            FROM purchase.payments
+            WHERE supplier_id = wearhousing_rec.supplier_id
+            AND closing_date = wearhousing_rec.closing_date
+            AND payment_deadline = wearhousing_rec.payment_deadline;
+
             INSERT INTO purchase.accounts_payable_histories
             VALUES (
                 default,
@@ -1069,7 +1132,8 @@ def create_wearhousing_details_table() -> None:
                 NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
                 'PURCHASE',
                 null,
-                NEW.detail_no
+                NEW.detail_no,
+                t_payment_no
             );
 
             return NEW;
@@ -1110,6 +1174,31 @@ def create_view() -> None:
             ORDER BY OD.product_id, OD.estimate_arrival_date;
         """
     )
+    # (SELECT date FROM business_date WHERE date_type = 'BUSINESS_DATE')
+    op.execute(
+        """
+        CREATE VIEW purchase.view_payments AS
+            WITH date_with AS (
+                SELECT *
+                FROM business_date
+                WHERE date_type = 'BUSINESS_DATE'
+            )
+            SELECT
+                PM.payment_no,
+                PM.supplier_id,
+                PM.closing_date,
+                PM.payment_deadline,
+                PM.payment_price,
+                CASE
+                    WHEN PM.payment_datetime IS NOT NULL THEN 'PAYMENT_PROCESSED'
+                    WHEN PM.closing_date >= (SELECT date FROM date_with) THEN 'BEFORE_CLOSING'
+                    WHEN PM.payment_deadline < (SELECT date FROM date_with) THEN 'OVERDUE_PAYMENT'
+                    WHEN PM.payment_check_datetime IS NOT NULL THEN 'INVOICE_CONFIRMED'
+                    ELSE 'CLOSING'
+                END AS situation
+            FROM purchase.payments PM;
+        """
+    )
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -1136,6 +1225,7 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS purchase.ordering_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.orderings CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.payments CASCADE;")
+    op.execute("DROP TABLE IF EXISTS purchase.payment_proceeded CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.accounts_payable_histories CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.accounts_payables CASCADE;")
     op.execute("DROP SEQUENCE IF EXISTS purchase.ordering_no_seed CASCADE;")
