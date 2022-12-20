@@ -126,11 +126,11 @@ def upgrade() -> None:
     op.execute(
         """
         -- 予定納期日の変更
-        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-02-05' where detail_no = 1;
+        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-02-05' WHERE detail_no = 1;
         -- 発注キャンセル(全量)
-        UPDATE purchase.ordering_details SET cancel_quantity = 2 where detail_no = 2;
+        UPDATE purchase.ordering_details SET cancel_quantity = 2 WHERE detail_no = 2;
         -- 発注キャンセル(一部)
-        UPDATE purchase.ordering_details SET cancel_quantity = 1 where detail_no = 3;
+        UPDATE purchase.ordering_details SET cancel_quantity = 1 WHERE detail_no = 3;
         """
     )
 
@@ -201,6 +201,35 @@ def upgrade() -> None:
         ],
     )
 
+    # 請求書の確認-支払
+    op.execute(
+        """
+        UPDATE purchase.payments
+        SET payment_check_datetime = '2023-2-8', payment_check_pic = 'T-901'
+        WHERE payment_no = 'PM-0000001';
+
+        UPDATE purchase.payments
+        SET payment_check_datetime = '2023-3-1', payment_check_pic = 'T-902'
+        WHERE payment_no = 'PM-0000003';
+
+        UPDATE purchase.payments
+        SET payment_check_datetime = '2023-3-10', payment_check_pic = 'T-901'
+        WHERE payment_no = 'PM-0000002';
+
+        UPDATE purchase.payments
+        SET payment_datetime = '2023-3-20', payment_pic = 'T-901'
+        WHERE payment_no = 'PM-0000001';
+
+        UPDATE purchase.payments
+        SET payment_datetime = '2023-4-10', payment_pic = 'T-902'
+        WHERE payment_no = 'PM-0000003';
+
+        UPDATE purchase.payments
+        SET payment_datetime = '2023-5-13', payment_pic = 'T-901'
+        WHERE payment_no = 'PM-0000002';
+        """
+    )
+
     # 発注-入荷
     op.bulk_insert(
         pch_orderings,
@@ -247,7 +276,16 @@ def upgrade() -> None:
         ],
     )
 
-    # 発注-入荷
+    # 請求書の確認
+    op.execute(
+        """
+        UPDATE purchase.payments
+        SET payment_check_datetime = '2023-11-6', payment_check_pic = 'T-901'
+        WHERE payment_no = 'PM-0000004';
+        """
+    )
+
+    # 発注
     op.bulk_insert(
         pch_orderings,
         [
@@ -276,12 +314,15 @@ def upgrade() -> None:
             },
         ],
     )
+
+    # 予定納期日の変更
     op.execute(
         """
-        -- 予定納期日の変更
-        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-12-12' where detail_no = 7;
+        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-12-12' WHERE detail_no = 7;
         """
     )
+
+    # 入荷
     op.bulk_insert(
         pch_wearhousings,
         [
@@ -353,6 +394,15 @@ def upgrade() -> None:
                 "transaction_no": 504,
             },
         ],
+    )
+
+    # 請求書の確認
+    op.execute(
+        """
+        UPDATE purchase.payments
+        SET payment_check_datetime = '2023-12-14', payment_check_pic = 'T-901'
+        WHERE payment_no = 'PM-0000005';
+        """
     )
 
     # 販売FIXME:

@@ -54,7 +54,7 @@ def create_business_date_table() -> None:
         business_date_table,
         [
             {
-                "date": "2024-01-05",
+                "date": "2024-01-18",
             },
         ],
     )
