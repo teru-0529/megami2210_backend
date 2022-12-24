@@ -742,17 +742,19 @@ def create_transition_estimates_table() -> None:
 
 
 # INFO:
-def create_moving_histories_table() -> None:
+def create_moving_instructions_table() -> None:
     op.create_table(
-        "moving_histories",
-        sa.Column("no", sa.Integer, primary_key=True, comment="在庫移動NO"),
+        "moving_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="移動指示NO"),
         sa.Column(
-            "transaction_date",
+            "instruction_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
             comment="移動日",
         ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("moving_reason", sa.Text, nullable=False, comment="移動理由"),
         sa.Column("site_id_from", sa.String(2), nullable=False, comment="移動元倉庫ID"),
         sa.Column("site_id_to", sa.String(2), nullable=False, comment="移動先倉庫ID"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
@@ -769,19 +771,29 @@ def create_moving_histories_table() -> None:
 
     op.create_check_constraint(
         "ck_site_id",
-        "moving_histories",
+        "moving_instructions",
         "site_id_from != site_id_to",
         schema="inventory",
     )
     op.create_check_constraint(
         "ck_moving_quantity",
-        "moving_histories",
+        "moving_instructions",
         "moving_quantity > 0",
         schema="inventory",
     )
     op.create_foreign_key(
+        "fk_instruction_pic",
+        "moving_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="inventory",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
         "fk_product_id",
-        "moving_histories",
+        "moving_instructions",
         "products",
         ["product_id"],
         ["product_id"],
@@ -791,7 +803,7 @@ def create_moving_histories_table() -> None:
     )
     op.create_foreign_key(
         "fk_site_id_from",
-        "moving_histories",
+        "moving_instructions",
         "sites",
         ["site_id_from"],
         ["site_id"],
@@ -801,7 +813,7 @@ def create_moving_histories_table() -> None:
     )
     op.create_foreign_key(
         "fk_site_id_to",
-        "moving_histories",
+        "moving_instructions",
         "sites",
         ["site_id_to"],
         ["site_id"],
@@ -810,17 +822,17 @@ def create_moving_histories_table() -> None:
         referent_schema="mst",
     )
     op.create_index(
-        "ix_moving_histories_product",
-        "moving_histories",
-        ["product_id", "transaction_date"],
+        "ix_moving_instructions_product",
+        "moving_instructions",
+        ["product_id", "instruction_date"],
         schema="inventory",
     )
 
     op.execute(
         """
-        CREATE TRIGGER moving_histories_modified
+        CREATE TRIGGER moving_instructions_modified
             BEFORE UPDATE
-            ON inventory.moving_histories
+            ON inventory.moving_instructions
             FOR EACH ROW
         EXECUTE PROCEDURE set_modified_at();
         """
@@ -829,12 +841,12 @@ def create_moving_histories_table() -> None:
     # 登録後、在庫変動履歴を自動作成FIXME:関数名
     op.execute(
         """
-        CREATE FUNCTION inventory.create_transition_histories() RETURNS TRIGGER AS $$
+        CREATE FUNCTION inventory.create_transition_histories_by_moving() RETURNS TRIGGER AS $$
         BEGIN
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.transaction_date,
+                NEW.instruction_date,
                 NEW.site_id_from,
                 NEW.product_id,
                 - NEW.moving_quantity ,
@@ -846,7 +858,7 @@ def create_moving_histories_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.transaction_date,
+                NEW.instruction_date,
                 NEW.site_id_to,
                 NEW.product_id,
                 NEW.moving_quantity ,
@@ -861,11 +873,121 @@ def create_moving_histories_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER hook_insert_moving_histories
+        CREATE TRIGGER hook_insert_moving_instructions
             AFTER INSERT
-            ON inventory.moving_histories
+            ON inventory.moving_instructions
             FOR EACH ROW
-        EXECUTE PROCEDURE inventory.create_transition_histories();
+        EXECUTE PROCEDURE inventory.create_transition_histories_by_moving();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_other_inventory_instructions_table() -> None:
+    op.create_table(
+        "other_inventory_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="雑入出庫指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("transition_reason", sa.Text, nullable=False, comment="入出庫理由"),
+        sa.Column("site_id", sa.String(2), nullable=False, comment="倉庫ID"),
+        sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
+        sa.Column(
+            "quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="入出庫数",
+        ),
+        sa.Column(
+            "amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="入出庫額",
+        ),
+        *timestamps(),
+        schema="inventory",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "other_inventory_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="inventory",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_product_id",
+        "other_inventory_instructions",
+        "products",
+        ["product_id"],
+        ["product_id"],
+        ondelete="RESTRICT",
+        source_schema="inventory",
+        referent_schema="mst",
+    )
+    op.create_foreign_key(
+        "fk_site_id",
+        "other_inventory_instructions",
+        "sites",
+        ["site_id"],
+        ["site_id"],
+        ondelete="RESTRICT",
+        source_schema="inventory",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER other_inventory_instructions_modified
+            BEFORE UPDATE
+            ON inventory.other_inventory_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 登録後、在庫変動履歴を自動作成FIXME:関数名
+    op.execute(
+        """
+        CREATE FUNCTION inventory.create_transition_histories_by_other() RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO inventory.transition_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.site_id,
+                NEW.product_id,
+                NEW.quantity ,
+                NEW.amount,
+                'OTHER_TRANSITION',
+                NEW.no
+            );
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_other_inventory_instructions
+            AFTER INSERT
+            ON inventory.other_inventory_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.create_transition_histories_by_other();
         """
     )
 
@@ -923,7 +1045,8 @@ def upgrade() -> None:
     create_monthry_summaries_table()
     create_monthry_summaries_every_site_table()
     create_transition_histories_table()
-    create_moving_histories_table()
+    create_moving_instructions_table()
+    create_other_inventory_instructions_table()
     create_transition_estimates_table()
     create_view()
 
@@ -933,7 +1056,8 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS inventory.current_summaries CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.monthry_summaries_every_site CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.monthry_summaries CASCADE;")
-    op.execute("DROP TABLE IF EXISTS inventory.moving_histories CASCADE;")
+    op.execute("DROP TABLE IF EXISTS inventory.moving_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS inventory.other_inventory_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.transition_estimates CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.transition_histories CASCADE;")
     op.execute("DROP TYPE IF EXISTS inventory.transition_type;")

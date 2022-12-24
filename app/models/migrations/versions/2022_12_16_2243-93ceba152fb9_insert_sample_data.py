@@ -26,10 +26,12 @@ def upgrade() -> None:
     meta.reflect(schema="inventory")
     # FIXME:在庫変動予定(受注-出荷予定)
     inv_transition_estimates = Table("inventory.transition_estimates", meta)
-    # FIXME:在庫変動履歴(出荷、売上返品、その他取引)
+    # FIXME:在庫変動履歴(出荷、売上返品)
     inv_transition_histories = Table("inventory.transition_histories", meta)
-    # FIXME:検品、
-    inv_moving_histories = Table("inventory.moving_histories", meta)
+    inv_moving_instructions = Table("inventory.moving_instructions", meta)
+    inv_other_inventory_instructions = Table(
+        "inventory.other_inventory_instructions", meta
+    )
 
     meta = MetaData(bind=op.get_bind())
     meta.reflect(schema="purchase")
@@ -215,6 +217,7 @@ def upgrade() -> None:
             {
                 "instruction_date": date(2023, 2, 8),
                 "instruction_pic": "T-902",
+                "return_reason": "お客様受注のキャンセル対応",
                 "supplier_id": "S002",
                 "product_id": "S002-00001",
                 "return_quantity": 2,
@@ -409,19 +412,23 @@ def upgrade() -> None:
         ],
     )
 
-    # 検品（在庫移動）FIXME:
+    # 在庫移動（検品）
     op.bulk_insert(
-        inv_moving_histories,
+        inv_moving_instructions,
         [
             {
-                "transaction_date": date(2023, 12, 12),
+                "instruction_date": date(2023, 12, 12),
+                "instruction_pic": "T-901",
+                "moving_reason": "検品完了（異常なし）",
                 "site_id_from": "E3",
                 "site_id_to": "E4",
                 "product_id": "S001-00001",
                 "moving_quantity": 2,
             },
             {
-                "transaction_date": date(2023, 12, 12),
+                "instruction_date": date(2023, 12, 12),
+                "instruction_pic": "T-901",
+                "moving_reason": "検品完了（不良品）",
                 "site_id_from": "E3",
                 "site_id_to": "N1",
                 "product_id": "S001-00001",
@@ -430,17 +437,33 @@ def upgrade() -> None:
         ],
     )
 
-    # 仕入返品FIXME:
+    # 仕入返品
     op.bulk_insert(
         pch_purchase_return_instructions,
         [
             {
                 "instruction_date": date(2023, 12, 14),
                 "instruction_pic": "T-901",
+                "return_reason": "検品不良の対応",
                 "wearhousing_detail_no": 8,
                 "return_quantity": 1,
                 "site_id": "E4",
             }
+        ],
+    )
+    # その他入出庫（廃棄）
+    op.bulk_insert(
+        inv_other_inventory_instructions,
+        [
+            {
+                "instruction_date": date(2023, 12, 14),
+                "instruction_pic": "T-901",
+                "transition_reason": "検品不良により廃棄、費用は雑費用として処理",
+                "site_id": "E4",
+                "product_id": "S001-00001",
+                "quantity": -1,
+                "amount": -11000.0,
+            },
         ],
     )
 
@@ -515,19 +538,17 @@ def upgrade() -> None:
         ],
     )
 
-    # その他（棚卸）FIXME:
+    # その他入出庫（棚卸）
     op.bulk_insert(
-        inv_transition_histories,
+        inv_other_inventory_instructions,
         [
             {
-                "transaction_date": date(2024, 1, 18),
+                "instruction_date": date(2024, 1, 18),
+                "instruction_pic": "T-901",
+                "transition_reason": "棚卸結果反映、帳簿在庫増",
                 "site_id": "N1",
                 "product_id": "S001-00002",
-                "transaction_quantity": 1,
-                "transaction_amount": 0.0,
-                "transition_type": StockTransitionType.other_transition,
-                # "transition_reason": "棚卸の結果、帳簿在庫増",
-                "transaction_no": 507,
+                "quantity": 1,
             },
         ],
     )
@@ -548,12 +569,14 @@ def upgrade() -> None:
         ],
     )
 
-    # 予約販売FIXME:
+    # 在庫移動（予約商品確保）
     op.bulk_insert(
-        inv_moving_histories,
+        inv_moving_instructions,
         [
             {
-                "transaction_date": date(2024, 1, 22),
+                "instruction_date": date(2024, 1, 22),
+                "instruction_pic": "T-901",
+                "moving_reason": "予約販売商品確保",
                 "site_id_from": "N1",
                 "site_id_to": "E2",
                 "product_id": "S001-00001",

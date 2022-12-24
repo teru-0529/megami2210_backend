@@ -1210,6 +1210,7 @@ def create_purchase_return_instructions_table() -> None:
             comment="指示日",
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("return_reason", sa.Text, nullable=False, comment="返品理由"),
         sa.Column("wearhousing_detail_no", sa.Integer, nullable=True, comment="入荷明細NO"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
         sa.Column(
@@ -1450,8 +1451,8 @@ def create_other_purchase_instructions_table() -> None:
             comment="指示日",
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("transition_reason", sa.Text, nullable=False, comment="変動理由"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
-        sa.Column("transition_reason", sa.Text, nullable=False, comment="買掛変動理由"),
         sa.Column(
             "transition_amount",
             sa.Numeric,
