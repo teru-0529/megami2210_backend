@@ -364,7 +364,6 @@ def create_transition_histories_table() -> None:
             nullable=False,
             comment="在庫変動区分",
         ),
-        sa.Column("transition_reason", sa.Text, nullable=True, comment="在庫変動理由"),
         sa.Column(
             "transaction_no",
             sa.Integer,
@@ -375,20 +374,6 @@ def create_transition_histories_table() -> None:
         schema="inventory",
     )
 
-    # 「在庫変動区分」が「その他取引」の場合は、「在庫変動理由」が必須、「その他取引」以外の場合は「在庫変動理由」を指定してはいけない
-    ck_transition_reason: str = """
-    CASE
-        WHEN transition_type='OTHER_TRANSITION' AND transition_reason IS NULL THEN FALSE
-        WHEN transition_type!='OTHER_TRANSITION' AND transition_reason IS NOT NULL THEN FALSE
-        ELSE TRUE
-    END
-    """
-    op.create_check_constraint(
-        "ck_transition_reason",
-        "transition_histories",
-        ck_transition_reason,
-        schema="inventory",
-    )
     op.create_foreign_key(
         "fk_product_id",
         "transition_histories",
@@ -847,10 +832,28 @@ def create_moving_histories_table() -> None:
         CREATE FUNCTION inventory.create_transition_histories() RETURNS TRIGGER AS $$
         BEGIN
             INSERT INTO inventory.transition_histories
-            VALUES (default, NEW.transaction_date, NEW.site_id_from, NEW.product_id, - NEW.moving_quantity , 0.0, 'MOVEMENT_SHIPPING', null, NEW.no);
+            VALUES (
+                default,
+                NEW.transaction_date,
+                NEW.site_id_from,
+                NEW.product_id,
+                - NEW.moving_quantity ,
+                0.0,
+                'MOVEMENT_SHIPPING',
+                NEW.no
+            );
 
             INSERT INTO inventory.transition_histories
-            VALUES (default, NEW.transaction_date, NEW.site_id_to, NEW.product_id, NEW.moving_quantity , 0.0, 'MOVEMENT_WAREHOUSING', null, NEW.no);
+            VALUES (
+                default,
+                NEW.transaction_date,
+                NEW.site_id_to,
+                NEW.product_id,
+                NEW.moving_quantity ,
+                0.0,
+                'MOVEMENT_WAREHOUSING',
+                NEW.no
+            );
             return NEW;
         END;
         $$ LANGUAGE plpgsql;

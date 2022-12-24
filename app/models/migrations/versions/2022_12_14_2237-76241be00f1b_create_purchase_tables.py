@@ -87,7 +87,7 @@ def create_accounts_payables_table() -> None:
         """
         CREATE FUNCTION purchase.calc_accounts_payables() RETURNS TRIGGER AS $$
         BEGIN
-            NEW.balance:=NEW.init_balance + NEW.purchase_amount - NEW.payment_amount;
+            NEW.balance:=NEW.init_balance + NEW.purchase_amount - NEW.payment_amount + NEW.other_amount;
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -135,7 +135,6 @@ def create_accounts_payable_histories_table() -> None:
             nullable=False,
             comment="買掛変動区分",
         ),
-        sa.Column("transition_reason", sa.Text, nullable=True, comment="買掛変動理由"),
         sa.Column(
             "transaction_no",
             sa.Integer,
@@ -152,20 +151,6 @@ def create_accounts_payable_histories_table() -> None:
         schema="purchase",
     )
 
-    # 「買掛変動区分」が「その他取引」の場合は、「買掛変動理由」が必須、「その他取引」以外の場合は「買掛変動理由」を指定してはいけない
-    ck_transition_reason: str = """
-    CASE
-        WHEN transition_type='OTHER_TRANSITION' AND transition_reason IS NULL THEN FALSE
-        WHEN transition_type!='OTHER_TRANSITION' AND transition_reason IS NOT NULL THEN FALSE
-        ELSE TRUE
-    END
-    """
-    op.create_check_constraint(
-        "ck_transition_reason",
-        "accounts_payable_histories",
-        ck_transition_reason,
-        schema="purchase",
-    )
     op.create_foreign_key(
         "fk_supplier_id",
         "accounts_payable_histories",
@@ -286,18 +271,6 @@ def create_accounts_payable_histories_table() -> None:
 # INFO:
 def create_payments_table() -> None:
     op.create_table(
-        "payment_proceeded",
-        sa.Column(
-            "payment_no",
-            sa.String(10),
-            primary_key=True,
-            server_default="set_me",
-            comment="支払NO",
-        ),
-        schema="purchase",
-    )
-
-    op.create_table(
         "payments",
         sa.Column(
             "payment_no",
@@ -330,16 +303,16 @@ def create_payments_table() -> None:
         ),
         sa.Column(
             "payment_check_datetime",
-            sa.DateTime,
+            sa.Date,
             nullable=True,
-            comment="請求書確認日時",
+            comment="請求書確認日",
         ),
         sa.Column("payment_check_pic", sa.String(5), nullable=True, comment="請求書確認者ID"),
         sa.Column(
             "payment_datetime",
-            sa.DateTime,
+            sa.Date,
             nullable=True,
-            comment="支払実施日時",
+            comment="支払実施日",
         ),
         sa.Column("payment_pic", sa.String(5), nullable=True, comment="支払実施者ID"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
@@ -347,16 +320,6 @@ def create_payments_table() -> None:
         schema="purchase",
     )
 
-    op.create_foreign_key(
-        "fk_payment_no",
-        "payment_proceeded",
-        "payments",
-        ["payment_no"],
-        ["payment_no"],
-        ondelete="CASCADE",
-        source_schema="purchase",
-        referent_schema="purchase",
-    )
     op.create_foreign_key(
         "fk_supplier_id",
         "payments",
@@ -422,54 +385,6 @@ def create_payments_table() -> None:
             ON purchase.payments
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.calc_payments();
-        """
-    )
-
-    # 入金確認登録後、買掛変動履歴を自動作成TODO:
-    op.execute(
-        """
-        CREATE FUNCTION purchase.set_transition_histories() RETURNS TRIGGER AS $$
-        DECLARE
-            yyyymm character(6);
-            t_init_balance numeric;
-            t_purchase_amount numeric;
-            t_payment_amount numeric;
-            t_other_amount numeric;
-
-            recent_rec RECORD;
-            last_rec RECORD;
-        BEGIN
-            IF OLD.payment_datetime IS NULL AND NEW.payment_datetime IS NOT NULL THEN
-                -- 支払済NOの登録
-                INSERT INTO purchase.payment_proceeded VALUES (NEW.payment_no);
-
-                -- 買掛変動履歴の登録
-                INSERT INTO purchase.accounts_payable_histories
-                VALUES (
-                    default,
-                    CAST(NEW.payment_datetime AS DATE),
-                    NEW.supplier_id,
-                    - NEW.payment_price,
-                    'PAYMENT',
-                    null,
-                    null,
-                    NEW.payment_no
-                );
-
-            END IF;
-
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER hook_update_payments
-            AFTER UPDATE
-            ON purchase.payments
-            FOR EACH ROW
-        EXECUTE PROCEDURE purchase.set_transition_histories();
         """
     )
 
@@ -811,7 +726,7 @@ def create_ordering_details_table() -> None:
                     t_remaining_quantity * NEW.purchase_unit_price,
                     'PURCHASE',
                     NEW.detail_no
-                ); --FIXME:区分値の整備
+                );
             END IF;
             return NEW;
         END;
@@ -956,6 +871,13 @@ def create_wearhousing_details_table() -> None:
             comment="入荷数",
         ),
         sa.Column(
+            "return_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="返品数",
+        ),
+        sa.Column(
             "wearhousing_unit_price",
             sa.Numeric,
             nullable=False,
@@ -971,6 +893,18 @@ def create_wearhousing_details_table() -> None:
         "ck_wearhousing_quantity",
         "wearhousing_details",
         "wearhousing_quantity > 0",
+        schema="purchase",
+    )
+    op.create_check_constraint(
+        "ck_return_quantity",
+        "wearhousing_details",
+        "return_quantity >= 0",
+        schema="purchase",
+    )
+    op.create_check_constraint(
+        "ck_quantity",
+        "wearhousing_details",
+        "return_quantity <= wearhousing_quantity",
         schema="purchase",
     )
     op.create_check_constraint(
@@ -1051,10 +985,10 @@ def create_wearhousing_details_table() -> None:
         """
     )
 
-    # 在庫変動履歴/支払/買掛金の登録TODO:
+    # 在庫変動履歴/支払/買掛金変動履歴の登録TODO:
     op.execute(
         """
-        CREATE FUNCTION purchase.set_transition_histories_and_payments() RETURNS TRIGGER AS $$
+        CREATE FUNCTION purchase.set_inventories_and_payments() RETURNS TRIGGER AS $$
         DECLARE
             t_wearhousing_quantity integer;
             t_wearhousing_date date;
@@ -1087,7 +1021,6 @@ def create_wearhousing_details_table() -> None:
                 NEW.wearhousing_quantity,
                 NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
                 'PURCHASE',
-                null,
                 NEW.detail_no
             );
 
@@ -1131,7 +1064,6 @@ def create_wearhousing_details_table() -> None:
                 wearhousing_rec.supplier_id,
                 NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
                 'PURCHASE',
-                null,
                 NEW.detail_no,
                 t_payment_no
             );
@@ -1147,7 +1079,494 @@ def create_wearhousing_details_table() -> None:
             AFTER INSERT
             ON purchase.wearhousing_details
             FOR EACH ROW
-        EXECUTE PROCEDURE purchase.set_transition_histories_and_payments();
+        EXECUTE PROCEDURE purchase.set_inventories_and_payments();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_payment_instructions_table() -> None:
+    op.create_table(
+        "payment_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="支払指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column(
+            "payment_no",
+            sa.String(10),
+            nullable=False,
+            server_default="set_me",
+            comment="支払NO",
+        ),
+        *timestamps(),
+        schema="purchase",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "payment_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_payment_no",
+        "payment_instructions",
+        "payments",
+        ["payment_no"],
+        ["payment_no"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="purchase",
+    )
+    op.create_index(
+        "ix_payment_instructions_payment_no",
+        "payment_instructions",
+        ["payment_no"],
+        unique=True,
+        schema="purchase",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER payment_instructions_modified
+            BEFORE UPDATE
+            ON purchase.payment_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 入金指示後、入金日時更新、買掛変動履歴を自動作成TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.set_payment() RETURNS TRIGGER AS $$
+        DECLARE
+            rec RECORD;
+        BEGIN
+
+            -- 支払へ、入金日、入金担当者の登録
+            UPDATE purchase.payments
+            SET payment_datetime = NEW.instruction_date, payment_pic = NEW.instruction_pic
+            WHERE payment_no = NEW.payment_no;
+
+            -- 買掛変動履歴の登録
+            SELECT * INTO rec
+            FROM purchase.payments
+            WHERE payment_no = NEW.payment_no;
+
+            INSERT INTO purchase.accounts_payable_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                rec.supplier_id,
+                - rec.payment_price,
+                'PAYMENT',
+                NEW.no,
+                NEW.payment_no
+            );
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_payment_instructions
+            AFTER INSERT
+            ON purchase.payment_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.set_payment();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_purchase_return_instructions_table() -> None:
+    op.create_table(
+        "purchase_return_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="返品指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("wearhousing_detail_no", sa.Integer, nullable=True, comment="入荷明細NO"),
+        sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
+        sa.Column(
+            "product_id",
+            sa.String(10),
+            nullable=False,
+            server_default="set_me",
+            comment="当社商品ID",
+        ),
+        sa.Column(
+            "return_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="返品数",
+        ),
+        sa.Column(
+            "return_unit_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="返品単価",
+        ),
+        sa.Column("site_id", sa.String(2), nullable=False, comment="返品元倉庫ID"),
+        *timestamps(),
+        schema="purchase",
+    )
+
+    op.create_check_constraint(
+        "ck_return_quantity",
+        "purchase_return_instructions",
+        "return_quantity > 0",
+        schema="purchase",
+    )
+    op.create_check_constraint(
+        "ck_return_unit_price",
+        "purchase_return_instructions",
+        "return_unit_price > 0",
+        schema="purchase",
+    )
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "purchase_return_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_wearhousing_detail_no",
+        "purchase_return_instructions",
+        "wearhousing_details",
+        ["wearhousing_detail_no"],
+        ["detail_no"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="purchase",
+    )
+    op.create_foreign_key(
+        "fk_supplier_id",
+        "purchase_return_instructions",
+        "suppliers",
+        ["supplier_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="mst",
+    )
+    op.create_foreign_key(
+        "fk_site_id",
+        "purchase_return_instructions",
+        "sites",
+        ["site_id"],
+        ["site_id"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER purchase_return_instructions_modified
+            BEFORE UPDATE
+            ON purchase.purchase_return_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION purchase.calc_purchase_return_instructions() RETURNS TRIGGER AS $$
+        DECLARE
+            rec record;
+        BEGIN
+            IF NEW.wearhousing_detail_no IS NOT NULL THEN
+                -- 入荷明細から当社商品ID、仕入先ID、返品単価を取得
+                SELECT * INTO rec
+                FROM purchase.wearhousing_details
+                WHERE detail_no = NEW.wearhousing_detail_no
+                FOR UPDATE;
+
+                SELECT supplier_id INTO NEW.supplier_id
+                FROM purchase.wearhousings
+                WHERE wearhousing_no = rec.wearhousing_no;
+
+                -- 入荷明細に返品数を登録
+                UPDATE purchase.wearhousing_details
+                SET return_quantity = rec.return_quantity + NEW.return_quantity
+                WHERE detail_no = NEW.wearhousing_detail_no;
+
+                NEW.product_id:= rec.product_id;
+                NEW.return_unit_price:= rec.wearhousing_unit_price;
+
+            END iF;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_purchase_return_instructions
+            BEFORE INSERT
+            ON purchase.purchase_return_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.calc_purchase_return_instructions();
+        """
+    )
+
+    # 在庫変動履歴/支払/買掛金変動履歴の登録TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.set_inventories_and_payments_by_return() RETURNS TRIGGER AS $$
+        DECLARE
+            t_closing_date date;
+            t_payment_deadline date;
+            t_payment_price numeric;
+            t_payment_no text;
+
+            rec record;
+        BEGIN
+            -- 締日、支払期限の産出
+            rec:=mst.calc_payment_deadline(New.instruction_date, New.supplier_id);
+            t_closing_date:=rec.closing_date;
+            t_payment_deadline:=rec.payment_deadline;
+
+            -- 在庫変動履歴の登録
+            INSERT INTO inventory.transition_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.site_id,
+                NEW.product_id,
+                - NEW.return_quantity,
+                - NEW.return_quantity * NEW.return_unit_price,
+                'ORDERING_RETURN',
+                NEW.no
+            );
+
+            -- 支払の登録、更新
+            SELECT payment_price INTO t_payment_price
+            FROM purchase.payments
+            WHERE supplier_id = NEW.supplier_id
+            AND closing_date = t_closing_date
+            AND payment_deadline = t_payment_deadline
+            FOR UPDATE;
+
+            IF t_payment_price IS NOT NULL THEN
+                UPDATE purchase.payments
+                SET payment_price = t_payment_price - NEW.return_quantity * NEW.return_unit_price
+                WHERE supplier_id = NEW.supplier_id
+                AND closing_date = t_closing_date
+                AND payment_deadline = t_payment_deadline;
+
+            ELSE
+                INSERT INTO purchase.payments
+                VALUES (
+                    default,
+                    NEW.supplier_id,
+                    t_closing_date,
+                    t_payment_deadline,
+                    - NEW.return_quantity * NEW.return_unit_price
+                );
+            END IF;
+
+            -- 買掛変動履歴の登録
+            SELECT payment_no INTO t_payment_no
+            FROM purchase.payments
+            WHERE supplier_id = NEW.supplier_id
+            AND closing_date = t_closing_date
+            AND payment_deadline = t_payment_deadline;
+
+            INSERT INTO purchase.accounts_payable_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.supplier_id,
+                - NEW.return_quantity * NEW.return_unit_price,
+                'ORDERING_RETURN',
+                NEW.no,
+                t_payment_no
+            );
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_purchase_return_instructions
+            AFTER INSERT
+            ON purchase.purchase_return_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.set_inventories_and_payments_by_return();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_other_purchase_instructions_table() -> None:
+    op.create_table(
+        "other_purchase_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="雑仕入指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
+        sa.Column("transition_reason", sa.Text, nullable=False, comment="買掛変動理由"),
+        sa.Column(
+            "transition_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="変動金額",
+        ),
+        *timestamps(),
+        schema="purchase",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "other_purchase_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_supplier_id",
+        "other_purchase_instructions",
+        "suppliers",
+        ["supplier_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER other_purchase_instructions_modified
+            BEFORE UPDATE
+            ON purchase.other_purchase_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 支払/買掛金変動履歴の登録TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.set_payments_by_other_instruction() RETURNS TRIGGER AS $$
+        DECLARE
+            t_closing_date date;
+            t_payment_deadline date;
+            t_payment_price numeric;
+            t_payment_no text;
+
+            rec record;
+        BEGIN
+            -- 締日、支払期限の産出
+            rec:=mst.calc_payment_deadline(New.instruction_date, New.supplier_id);
+            t_closing_date:=rec.closing_date;
+            t_payment_deadline:=rec.payment_deadline;
+
+            -- 支払の登録、更新
+            SELECT payment_price INTO t_payment_price
+            FROM purchase.payments
+            WHERE supplier_id = NEW.supplier_id
+            AND closing_date = t_closing_date
+            AND payment_deadline = t_payment_deadline
+            FOR UPDATE;
+
+            IF t_payment_price IS NOT NULL THEN
+                UPDATE purchase.payments
+                SET payment_price = t_payment_price + NEW.transition_amount
+                WHERE supplier_id = NEW.supplier_id
+                AND closing_date = t_closing_date
+                AND payment_deadline = t_payment_deadline;
+
+            ELSE
+                INSERT INTO purchase.payments
+                VALUES (
+                    default,
+                    NEW.supplier_id,
+                    t_closing_date,
+                    t_payment_deadline,
+                    NEW.transition_amount
+                );
+            END IF;
+
+            -- 買掛変動履歴の登録
+            SELECT payment_no INTO t_payment_no
+            FROM purchase.payments
+            WHERE supplier_id = NEW.supplier_id
+            AND closing_date = t_closing_date
+            AND payment_deadline = t_payment_deadline;
+
+            INSERT INTO purchase.accounts_payable_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.supplier_id,
+                NEW.transition_amount,
+                'OTHER_TRANSITION',
+                NEW.no,
+                t_payment_no
+            );
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_other_purchase_instructions
+            AFTER INSERT
+            ON purchase.other_purchase_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.set_payments_by_other_instruction();
         """
     )
 
@@ -1216,10 +1635,16 @@ def upgrade() -> None:
     create_ordering_details_table()
     create_wearhousings_table()
     create_wearhousing_details_table()
+    create_payment_instructions_table()
+    create_purchase_return_instructions_table()
+    create_other_purchase_instructions_table()
     create_view()
 
 
 def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS purchase.other_purchase_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS purchase.purchase_return_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS purchase.payment_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.wearhousing_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.wearhousings CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.ordering_details CASCADE;")

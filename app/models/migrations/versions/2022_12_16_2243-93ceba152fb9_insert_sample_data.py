@@ -26,8 +26,9 @@ def upgrade() -> None:
     meta.reflect(schema="inventory")
     # FIXME:在庫変動予定(受注-出荷予定)
     inv_transition_estimates = Table("inventory.transition_estimates", meta)
-    # FIXME:在庫変動履歴(出荷、仕入返品、売上返品、その他取引)
+    # FIXME:在庫変動履歴(出荷、売上返品、その他取引)
     inv_transition_histories = Table("inventory.transition_histories", meta)
+    # FIXME:検品、
     inv_moving_histories = Table("inventory.moving_histories", meta)
 
     meta = MetaData(bind=op.get_bind())
@@ -36,6 +37,13 @@ def upgrade() -> None:
     pch_ordering_details = Table("purchase.ordering_details", meta)
     pch_wearhousings = Table("purchase.wearhousings", meta)
     pch_wearhousing_details = Table("purchase.wearhousing_details", meta)
+    pch_payment_instructions = Table("purchase.payment_instructions", meta)
+    pch_purchase_return_instructions = Table(
+        "purchase.purchase_return_instructions", meta
+    )
+    pch_other_purchase_instructions = Table(
+        "purchase.other_purchase_instructions", meta
+    )
 
     # 受注-出荷予定FIXME:在庫変動予定
     op.bulk_insert(
@@ -200,6 +208,41 @@ def upgrade() -> None:
             },
         ],
     )
+    # 仕入返品
+    op.bulk_insert(
+        pch_purchase_return_instructions,
+        [
+            {
+                "instruction_date": date(2023, 2, 8),
+                "instruction_pic": "T-902",
+                "supplier_id": "S002",
+                "product_id": "S002-00001",
+                "return_quantity": 2,
+                "return_unit_price": 18500.0,
+                "site_id": "N2",
+            }
+        ],
+    )
+    # その他買掛金取引
+    op.bulk_insert(
+        pch_other_purchase_instructions,
+        [
+            {
+                "instruction_date": date(2023, 2, 8),
+                "instruction_pic": "T-901",
+                "supplier_id": "S001",
+                "transition_reason": "輸送費追加計上",
+                "transition_amount": 2800.0,
+            },
+            {
+                "instruction_date": date(2023, 2, 9),
+                "instruction_pic": "T-901",
+                "supplier_id": "S002",
+                "transition_reason": "誤請求返金(2022年10月分)",
+                "transition_amount": -10000.0,
+            },
+        ],
+    )
 
     # 請求書の確認-支払
     op.execute(
@@ -215,19 +258,27 @@ def upgrade() -> None:
         UPDATE purchase.payments
         SET payment_check_datetime = '2023-3-10', payment_check_pic = 'T-901'
         WHERE payment_no = 'PM-0000002';
-
-        UPDATE purchase.payments
-        SET payment_datetime = '2023-3-20', payment_pic = 'T-901'
-        WHERE payment_no = 'PM-0000001';
-
-        UPDATE purchase.payments
-        SET payment_datetime = '2023-4-10', payment_pic = 'T-902'
-        WHERE payment_no = 'PM-0000003';
-
-        UPDATE purchase.payments
-        SET payment_datetime = '2023-5-13', payment_pic = 'T-901'
-        WHERE payment_no = 'PM-0000002';
         """
+    )
+    op.bulk_insert(
+        pch_payment_instructions,
+        [
+            {
+                "instruction_date": date(2023, 3, 20),
+                "instruction_pic": "T-901",
+                "payment_no": "PM-0000001",
+            },
+            {
+                "instruction_date": date(2023, 4, 10),
+                "instruction_pic": "T-902",
+                "payment_no": "PM-0000003",
+            },
+            {
+                "instruction_date": date(2023, 5, 13),
+                "instruction_pic": "T-901",
+                "payment_no": "PM-0000002",
+            },
+        ],
     )
 
     # 発注-入荷
@@ -381,18 +432,15 @@ def upgrade() -> None:
 
     # 仕入返品FIXME:
     op.bulk_insert(
-        inv_transition_histories,
+        pch_purchase_return_instructions,
         [
             {
-                "transaction_date": date(2023, 12, 14),
+                "instruction_date": date(2023, 12, 14),
+                "instruction_pic": "T-901",
+                "wearhousing_detail_no": 8,
+                "return_quantity": 1,
                 "site_id": "E4",
-                "product_id": "S001-00001",
-                "transaction_quantity": -1,
-                "transaction_amount": DUMMY_AMOUNT,
-                "transition_type": StockTransitionType.ordering_return,
-                "transition_reason": None,
-                "transaction_no": 504,
-            },
+            }
         ],
     )
 
@@ -416,7 +464,6 @@ def upgrade() -> None:
                 "transaction_quantity": -2,
                 "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
-                "transition_reason": None,
                 "transaction_no": 505,
             },
         ],
@@ -479,7 +526,7 @@ def upgrade() -> None:
                 "transaction_quantity": 1,
                 "transaction_amount": 0.0,
                 "transition_type": StockTransitionType.other_transition,
-                "transition_reason": "棚卸の結果、帳簿在庫増",
+                # "transition_reason": "棚卸の結果、帳簿在庫増",
                 "transaction_no": 507,
             },
         ],
@@ -496,7 +543,6 @@ def upgrade() -> None:
                 "transaction_quantity": -1,
                 "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
-                "transition_reason": None,
                 "transaction_no": 508,
             },
         ],
@@ -527,7 +573,6 @@ def upgrade() -> None:
                 "transaction_quantity": 1,
                 "transaction_amount": 20000.0,
                 "transition_type": StockTransitionType.sales_return,
-                "transition_reason": None,
                 "transaction_no": 509,
             },
         ],
@@ -544,7 +589,6 @@ def upgrade() -> None:
                 "transaction_quantity": -1,
                 "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
-                "transition_reason": None,
                 "transaction_no": 510,
             },
         ],
