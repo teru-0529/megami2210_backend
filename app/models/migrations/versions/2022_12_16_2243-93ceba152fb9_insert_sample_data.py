@@ -39,6 +39,8 @@ def upgrade() -> None:
     pch_ordering_details = Table("purchase.ordering_details", meta)
     pch_wearhousings = Table("purchase.wearhousings", meta)
     pch_wearhousing_details = Table("purchase.wearhousing_details", meta)
+    pch_order_cancel_instructions = Table("purchase.order_cancel_instructions", meta)
+    pch_arrival_date_instructions = Table("purchase.arrival_date_instructions", meta)
     pch_payment_instructions = Table("purchase.payment_instructions", meta)
     pch_purchase_return_instructions = Table(
         "purchase.purchase_return_instructions", meta
@@ -132,16 +134,39 @@ def upgrade() -> None:
         ],
     )
 
-    # 発注納期変更、発注キャンセル
-    op.execute(
-        """
-        -- 予定納期日の変更
-        UPDATE purchase.ordering_details SET estimate_arrival_date = '2023-02-05' WHERE detail_no = 1;
-        -- 発注キャンセル(全量)
-        UPDATE purchase.ordering_details SET cancel_quantity = 2 WHERE detail_no = 2;
-        -- 発注キャンセル(一部)
-        UPDATE purchase.ordering_details SET cancel_quantity = 1 WHERE detail_no = 3;
-        """
+    # 発注納期変更
+    op.bulk_insert(
+        pch_arrival_date_instructions,
+        [
+            {
+                "instruction_date": date(2023, 1, 24),
+                "instruction_pic": "T-902",
+                "change_reason": "メーカー在庫なし",
+                "ordering_detail_no": 1,
+                "arrival_date": date(2023, 2, 5),
+            },
+        ],
+    )
+
+    # 発注キャンセル
+    op.bulk_insert(
+        pch_order_cancel_instructions,
+        [
+            {
+                "instruction_date": date(2023, 1, 25),
+                "instruction_pic": "T-902",
+                "cancel_reason": "護発注",
+                "ordering_detail_no": 2,
+                "calcel_quantity": 2,
+            },
+            {
+                "instruction_date": date(2023, 1, 28),
+                "instruction_pic": "T-902",
+                "cancel_reason": "受注キャンセルの対応",
+                "ordering_detail_no": 3,
+                "calcel_quantity": 1,
+            },
+        ],
     )
 
     # 入荷

@@ -1198,6 +1198,191 @@ def create_payment_instructions_table() -> None:
 
 
 # INFO:
+def create_order_cancel_instructions_table() -> None:
+    op.create_table(
+        "order_cancel_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="キャンセル指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("cancel_reason", sa.Text, nullable=False, comment="キャンセル理由"),
+        sa.Column("ordering_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
+        sa.Column(
+            "calcel_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="キャンセル数",
+        ),
+        *timestamps(),
+        schema="purchase",
+    )
+
+    op.create_check_constraint(
+        "ck_calcel_quantity",
+        "order_cancel_instructions",
+        "calcel_quantity > 0",
+        schema="purchase",
+    )
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "order_cancel_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_ordering_detail_no",
+        "order_cancel_instructions",
+        "ordering_details",
+        ["ordering_detail_no"],
+        ["detail_no"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="purchase",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER order_cancel_instructions_modified
+            BEFORE UPDATE
+            ON purchase.order_cancel_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 発注明細の変更TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.update_order_quantity() RETURNS TRIGGER AS $$
+        DECLARE
+            t_cancel_quantity integer;
+        BEGIN
+            -- キャンセル数の更新
+            SELECT cancel_quantity INTO t_cancel_quantity
+            FROM purchase.ordering_details
+            WHERE detail_no = NEW.ordering_detail_no
+            FOR UPDATE;
+
+            UPDATE purchase.ordering_details
+            SET cancel_quantity = t_cancel_quantity + NEW.calcel_quantity
+            WHERE detail_no = NEW.ordering_detail_no;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_purchase_cancel_instructions
+            AFTER INSERT
+            ON purchase.order_cancel_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.update_order_quantity();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_arrival_date_instructions_table() -> None:
+    op.create_table(
+        "arrival_date_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="納期変更NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="変更実施日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="変更者ID"),
+        sa.Column("change_reason", sa.Text, nullable=False, comment="変更理由"),
+        sa.Column("ordering_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
+        sa.Column(
+            "arrival_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="予定納期日",
+        ),
+        *timestamps(),
+        schema="purchase",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "arrival_date_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_ordering_detail_no",
+        "arrival_date_instructions",
+        "ordering_details",
+        ["ordering_detail_no"],
+        ["detail_no"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="purchase",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER arrival_date_instructions_modified
+            BEFORE UPDATE
+            ON purchase.arrival_date_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 発注明細の変更TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.update_arrival_date() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 入荷予定日の更新
+            UPDATE purchase.ordering_details
+            SET estimate_arrival_date = NEW.arrival_date
+            WHERE detail_no = NEW.ordering_detail_no;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_purchase_cancel_instructions
+            AFTER INSERT
+            ON purchase.arrival_date_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.update_arrival_date();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def create_purchase_return_instructions_table() -> None:
     op.create_table(
         "purchase_return_instructions",
@@ -1636,6 +1821,8 @@ def upgrade() -> None:
     create_ordering_details_table()
     create_wearhousings_table()
     create_wearhousing_details_table()
+    create_order_cancel_instructions_table()
+    create_arrival_date_instructions_table()
     create_payment_instructions_table()
     create_purchase_return_instructions_table()
     create_other_purchase_instructions_table()
@@ -1646,12 +1833,13 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS purchase.other_purchase_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.purchase_return_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.payment_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS purchase.arrival_date_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS purchase.order_cancel_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.wearhousing_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.wearhousings CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.ordering_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.orderings CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.payments CASCADE;")
-    op.execute("DROP TABLE IF EXISTS purchase.payment_proceeded CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.accounts_payable_histories CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.accounts_payables CASCADE;")
     op.execute("DROP SEQUENCE IF EXISTS purchase.ordering_no_seed CASCADE;")
