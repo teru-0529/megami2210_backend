@@ -96,19 +96,21 @@ class OrderPolicy(Base):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-class siteType(Base):
+class SiteType(Base):
     main = "MAIN"
     keep_product = "KEEP_PRODUCT"
     inspect_product = "INSPECT_PRODUCT"
     damaged_product = "DAMAGED_PRODUCT"
+    private_order = "PRIVATE_ORDER"
 
     def description() -> str:
         return """
-発注方針:
+倉庫種別:
   * `MAIN` - メイン倉庫
   * `KEEP_PRODUCT` - 確保商品倉庫
   * `INSPECT_PRODUCT` - 検品商品倉庫
   * `DAMAGED_PRODUCT` - 破損商品倉庫
+  * `PRIVATE_ORDER` - 専用倉庫
     """
 
 

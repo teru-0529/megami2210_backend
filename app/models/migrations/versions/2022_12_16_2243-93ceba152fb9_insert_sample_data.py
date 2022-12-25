@@ -10,7 +10,7 @@ from datetime import date
 from alembic import op
 from sqlalchemy import MetaData, Table
 
-from app.models.segment_values import StockTransitionType
+from app.models.segment_values import StockTransitionType, SiteType
 
 # revision identifiers, used by Alembic.
 revision = "93ceba152fb9"
@@ -49,13 +49,13 @@ def upgrade() -> None:
         "purchase.other_purchase_instructions", meta
     )
 
-    # 受注-出荷予定FIXME:在庫変動予定
+    # 受注-出荷予定FIXME:在庫変動予定WARNING:
     op.bulk_insert(
         inv_transition_estimates,
         [
             {
                 "transaction_date": date(2023, 1, 11),
-                "site_id": "N2",
+                "site_type": SiteType.main,
                 "product_id": "S001-00003",
                 "transaction_quantity": -5,
                 "transaction_amount": DUMMY_AMOUNT,
@@ -64,7 +64,7 @@ def upgrade() -> None:
             },
             {
                 "transaction_date": date(2023, 1, 11),
-                "site_id": "N2",
+                "site_type": SiteType.main,
                 "product_id": "S001-00002",
                 "transaction_quantity": -2,
                 "transaction_amount": DUMMY_AMOUNT,
@@ -81,19 +81,16 @@ def upgrade() -> None:
             {
                 "order_date": date(2023, 1, 20),
                 "supplier_id": "S001",
-                "site_id": "E3",
                 "purchase_pic": "T-901",
             },
             {
                 "order_date": date(2023, 1, 22),
                 "supplier_id": "S002",
-                "site_id": "E3",
                 "purchase_pic": "T-902",
             },
             {
                 "order_date": date(2023, 1, 23),
                 "supplier_id": "S002",
-                "site_id": "E3",
                 "purchase_pic": "T-902",
             },
         ],
@@ -169,7 +166,7 @@ def upgrade() -> None:
         ],
     )
 
-    # 入荷
+    # 入荷(mainに直接入荷:検品を省略)
     op.bulk_insert(
         pch_wearhousings,
         [
@@ -203,35 +200,35 @@ def upgrade() -> None:
                 "order_detail_no": 3,
                 "wearhousing_quantity": 3,
                 "wearhousing_unit_price": 10000.0,
-                "site_id": "N2",
+                "site_type": SiteType.main,
             },
             {
                 "wearhousing_no": "WH-0000002",
                 "order_detail_no": 1,
                 "wearhousing_quantity": 3,
                 "wearhousing_unit_price": 10500.0,
-                "site_id": "N2",
+                "site_type": SiteType.main,
             },
             {
                 "wearhousing_no": "WH-0000003",
                 "order_detail_no": 4,
                 "wearhousing_quantity": 3,
                 "wearhousing_unit_price": 19000.0,
-                "site_id": "N2",
+                "site_type": SiteType.main,
             },
             {
                 "wearhousing_no": "WH-0000004",
                 "order_detail_no": 4,
                 "wearhousing_quantity": 2,
                 "wearhousing_unit_price": 17000.0,
-                "site_id": "N2",
+                "site_type": SiteType.main,
             },
             {
                 "wearhousing_no": "WH-0000004",
                 "order_detail_no": 5,
                 "wearhousing_quantity": 1,
                 "wearhousing_unit_price": 22000.0,
-                "site_id": "N2",
+                "site_type": SiteType.main,
             },
         ],
     )
@@ -247,7 +244,7 @@ def upgrade() -> None:
                 "product_id": "S002-00001",
                 "return_quantity": 2,
                 "return_unit_price": 18500.0,
-                "site_id": "N2",
+                "site_type": SiteType.main,
             }
         ],
     )
@@ -309,14 +306,13 @@ def upgrade() -> None:
         ],
     )
 
-    # 発注-入荷
+    # 発注-入荷(mainに直接入荷:検品を省略)
     op.bulk_insert(
         pch_orderings,
         [
             {
                 "order_date": date(2023, 10, 10),
                 "supplier_id": "S001",
-                "site_id": "N1",
                 "purchase_pic": "T-901",
             },
         ],
@@ -350,7 +346,7 @@ def upgrade() -> None:
                 "order_detail_no": 6,
                 "wearhousing_quantity": 1,
                 "wearhousing_unit_price": 12000.0,
-                "site_id": "N1",
+                "site_type": SiteType.main,
             },
         ],
     )
@@ -371,7 +367,6 @@ def upgrade() -> None:
             {
                 "order_date": date(2023, 11, 25),
                 "supplier_id": "S001",
-                "site_id": "N1",
                 "purchase_pic": "T-901",
             },
         ],
@@ -425,14 +420,12 @@ def upgrade() -> None:
                 "order_detail_no": 8,
                 "wearhousing_quantity": 2,
                 "wearhousing_unit_price": 10000.0,
-                "site_id": "N1",
             },
             {
                 "wearhousing_no": "WH-0000007",
                 "order_detail_no": 7,
                 "wearhousing_quantity": 5,
                 "wearhousing_unit_price": 11000.0,
-                "site_id": "E3",
             },
         ],
     )
@@ -442,20 +435,29 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
+                "instruction_date": date(2023, 12, 6),
+                "instruction_pic": "T-902",
+                "moving_reason": "検品（異常なし）",
+                "site_type_from": SiteType.inspect_product,
+                "site_type_to": SiteType.main,
+                "product_id": "S001-00002",
+                "moving_quantity": 2,
+            },
+            {
                 "instruction_date": date(2023, 12, 12),
                 "instruction_pic": "T-901",
-                "moving_reason": "検品完了（異常なし）",
-                "site_id_from": "E3",
-                "site_id_to": "E4",
+                "moving_reason": "検品（不良品）",
+                "site_type_from": SiteType.inspect_product,
+                "site_type_to": SiteType.damaged_product,
                 "product_id": "S001-00001",
                 "moving_quantity": 2,
             },
             {
                 "instruction_date": date(2023, 12, 12),
                 "instruction_pic": "T-901",
-                "moving_reason": "検品完了（不良品）",
-                "site_id_from": "E3",
-                "site_id_to": "N1",
+                "moving_reason": "検品（異常なし）",
+                "site_type_from": SiteType.inspect_product,
+                "site_type_to": SiteType.main,
                 "product_id": "S001-00001",
                 "moving_quantity": 3,
             },
@@ -472,7 +474,7 @@ def upgrade() -> None:
                 "return_reason": "検品不良の対応",
                 "wearhousing_detail_no": 8,
                 "return_quantity": 1,
-                "site_id": "E4",
+                "site_type": SiteType.damaged_product,
             }
         ],
     )
@@ -484,7 +486,7 @@ def upgrade() -> None:
                 "instruction_date": date(2023, 12, 14),
                 "instruction_pic": "T-901",
                 "transition_reason": "検品不良により廃棄、費用は雑費用として処理",
-                "site_id": "E4",
+                "site_type": SiteType.damaged_product,
                 "product_id": "S001-00001",
                 "quantity": -1,
                 "amount": -11000.0,
@@ -507,7 +509,7 @@ def upgrade() -> None:
         [
             {
                 "transaction_date": date(2024, 1, 3),
-                "site_id": "N1",
+                "site_type": SiteType.main,
                 "product_id": "S001-00002",
                 "transaction_quantity": -2,
                 "transaction_amount": DUMMY_AMOUNT,
@@ -517,14 +519,13 @@ def upgrade() -> None:
         ],
     )
 
-    # 発注-入荷
+    # 発注-入荷(mainに直接入荷:検品を省略)
     op.bulk_insert(
         pch_orderings,
         [
             {
                 "order_date": date(2024, 1, 5),
                 "supplier_id": "S001",
-                "site_id": "N1",
                 "purchase_pic": "T-901",
             },
         ],
@@ -558,7 +559,7 @@ def upgrade() -> None:
                 "order_detail_no": 9,
                 "wearhousing_quantity": 3,
                 "wearhousing_unit_price": 11500.0,
-                "site_id": "N1",
+                "site_type": SiteType.main,
             },
         ],
     )
@@ -571,7 +572,7 @@ def upgrade() -> None:
                 "instruction_date": date(2024, 1, 18),
                 "instruction_pic": "T-901",
                 "transition_reason": "棚卸結果反映、帳簿在庫増",
-                "site_id": "N1",
+                "site_type": SiteType.main,
                 "product_id": "S001-00002",
                 "quantity": 1,
             },
@@ -584,7 +585,7 @@ def upgrade() -> None:
         [
             {
                 "transaction_date": date(2024, 1, 20),
-                "site_id": "N1",
+                "site_type": SiteType.main,
                 "product_id": "S001-00002",
                 "transaction_quantity": -1,
                 "transaction_amount": DUMMY_AMOUNT,
@@ -594,21 +595,21 @@ def upgrade() -> None:
         ],
     )
 
-    # 在庫移動（予約商品確保）
-    op.bulk_insert(
-        inv_moving_instructions,
-        [
-            {
-                "instruction_date": date(2024, 1, 22),
-                "instruction_pic": "T-901",
-                "moving_reason": "予約販売商品確保",
-                "site_id_from": "N1",
-                "site_id_to": "E2",
-                "product_id": "S001-00001",
-                "moving_quantity": 2,
-            },
-        ],
-    )
+    # # 在庫移動（予約商品確保）
+    # op.bulk_insert(
+    #     inv_moving_instructions,
+    #     [
+    #         {
+    #             "instruction_date": date(2024, 1, 22),
+    #             "instruction_pic": "T-901",
+    #             "moving_reason": "予約販売商品確保",
+    #             "site_id_from": "N1",
+    #             "site_id_to": "E2",
+    #             "product_id": "S001-00001",
+    #             "moving_quantity": 2,
+    #         },
+    #     ],
+    # )
 
     # 売上返品FIXME:
     op.bulk_insert(
@@ -616,7 +617,7 @@ def upgrade() -> None:
         [
             {
                 "transaction_date": date(2024, 1, 25),
-                "site_id": "N1",
+                "site_type": SiteType.main,
                 "product_id": "S001-00002",
                 "transaction_quantity": 1,
                 "transaction_amount": 20000.0,
@@ -632,7 +633,7 @@ def upgrade() -> None:
         [
             {
                 "transaction_date": date(2024, 1, 30),
-                "site_id": "E2",
+                "site_type": SiteType.main,
                 "product_id": "S001-00001",
                 "transaction_quantity": -1,
                 "transaction_amount": DUMMY_AMOUNT,

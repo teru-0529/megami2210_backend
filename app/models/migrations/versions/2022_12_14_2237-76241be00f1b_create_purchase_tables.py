@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.models.migrations.util import timestamps
-from app.models.segment_values import PayableTransitionType
+from app.models.segment_values import PayableTransitionType, SiteType
 
 # revision identifiers, used by Alembic.
 revision = "76241be00f1b"
@@ -411,7 +411,6 @@ def create_orderings_table() -> None:
             comment="発注日",
         ),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
-        sa.Column("site_id", sa.String(2), nullable=False, comment="入荷予定倉庫ID"),
         sa.Column("purchase_pic", sa.String(5), nullable=True, comment="発注担当者ID"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
         *timestamps(),
@@ -424,16 +423,6 @@ def create_orderings_table() -> None:
         "suppliers",
         ["supplier_id"],
         ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="purchase",
-        referent_schema="mst",
-    )
-    op.create_foreign_key(
-        "fk_site_id",
-        "orderings",
-        "sites",
-        ["site_id"],
-        ["site_id"],
         ondelete="RESTRICT",
         source_schema="purchase",
         referent_schema="mst",
@@ -695,7 +684,6 @@ def create_ordering_details_table() -> None:
         """
         CREATE FUNCTION purchase.set_transition_estimates() RETURNS TRIGGER AS $$
         DECLARE
-            t_site_id character(2);
             t_remaining_quantity integer;
         BEGIN
             t_remaining_quantity:=NEW.purchase_quantity - NEW.wearhousing_quantity - NEW.cancel_quantity;
@@ -717,16 +705,10 @@ def create_ordering_details_table() -> None:
 
             ELSEIF TG_OP = 'INSERT' THEN
 
-                -- 受払予定を登録
-                SELECT site_id INTO t_site_id
-                FROM purchase.orderings
-                WHERE ordering_no = NEW.ordering_no;
-
                 INSERT INTO inventory.transition_estimates
                 VALUES (
                     default,
                     NEW.estimate_arrival_date,
-                    t_site_id,
                     NEW.product_id,
                     t_remaining_quantity,
                     t_remaining_quantity * NEW.purchase_unit_price,
@@ -890,7 +872,13 @@ def create_wearhousing_details_table() -> None:
             server_default="0.0",
             comment="入荷単価",
         ),
-        sa.Column("site_id", sa.String(2), nullable=False, comment="入荷倉庫ID"),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            server_default=SiteType.inspect_product,
+            comment="入荷倉庫種別 ",
+        ),
         *timestamps(),
         schema="purchase",
     )
@@ -938,16 +926,6 @@ def create_wearhousing_details_table() -> None:
         ondelete="RESTRICT",
         source_schema="purchase",
         referent_schema="purchase",
-    )
-    op.create_foreign_key(
-        "fk_site_id",
-        "wearhousing_details",
-        "sites",
-        ["site_id"],
-        ["site_id"],
-        ondelete="RESTRICT",
-        source_schema="purchase",
-        referent_schema="mst",
     )
     op.create_index(
         "ix_wearhousing_details_wearhousing",
@@ -1022,7 +1000,7 @@ def create_wearhousing_details_table() -> None:
             VALUES (
                 default,
                 wearhousing_rec.wearhousing_date,
-                NEW.site_id,
+                NEW.site_type,
                 NEW.product_id,
                 NEW.wearhousing_quantity,
                 NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
@@ -1425,7 +1403,12 @@ def create_purchase_return_instructions_table() -> None:
             server_default="0.0",
             comment="返品単価",
         ),
-        sa.Column("site_id", sa.String(2), nullable=False, comment="返品元倉庫ID"),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            comment="返品元倉庫種別 ",
+        ),
         *timestamps(),
         schema="purchase",
     )
@@ -1468,16 +1451,6 @@ def create_purchase_return_instructions_table() -> None:
         "suppliers",
         ["supplier_id"],
         ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="purchase",
-        referent_schema="mst",
-    )
-    op.create_foreign_key(
-        "fk_site_id",
-        "purchase_return_instructions",
-        "sites",
-        ["site_id"],
-        ["site_id"],
         ondelete="RESTRICT",
         source_schema="purchase",
         referent_schema="mst",
@@ -1558,7 +1531,7 @@ def create_purchase_return_instructions_table() -> None:
             VALUES (
                 default,
                 NEW.instruction_date,
-                NEW.site_id,
+                NEW.site_type,
                 NEW.product_id,
                 - NEW.return_quantity,
                 - NEW.return_quantity * NEW.return_unit_price,

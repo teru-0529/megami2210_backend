@@ -264,7 +264,7 @@ def create_receiving_details_table() -> None:
         """
         CREATE FUNCTION selling.set_transition_estimates() RETURNS TRIGGER AS $$
         DECLARE
-            t_site_id character(2);
+            t_site_type mst.site_type;
             t_remaining_quantity integer;
         BEGIN
             --t_remaining_quantity:=NEW.purchase_quantity - NEW.wearhousing_quantity - NEW.cancel_quantity;
@@ -287,7 +287,7 @@ def create_receiving_details_table() -> None:
             --ELSEIF TG_OP = 'INSERT' THEN
 
             --    -- 受払予定を登録
-            --    SELECT site_id INTO t_site_id
+            --    SELECT site_type INTO t_site_type
             --    FROM purchase.orderings
             --    WHERE ordering_no = NEW.ordering_no;
 
@@ -295,7 +295,7 @@ def create_receiving_details_table() -> None:
             --    VALUES (
             --        default,
             --        NEW.estimate_arrival_date,
-            --        t_site_id,
+            --        t_site_type,
             --       NEW.product_id,
             --        t_remaining_quantity,
             --        t_remaining_quantity * NEW.purchase_unit_price,

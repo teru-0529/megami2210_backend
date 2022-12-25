@@ -868,79 +868,6 @@ def create_products_table(status_type: ENUM) -> None:
 
 
 # INFO:
-def create_sites_table() -> None:
-    sites_table = op.create_table(
-        "sites",
-        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
-        sa.Column("name", sa.String(30), nullable=False, comment="倉庫名"),
-        sa.Column(
-            "is_free",
-            sa.Boolean,
-            nullable=False,
-            server_default="false",
-            comment="フリー在庫用倉庫",
-        ),
-        sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
-        schema="mst",
-    )
-    op.execute(
-        """
-        CREATE TRIGGER sites_modified
-            BEFORE UPDATE
-            ON mst.sites
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    op.bulk_insert(
-        sites_table,
-        [
-            {
-                "site_id": "N1",
-                "name": "通常倉庫1",
-                "is_free": True,
-                "note": None,
-            },
-            {
-                "site_id": "N2",
-                "name": "通常倉庫2",
-                "is_free": True,
-                "note": None,
-            },
-            {
-                "site_id": "E1",
-                "name": "貸出倉庫",
-                "is_free": False,
-                "note": "商品貸し出し中を管理する",
-            },
-            {
-                "site_id": "E2",
-                "name": "出庫準備倉庫",
-                "is_free": False,
-                "note": "売上出庫待ちを管理する",
-            },
-            {
-                "site_id": "E3",
-                "name": "検品中倉庫",
-                "is_free": False,
-                "note": "検品待ち商品を管理する",
-            },
-            {
-                "site_id": "E4",
-                "name": "破損商品倉庫",
-                "is_free": False,
-                "note": "破損商品を管理する",
-            },
-        ],
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-# INFO:
 def create_view() -> None:
     op.execute(
         """
@@ -979,12 +906,10 @@ def upgrade() -> None:
     create_suppliers_table()
     create_destination_address_table()
     create_products_table(status_type)
-    create_sites_table()
     create_view()
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS mst.sites CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.products CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.destination_address CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.suppliers CASCADE;")

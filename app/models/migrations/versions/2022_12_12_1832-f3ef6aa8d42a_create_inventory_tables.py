@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.models.migrations.util import timestamps
-from app.models.segment_values import StockTransitionType
+from app.models.segment_values import StockTransitionType, SiteType
 
 # revision identifiers, used by Alembic.
 revision = "f3ef6aa8d42a"
@@ -27,7 +27,12 @@ def create_monthry_summaries_every_site_table() -> None:
         "monthry_summaries_every_site",
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
         sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
-        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            primary_key=True,
+            comment="倉庫種別 ",
+        ),
         sa.Column(
             "init_quantity",
             sa.Integer,
@@ -60,12 +65,6 @@ def create_monthry_summaries_every_site_table() -> None:
         "ck_quantity",
         "monthry_summaries_every_site",
         "quantity >= 0",
-        schema="inventory",
-    )
-    op.create_index(
-        "ix_monthry_summaries_every_site_product",
-        "monthry_summaries_every_site",
-        ["product_id", "year_month", "site_id"],
         schema="inventory",
     )
 
@@ -229,7 +228,12 @@ def create_current_summaries_every_site_table() -> None:
     op.create_table(
         "current_summaries_every_site",
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
-        sa.Column("site_id", sa.String(2), primary_key=True, comment="倉庫ID"),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            primary_key=True,
+            comment="倉庫種別 ",
+        ),
         sa.Column(
             "quantity", sa.Integer, nullable=False, server_default="0", comment="在庫数"
         ),
@@ -340,7 +344,12 @@ def create_transition_histories_table() -> None:
             nullable=False,
             comment="取引日",
         ),
-        sa.Column("site_id", sa.String(2), nullable=False, comment="倉庫ID"),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            comment="倉庫種別 ",
+        ),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
         sa.Column(
             "transaction_quantity",
@@ -384,16 +393,6 @@ def create_transition_histories_table() -> None:
         source_schema="inventory",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_site_id",
-        "transition_histories",
-        "sites",
-        ["site_id"],
-        ["site_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
     op.create_index(
         "ix_transition_histories_product",
         "transition_histories",
@@ -418,7 +417,7 @@ def create_transition_histories_table() -> None:
         DECLARE
             yyyymm character(6);
             t_product_id character(10);
-            t_site_id character(2);
+            t_site_type mst.site_type;
             t_init_quantity integer;
             t_warehousing_quantity integer;
             t_shipping_quantity integer;
@@ -435,20 +434,20 @@ def create_transition_histories_table() -> None:
             last_rec RECORD;
         BEGIN
             yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
-            t_site_id:=NEW.site_id;
+            t_site_type:=NEW.site_type;
             t_product_id:=NEW.product_id;
 
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
             -- 月次サマリー（倉庫別）TODO:
             SELECT * INTO recent_rec
                 FROM inventory.monthry_summaries_every_site
-                WHERE product_id = t_product_id AND year_month = yyyymm AND site_id = t_site_id
+                WHERE product_id = t_product_id AND year_month = yyyymm AND site_type = t_site_type
                 FOR UPDATE;
 
             IF recent_rec IS NULL THEN
                 SELECT * INTO last_rec
                     FROM inventory.monthry_summaries_every_site
-                    WHERE product_id = t_product_id AND site_id = t_site_id
+                    WHERE product_id = t_product_id AND site_type = t_site_type
                     ORDER BY year_month DESC
                     LIMIT 1;
 
@@ -477,7 +476,7 @@ def create_transition_histories_table() -> None:
                 VALUES (
                     t_product_id,
                     yyyymm,
-                    t_site_id,
+                    t_site_type,
                     t_init_quantity,
                     t_warehousing_quantity,
                     t_shipping_quantity
@@ -486,7 +485,7 @@ def create_transition_histories_table() -> None:
                 UPDATE inventory.monthry_summaries_every_site
                 SET warehousing_quantity = t_warehousing_quantity,
                     shipping_quantity = t_shipping_quantity
-                WHERE product_id = t_product_id AND year_month = yyyymm AND site_id = t_site_id;
+                WHERE product_id = t_product_id AND year_month = yyyymm AND site_type = t_site_type;
             END IF;
 
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -573,7 +572,7 @@ def create_transition_histories_table() -> None:
 
             SELECT * INTO recent_rec
                 FROM inventory.current_summaries_every_site
-                WHERE product_id = t_product_id AND site_id = t_site_id
+                WHERE product_id = t_product_id AND site_type = t_site_type
                 FOR UPDATE;
 
             IF recent_rec IS NULL THEN
@@ -586,13 +585,13 @@ def create_transition_histories_table() -> None:
                 INSERT INTO inventory.current_summaries_every_site
                 VALUES (
                     t_product_id,
-                    t_site_id,
+                    t_site_type,
                     t_quantity
                 );
             ELSE
                 UPDATE inventory.current_summaries_every_site
                 SET quantity = t_quantity
-                WHERE product_id = t_product_id AND site_id = t_site_id;
+                WHERE product_id = t_product_id AND site_type = t_site_type;
             END IF;
 
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -666,7 +665,6 @@ def create_transition_estimates_table() -> None:
             server_default=sa.func.now(),
             comment="取引予定日",
         ),
-        sa.Column("site_id", sa.String(2), nullable=False, comment="倉庫ID"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
         sa.Column(
             "transaction_quantity",
@@ -689,7 +687,7 @@ def create_transition_estimates_table() -> None:
             ),
             nullable=False,
             comment="在庫変動区分",
-        ),
+        ),  # FIXME:変動区分整理
         sa.Column(
             "transaction_no",
             sa.Integer,
@@ -706,16 +704,6 @@ def create_transition_estimates_table() -> None:
         "products",
         ["product_id"],
         ["product_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
-    op.create_foreign_key(
-        "fk_site_id",
-        "transition_estimates",
-        "sites",
-        ["site_id"],
-        ["site_id"],
         ondelete="RESTRICT",
         source_schema="inventory",
         referent_schema="mst",
@@ -755,8 +743,18 @@ def create_moving_instructions_table() -> None:
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("moving_reason", sa.Text, nullable=False, comment="移動理由"),
-        sa.Column("site_id_from", sa.String(2), nullable=False, comment="移動元倉庫ID"),
-        sa.Column("site_id_to", sa.String(2), nullable=False, comment="移動先倉庫ID"),
+        sa.Column(
+            "site_type_from",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            comment="移動元倉庫種別 ",
+        ),
+        sa.Column(
+            "site_type_to",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            comment="移動先倉庫種別 ",
+        ),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
         sa.Column(
             "moving_quantity",
@@ -770,9 +768,9 @@ def create_moving_instructions_table() -> None:
     )
 
     op.create_check_constraint(
-        "ck_site_id",
+        "ck_site_type",
         "moving_instructions",
-        "site_id_from != site_id_to",
+        "site_type_from != site_type_to",
         schema="inventory",
     )
     op.create_check_constraint(
@@ -801,26 +799,6 @@ def create_moving_instructions_table() -> None:
         source_schema="inventory",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_site_id_from",
-        "moving_instructions",
-        "sites",
-        ["site_id_from"],
-        ["site_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
-    op.create_foreign_key(
-        "fk_site_id_to",
-        "moving_instructions",
-        "sites",
-        ["site_id_to"],
-        ["site_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
     op.create_index(
         "ix_moving_instructions_product",
         "moving_instructions",
@@ -838,7 +816,7 @@ def create_moving_instructions_table() -> None:
         """
     )
 
-    # 登録後、在庫変動履歴を自動作成FIXME:関数名
+    # 登録後、在庫変動履歴を自動作成
     op.execute(
         """
         CREATE FUNCTION inventory.create_transition_histories_by_moving() RETURNS TRIGGER AS $$
@@ -847,7 +825,7 @@ def create_moving_instructions_table() -> None:
             VALUES (
                 default,
                 NEW.instruction_date,
-                NEW.site_id_from,
+                NEW.site_type_from,
                 NEW.product_id,
                 - NEW.moving_quantity ,
                 0.0,
@@ -859,7 +837,7 @@ def create_moving_instructions_table() -> None:
             VALUES (
                 default,
                 NEW.instruction_date,
-                NEW.site_id_to,
+                NEW.site_type_to,
                 NEW.product_id,
                 NEW.moving_quantity ,
                 0.0,
@@ -899,7 +877,12 @@ def create_other_inventory_instructions_table() -> None:
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("transition_reason", sa.Text, nullable=False, comment="入出庫理由"),
-        sa.Column("site_id", sa.String(2), nullable=False, comment="倉庫ID"),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            comment="倉庫種別 ",
+        ),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
         sa.Column(
             "quantity",
@@ -939,16 +922,6 @@ def create_other_inventory_instructions_table() -> None:
         source_schema="inventory",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_site_id",
-        "other_inventory_instructions",
-        "sites",
-        ["site_id"],
-        ["site_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
 
     op.execute(
         """
@@ -960,7 +933,7 @@ def create_other_inventory_instructions_table() -> None:
         """
     )
 
-    # 登録後、在庫変動履歴を自動作成FIXME:関数名
+    # 登録後、在庫変動履歴を自動作成
     op.execute(
         """
         CREATE FUNCTION inventory.create_transition_histories_by_other() RETURNS TRIGGER AS $$
@@ -969,7 +942,7 @@ def create_other_inventory_instructions_table() -> None:
             VALUES (
                 default,
                 NEW.instruction_date,
-                NEW.site_id,
+                NEW.site_type,
                 NEW.product_id,
                 NEW.quantity ,
                 NEW.amount,
@@ -1005,15 +978,16 @@ def create_view() -> None:
                 CS.quantity AS assets_quantity,
                 (SELECT SUM(CE.quantity)
                     FROM inventory.current_summaries_every_site CE
-                    LEFT JOIN mst.sites SI ON CE.site_id = SI.site_id
+                    --LEFT JOIN mst.sites SI ON CE.site_id = SI.site_id
                     WHERE CE.product_id = CS.product_id
-                    AND SI.is_free = true
+                    AND CE.site_type = 'MAIN'
+                    --AND SI.is_free = true
                 ) AS free_quantity,
                 CS.amount,
                 CS.cost_price
             FROM inventory.current_summaries CS;
         """
-    )
+    )  # FIXME:
     op.execute(
         """
         CREATE VIEW inventory.view_monthry_summaries AS
@@ -1023,16 +997,17 @@ def create_view() -> None:
                 MS.quantity AS assets_quantity,
                 (SELECT SUM(ME.quantity)
                     FROM inventory.monthry_summaries_every_site ME
-                    LEFT JOIN mst.sites SI ON ME.site_id = SI.site_id
+                    --LEFT JOIN mst.sites SI ON ME.site_id = SI.site_id
                     WHERE ME.year_month = MS.year_month
                     AND ME.product_id = MS.product_id
-                    AND SI.is_free = true
+                    AND ME.site_type = 'MAIN'
+                    --AND SI.is_free = true
                 ) AS free_quantity,
                 MS.amount,
                 MS.cost_price
             FROM inventory.monthry_summaries MS;
         """
-    )
+    )  # FIXME:
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
