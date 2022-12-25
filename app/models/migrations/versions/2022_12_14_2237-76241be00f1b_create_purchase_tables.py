@@ -591,6 +591,12 @@ def create_ordering_details_table() -> None:
         "purchase_quantity >= wearhousing_quantity + cancel_quantity",
         schema="purchase",
     )
+    op.create_check_constraint(
+        "ck_purchase_unit_price",
+        "ordering_details",
+        "purchase_unit_price > 0",
+        schema="purchase",
+    )
     op.create_foreign_key(
         "fk_ordering_no",
         "ordering_details",
@@ -1764,22 +1770,18 @@ def create_other_purchase_instructions_table() -> None:
 def create_view() -> None:
     op.execute(
         """
-        CREATE VIEW purchase.view_remaining_ordering_details AS
+        CREATE VIEW purchase.view_remaining_order AS
             SELECT
                 OD.detail_no,
                 OD.product_id,
                 OD.purchase_quantity,
-                OD.wearhousing_quantity,
-                OD.cancel_quantity,
                 (OD.purchase_quantity - OD.wearhousing_quantity - OD.cancel_quantity) AS remaining_quantity,
-                OD.purchase_unit_price,
                 OD.estimate_arrival_date
             FROM purchase.ordering_details OD
             WHERE (OD.purchase_quantity - OD.wearhousing_quantity - OD.cancel_quantity) > 0
-            ORDER BY OD.product_id, OD.estimate_arrival_date;
+            ORDER BY OD.product_id, OD.estimate_arrival_date, OD.detail_no;
         """
     )
-    # (SELECT date FROM business_date WHERE date_type = 'BUSINESS_DATE')
     op.execute(
         """
         CREATE VIEW purchase.view_payments AS

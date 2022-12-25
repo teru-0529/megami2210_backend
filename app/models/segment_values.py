@@ -96,6 +96,25 @@ class OrderPolicy(Base):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+class siteType(Base):
+    main = "MAIN"
+    keep_product = "KEEP_PRODUCT"
+    inspect_product = "INSPECT_PRODUCT"
+    damaged_product = "DAMAGED_PRODUCT"
+
+    def description() -> str:
+        return """
+発注方針:
+  * `MAIN` - メイン倉庫
+  * `KEEP_PRODUCT` - 確保商品倉庫
+  * `INSPECT_PRODUCT` - 検品商品倉庫
+  * `DAMAGED_PRODUCT` - 破損商品倉庫
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class StockTransitionType(Base):
     movement_warehousing = "MOVEMENT_WAREHOUSING"
     purchase = "PURCHASE"
