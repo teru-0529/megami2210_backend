@@ -969,51 +969,6 @@ def create_other_inventory_instructions_table() -> None:
 
 
 # INFO:
-def create_view() -> None:
-    op.execute(
-        """
-        CREATE VIEW inventory.view_current_summaries AS
-            SELECT
-                CS.product_id,
-                CS.quantity AS assets_quantity,
-                (SELECT SUM(CE.quantity)
-                    FROM inventory.current_summaries_every_site CE
-                    --LEFT JOIN mst.sites SI ON CE.site_id = SI.site_id
-                    WHERE CE.product_id = CS.product_id
-                    AND CE.site_type = 'MAIN'
-                    --AND SI.is_free = true
-                ) AS free_quantity,
-                CS.amount,
-                CS.cost_price
-            FROM inventory.current_summaries CS;
-        """
-    )  # FIXME:
-    op.execute(
-        """
-        CREATE VIEW inventory.view_monthry_summaries AS
-            SELECT
-                MS.year_month,
-                MS.product_id,
-                MS.quantity AS assets_quantity,
-                (SELECT SUM(ME.quantity)
-                    FROM inventory.monthry_summaries_every_site ME
-                    --LEFT JOIN mst.sites SI ON ME.site_id = SI.site_id
-                    WHERE ME.year_month = MS.year_month
-                    AND ME.product_id = MS.product_id
-                    AND ME.site_type = 'MAIN'
-                    --AND SI.is_free = true
-                ) AS free_quantity,
-                MS.amount,
-                MS.cost_price
-            FROM inventory.monthry_summaries MS;
-        """
-    )  # FIXME:
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-# INFO:
 def upgrade() -> None:
     create_current_summaries_table()
     create_current_summaries_every_site_table()
@@ -1023,7 +978,6 @@ def upgrade() -> None:
     create_moving_instructions_table()
     create_other_inventory_instructions_table()
     create_transition_estimates_table()
-    create_view()
 
 
 def downgrade() -> None:

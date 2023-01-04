@@ -117,6 +117,25 @@ class SiteType(Base):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+class ShippingProductSituation(Base):
+    in_stock = "IN_STOCK"
+    on_inspect = "ON_INSPECT"
+    arleady_ordered = "ARLEADY_ORDERED"
+    not_yet_ordered = "NOT_YET_ORDERED"
+
+    def description() -> str:
+        return """
+出荷商品状況:
+  * `IN_STOCK` - 在庫商品
+  * `ON_INSPECT` - 検品中商品
+  * `ARLEADY_ORDERED` - 既発注商品
+  * `NOT_YET_ORDERED` - 未発注商品
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class StockTransitionType(Base):
     movement_warehousing = "MOVEMENT_WAREHOUSING"
     purchase = "PURCHASE"
@@ -164,26 +183,30 @@ class PayableTransitionType(Base):
 
 
 class Weeks(Base):
+    sun = "SUN"
     mon = "MON"
     tue = "TUE"
     wed = "WED"
     thu = "THU"
     fri = "FRI"
     sat = "SAT"
-    sun = "SUN"
 
     def description() -> str:
         return """
 曜日:
+  * `SUN` - 日曜日
   * `MON` - 月曜日
   * `TUE` - 火曜日
   * `WED` - 水曜日
   * `THU` - 木曜日
   * `FRI` - 金曜日
   * `SAT` - 土曜日
-  * `SUN` - 日曜日
     """
 
     def week_num(self) -> int:
         list = [*Weeks.__members__.values()]
         return list.index(self)
+
+
+def new_week_num(num: int) -> Weeks:
+    return Weeks[num]

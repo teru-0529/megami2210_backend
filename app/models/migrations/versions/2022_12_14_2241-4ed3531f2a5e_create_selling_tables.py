@@ -8,6 +8,7 @@ Create Date: 2022-12-14 22:41:16.215287
 import sqlalchemy as sa
 from alembic import op
 
+from app.models.segment_values import ShippingProductSituation
 from app.models.migrations.util import timestamps
 
 # revision identifiers, used by Alembic.
@@ -323,6 +324,257 @@ def create_receiving_details_table() -> None:
 
 
 # INFO:
+def create_shipping_plan_products_table() -> None:
+    op.create_table(
+        "shipping_plan_products",
+        sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
+        sa.Column("priority_no", sa.Integer, primary_key=True, comment="優先順位"),
+        sa.Column(
+            "situation",
+            sa.Enum(
+                *ShippingProductSituation.list(),
+                name="shipping_situation",
+                schema="selling",
+            ),
+            nullable=False,
+            comment="出荷予定商品状況",
+        ),
+        sa.Column(
+            "quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="出荷可能数",
+        ),
+        sa.Column(
+            "available_shipment_date",
+            sa.Date,
+            server_default="2000-01-01",
+            nullable=False,
+            comment="出荷可能日",
+        ),
+        sa.Column(
+            "fastest_ordering_date",
+            sa.Date,
+            nullable=True,
+            comment="最速発注日",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_check_constraint(
+        "ck_quantity",
+        "shipping_plan_products",
+        "quantity > 0",
+        schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_product_id",
+        "shipping_plan_products",
+        "products",
+        ["product_id"],
+        ["product_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+
+    # 出荷計画の作成
+    op.execute(
+        """
+        CREATE FUNCTION selling.reset_shipping_plan() RETURNS TRIGGER AS $$
+        DECLARE
+            i_product_id text;
+            t_plan_quantity integer;
+            t_priority integer;
+            t_quantity integer;
+
+            t_today date;
+
+            --検品日数(1日)
+            instpect_interval interval:=CAST('+1 Day' AS interval);
+
+            tttt RECORD;
+            ordered_cursor refcursor;
+            rec RECORD;
+
+            ordering_dates RECORD;
+            --FIXME:
+
+        BEGIN
+            i_product_id:=NEW.product_id;
+            t_priority:=0;
+
+            SELECT date INTO t_today
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+            --FIXME:
+
+            -- 指定商品の出荷計画を削除
+            DELETE
+            FROM selling.shipping_plan_products
+            WHERE product_id = i_product_id;
+
+            -- 受注残数の計算
+            SELECT SUM(receive_quantity - shipping_quantity - cancel_quantity) INTO t_plan_quantity
+            FROM selling.receiving_details
+            WHERE product_id = i_product_id;
+
+            IF t_plan_quantity IS NULL OR t_plan_quantity = 0 THEN
+                return NEW;
+            END iF;
+
+            -- フリー在庫数の計算TODO:
+            SELECT quantity INTO t_quantity
+            FROM inventory.current_summaries_every_site
+            WHERE product_id = i_product_id
+            AND   site_type = 'MAIN';
+
+            IF t_quantity IS NOT NULL AND t_quantity > 0 THEN
+                IF t_quantity < t_plan_quantity THEN
+                    t_plan_quantity:=t_plan_quantity-t_quantity;
+                ELSE
+                    t_quantity:=t_plan_quantity;
+                    t_plan_quantity:=0;
+                END IF;
+
+                t_priority:=t_priority + 1;
+                INSERT INTO selling.shipping_plan_products
+                VALUES (
+                    i_product_id,
+                    t_priority,
+                    'IN_STOCK',
+                    t_quantity,
+                    t_today
+                );
+            END IF;
+
+            IF t_plan_quantity = 0 THEN
+                return NEW;
+            END iF;
+
+            -- 検品中在庫数の計算TODO:
+            SELECT quantity INTO t_quantity
+            FROM inventory.current_summaries_every_site
+            WHERE product_id = i_product_id
+            AND   site_type = 'INSPECT_PRODUCT';
+
+            IF t_quantity IS NOT NULL AND t_quantity > 0 THEN
+                IF t_quantity < t_plan_quantity THEN
+                    t_plan_quantity:=t_plan_quantity-t_quantity;
+                ELSE
+                    t_quantity:=t_plan_quantity;
+                    t_plan_quantity:=0;
+                END IF;
+
+                t_priority:=t_priority + 1;
+                INSERT INTO selling.shipping_plan_products
+                VALUES (
+                    i_product_id,
+                    t_priority,
+                    'ON_INSPECT',
+                    t_quantity,
+                    t_today + instpect_interval
+                );
+            END IF;
+
+            IF t_plan_quantity = 0 THEN
+                return NEW;
+            END iF;
+
+            -- 既発注数の計算TODO:
+            OPEN ordered_cursor FOR
+            SELECT *
+            FROM purchase.view_remaining_order
+            WHERE product_id = i_product_id
+            ORDER BY estimate_arrival_date ASC;
+
+            LOOP
+                FETCH ordered_cursor INTO rec;
+                IF NOT FOUND THEN
+                    EXIT;
+                END IF;
+                IF t_plan_quantity=0 THEN
+                    EXIT;
+                END IF;
+
+                IF rec.remaining_quantity < t_plan_quantity THEN
+                    t_quantity:=rec.remaining_quantity;
+                    t_plan_quantity:=t_plan_quantity-t_quantity;
+                ELSE
+                    t_quantity:=t_plan_quantity;
+                    t_plan_quantity:=0;
+                END IF;
+
+                t_priority:=t_priority + 1;
+                INSERT INTO selling.shipping_plan_products
+                VALUES (
+                    i_product_id,
+                    t_priority,
+                    'ARLEADY_ORDERED',
+                    t_quantity,
+                    rec.estimate_arrival_date + instpect_interval
+                );
+
+            END LOOP;
+            CLOSE ordered_cursor;
+
+            IF t_plan_quantity = 0 THEN
+                return NEW;
+            END iF;
+
+            -- 未発注数の計算TODO:
+            ordering_dates:=mst.calc_ordering_date(t_today, i_product_id);
+
+            t_priority:=t_priority + 1;
+            INSERT INTO selling.shipping_plan_products
+            VALUES (
+                i_product_id,
+                t_priority,
+                'NOT_YET_ORDERED',
+                t_plan_quantity,
+                ordering_dates.estimate_weahousing + instpect_interval,
+                ordering_dates.estimate_ordering
+            );
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER ship_plan_of_receiving_details
+            AFTER INSERT OR UPDATE
+            ON selling.receiving_details
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.reset_shipping_plan();
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER ship_plan_of_ordering_details
+            AFTER INSERT OR UPDATE
+            ON purchase.ordering_details
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.reset_shipping_plan();
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER ship_plan_of_inventory_summaries
+            AFTER INSERT OR UPDATE
+            ON inventory.current_summaries_every_site
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.reset_shipping_plan();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def create_view() -> None:
     op.execute(
         """
@@ -352,6 +604,27 @@ def create_view() -> None:
             ORDER BY RD.product_id;
         """
     )
+    op.execute(
+        """
+        CREATE VIEW inventory.view_current_summaries AS
+            SELECT
+                CS.product_id,
+                CS.quantity AS assets_quantity,
+                COALESCE(CE.quantity, 0) AS prepared_quantity,
+                COALESCE(SP.quantity, 0) AS ordered_quantity,
+                COALESCE(CE.quantity, 0) - COALESCE(SP.quantity, 0) AS free_quantity,
+                CS.amount,
+                CS.cost_price
+            FROM inventory.current_summaries CS
+            LEFT JOIN inventory.current_summaries_every_site CE
+                ON CE.product_id = CS.product_id
+                AND CE.site_type = 'MAIN'
+            LEFT JOIN selling.shipping_plan_products SP
+                ON SP.product_id = CS.product_id
+                AND SP.situation = 'IN_STOCK';
+            ;
+        """
+    )
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -362,10 +635,12 @@ def upgrade() -> None:
     op.execute("CREATE SEQUENCE selling.shipping_no_seed START 1;")
     create_receivings_table()
     create_receiving_details_table()
+    create_shipping_plan_products_table()
     create_view()
 
 
 def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS selling.shipping_plan_products CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.receiving_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.receivings CASCADE;")
     op.execute("DROP SEQUENCE IF EXISTS selling.receiving_no_seed CASCADE;")

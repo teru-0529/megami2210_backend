@@ -10,7 +10,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import ENUM
 
 from app.models.migrations.util import timestamps
-from app.models.segment_values import MasterStatus, OrderPolicy, Weeks
+from app.models.segment_values import MasterStatus, OrderPolicy
 
 # revision identifiers, used by Alembic.
 revision = "139619b8894b"
@@ -383,8 +383,8 @@ def create_suppliers_table() -> None:
             comment="発注方針",
         ),
         sa.Column(
-            "order_week",
-            sa.Enum(*Weeks.list(), name="order_week", schema="mst"),
+            "order_week_num",
+            sa.Integer,
             nullable=True,
             index=True,
             comment="発注曜日",
@@ -419,17 +419,17 @@ def create_suppliers_table() -> None:
         schema="mst",
     )
     # 「発注方針」が「定期発注」の場合は、「発注曜日」が必須、「発注方針」が「随時発注」の場合は、「発注曜日」を指定してはいけない
-    ck_order_week: str = """
+    ck_order_week_num: str = """
     CASE
-        WHEN order_policy='PERIODICALLY' AND order_week IS NULL THEN FALSE
-        WHEN order_policy='AS_NEEDED' AND order_week IS NOT NULL THEN FALSE
+        WHEN order_policy='PERIODICALLY' AND order_week_num IS NULL THEN FALSE
+        WHEN order_policy='AS_NEEDED' AND order_week_num IS NOT NULL THEN FALSE
         ELSE TRUE
     END
     """
     op.create_check_constraint(
-        "ck_order_week",
+        "ck_order_week_num",
         "suppliers",
-        ck_order_week,
+        ck_order_week_num,
         schema="mst",
     )
     op.execute(
@@ -473,7 +473,7 @@ def create_suppliers_table() -> None:
                 "purchase_pic": "T-902",
                 "contact_person": "桜木花道",
                 "order_policy": OrderPolicy.periodically,
-                "order_week": Weeks.thu,
+                "order_week_num": 4,
                 "days_to_arrive": 10,
                 "note": "湘北",
             },
@@ -485,7 +485,7 @@ def create_suppliers_table() -> None:
                 "purchase_pic": "T-902",
                 "contact_person": "流川楓",
                 "order_policy": OrderPolicy.as_needed,
-                "order_week": None,
+                "order_week_num": None,
                 "days_to_arrive": 15,
                 "note": "湘北",
             },
@@ -497,7 +497,7 @@ def create_suppliers_table() -> None:
                 "purchase_pic": "T-902",
                 "contact_person": "赤木剛憲",
                 "order_policy": OrderPolicy.periodically,
-                "order_week": Weeks.thu,
+                "order_week_num": 4,
                 "days_to_arrive": 12,
                 "note": "湘北",
             },
@@ -509,7 +509,7 @@ def create_suppliers_table() -> None:
                 "purchase_pic": None,
                 "contact_person": None,
                 "order_policy": OrderPolicy.periodically,
-                "order_week": Weeks.thu,
+                "order_week_num": 4,
                 "days_to_arrive": 10,
                 "note": "湘北",
             },
@@ -521,14 +521,14 @@ def create_suppliers_table() -> None:
                 "purchase_pic": None,
                 "contact_person": "三井寿",
                 "order_policy": OrderPolicy.periodically,
-                "order_week": Weeks.wed,
+                "order_week_num": 3,
                 "days_to_arrive": 10,
                 "note": "湘北",
             },
         ],
     )
 
-    # 支払締日、支払期限の計算
+    # 支払締日、支払期限の計算TODO:
     op.execute(
         """
         CREATE FUNCTION mst.calc_payment_deadline(
@@ -761,6 +761,54 @@ def create_products_table(status_type: ENUM) -> None:
         schema="mst",
     )
 
+    # 指定日付以降に発注した場合の発注日、納期予定日を計算TODO:
+    op.execute(
+        """
+        CREATE FUNCTION mst.calc_ordering_date(
+            operation_date date,
+            i_product_id text,
+            OUT estimate_ordering date,
+            OUT estimate_weahousing date
+        ) AS $$
+        DECLARE
+            product_rec record;
+            supplier_rec record;
+
+            weeknum_of_operation integer;
+        BEGIN
+            --商品マスタ、仕入先マスタの検索
+            SELECT * INTO product_rec
+            FROM mst.products
+            WHERE product_id = i_product_id;
+
+            SELECT * INTO supplier_rec
+            FROM mst.suppliers
+            WHERE company_id = product_rec.supplier_id;
+
+            --最短発注日計算
+            IF supplier_rec.order_policy = 'AS_NEEDED' THEN
+                --随時発注の場合当日発注
+                estimate_ordering:=operation_date;
+            ELSE
+                --定期発注の場合次の発注曜日を計算
+                weeknum_of_operation:= date_part('dow', operation_date);
+                estimate_ordering:=operation_date + CAST(
+                    MOD(7 + supplier_rec.order_week_num - weeknum_of_operation, 7) || ' Day' AS interval
+                );
+            END IF;
+
+            --納入予定日計算
+            IF product_rec.days_to_arrive IS NULL THEN
+                estimate_weahousing:=estimate_ordering + CAST(supplier_rec.days_to_arrive || ' Day' AS interval);
+            ELSE
+                estimate_weahousing:=estimate_ordering + CAST(product_rec.days_to_arrive || ' Day' AS interval);
+            END IF;
+
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+
     op.bulk_insert(
         products_table,
         [
@@ -916,5 +964,4 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS mst.costomers CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.companies CASCADE;")
     op.execute("DROP TYPE IF EXISTS mst.order_policy;")
-    op.execute("DROP TYPE IF EXISTS mst.order_week;")
     op.execute("DROP TYPE IF EXISTS mst.status;")

@@ -200,7 +200,7 @@ def upgrade() -> None:
                 "order_detail_no": 3,
                 "wearhousing_quantity": 3,
                 "wearhousing_unit_price": 10000.0,
-                "site_type": SiteType.main,
+                "site_type": SiteType.inspect_product,
             },
             {
                 "wearhousing_no": "WH-0000002",
@@ -639,6 +639,40 @@ def upgrade() -> None:
                 "transaction_amount": DUMMY_AMOUNT,
                 "transition_type": StockTransitionType.selling,
                 "transaction_no": 510,
+            },
+        ],
+    )
+
+    # 発注
+    op.bulk_insert(
+        pch_orderings,
+        [
+            {
+                "order_date": date(2024, 2, 10),
+                "supplier_id": "S001",
+                "purchase_pic": "T-901",
+            },
+            {
+                "order_date": date(2024, 2, 13),
+                "supplier_id": "S001",
+                "purchase_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        pch_ordering_details,
+        [
+            {
+                "ordering_no": "PO-0000007",
+                "product_id": "S001-00001",
+                "purchase_quantity": 1,
+                "purchase_unit_price": 11000.0,
+            },
+            {
+                "ordering_no": "PO-0000008",
+                "product_id": "S001-00001",
+                "purchase_quantity": 2,
+                "purchase_unit_price": 9500.0,
             },
         ],
     )
