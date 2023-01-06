@@ -92,7 +92,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2023, 1, 20),
                 "supplier_id": "S001",
                 "purchase_pic": "T-901",
             },
@@ -133,7 +132,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2023, 1, 22),
                 "supplier_id": "S002",
                 "purchase_pic": "T-902",
             },
@@ -162,7 +160,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2023, 1, 23),
                 "supplier_id": "S002",
                 "purchase_pic": "T-902",
             },
@@ -191,7 +188,6 @@ def upgrade() -> None:
         pch_arrival_date_instructions,
         [
             {
-                "instruction_date": date(2023, 1, 24),
                 "instruction_pic": "T-902",
                 "change_reason": "メーカー在庫なし",
                 "ordering_detail_no": 1,
@@ -211,7 +207,6 @@ def upgrade() -> None:
         pch_order_cancel_instructions,
         [
             {
-                "instruction_date": date(2023, 1, 25),
                 "instruction_pic": "T-902",
                 "cancel_reason": "護発注",
                 "ordering_detail_no": 2,
@@ -231,7 +226,6 @@ def upgrade() -> None:
         pch_order_cancel_instructions,
         [
             {
-                "instruction_date": date(2023, 1, 28),
                 "instruction_pic": "T-902",
                 "cancel_reason": "受注キャンセルの対応",
                 "ordering_detail_no": 3,
@@ -251,7 +245,6 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2023, 1, 30),
                 "supplier_id": "S001",
                 "wearhousing_pic": "T-901",
             },
@@ -281,7 +274,6 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
-                "instruction_date": date(2023, 1, 31),
                 "instruction_pic": "T-901",
                 "moving_reason": "検品（異常なし）",
                 "site_type_from": SiteType.inspect_product,
@@ -303,12 +295,10 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2023, 2, 6),
                 "supplier_id": "S001",
                 "wearhousing_pic": "T-901",
             },
             {
-                "wearhousing_date": date(2023, 2, 6),
                 "supplier_id": "S002",
                 "wearhousing_pic": "T-902",
             },
@@ -345,7 +335,6 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2023, 2, 7),
                 "supplier_id": "S002",
                 "wearhousing_pic": "T-902",
             },
@@ -383,7 +372,6 @@ def upgrade() -> None:
         pch_purchase_return_instructions,
         [
             {
-                "instruction_date": date(2023, 2, 8),
                 "instruction_pic": "T-902",
                 "return_reason": "お客様受注のキャンセル対応",
                 "supplier_id": "S002",
@@ -399,7 +387,6 @@ def upgrade() -> None:
         pch_other_purchase_instructions,
         [
             {
-                "instruction_date": date(2023, 2, 8),
                 "instruction_pic": "T-901",
                 "supplier_id": "S001",
                 "transition_reason": "輸送費追加計上",
@@ -414,7 +401,7 @@ def upgrade() -> None:
         SET payment_check_date = '2023-2-8', payment_check_pic = 'T-901'
         WHERE payment_no = 'PM-0000001';
         """
-    )
+    )  # FIXME:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-02-09 その他買掛金取引INFO:
@@ -427,7 +414,6 @@ def upgrade() -> None:
         pch_other_purchase_instructions,
         [
             {
-                "instruction_date": date(2023, 2, 9),
                 "instruction_pic": "T-901",
                 "supplier_id": "S002",
                 "transition_reason": "誤請求返金(2022年10月分)",
@@ -449,7 +435,7 @@ def upgrade() -> None:
         SET payment_check_date = '2023-3-1', payment_check_pic = 'T-902'
         WHERE payment_no = 'PM-0000003';
         """
-    )
+    )  # FIXME:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-03-10 請求書確認INFO:
@@ -464,7 +450,7 @@ def upgrade() -> None:
         SET payment_check_date = '2023-3-10', payment_check_pic = 'T-901'
         WHERE payment_no = 'PM-0000002';
         """
-    )
+    )  # FIXME:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-03-20 支払INFO:
@@ -477,7 +463,6 @@ def upgrade() -> None:
         pch_payment_instructions,
         [
             {
-                "instruction_date": date(2023, 3, 20),
                 "instruction_pic": "T-901",
                 "payment_no": "PM-0000001",
             },
@@ -495,7 +480,6 @@ def upgrade() -> None:
         pch_payment_instructions,
         [
             {
-                "instruction_date": date(2023, 4, 10),
                 "instruction_pic": "T-902",
                 "payment_no": "PM-0000003",
             },
@@ -513,7 +497,6 @@ def upgrade() -> None:
         pch_payment_instructions,
         [
             {
-                "instruction_date": date(2023, 5, 13),
                 "instruction_pic": "T-901",
                 "payment_no": "PM-0000002",
             },
@@ -531,7 +514,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2023, 10, 10),
                 "supplier_id": "S001",
                 "purchase_pic": "T-901",
             },
@@ -560,7 +542,6 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2023, 10, 20),
                 "supplier_id": "S001",
                 "wearhousing_pic": "T-901",
             },
@@ -592,7 +573,7 @@ def upgrade() -> None:
         SET payment_check_date = '2023-11-6', payment_check_pic = 'T-901'
         WHERE payment_no = 'PM-0000004';
         """
-    )
+    )  # FIXME:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-11-21 予約受注 INFO:FIXME:受注キャンセルを追加する
@@ -605,7 +586,6 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "receive_date": date(2023, 11, 21),
                 "coustomer_id": "C001",
                 "receiving_pic": "T-901",
             },
@@ -634,7 +614,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2023, 11, 25),
                 "supplier_id": "S001",
                 "purchase_pic": "T-901",
             },
@@ -669,7 +648,6 @@ def upgrade() -> None:
         pch_arrival_date_instructions,
         [
             {
-                "instruction_date": date(2023, 11, 27),
                 "instruction_pic": "T-901",
                 "change_reason": "輸送業者都合",
                 "ordering_detail_no": 7,
@@ -689,7 +667,6 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2023, 12, 5),
                 "supplier_id": "S001",
                 "wearhousing_pic": "T-901",
             },
@@ -718,7 +695,6 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
-                "instruction_date": date(2023, 12, 6),
                 "instruction_pic": "T-902",
                 "moving_reason": "検品（異常なし）",
                 "site_type_from": SiteType.inspect_product,
@@ -741,7 +717,6 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2023, 12, 12),
                 "supplier_id": "S001",
                 "wearhousing_pic": "T-901",
             },
@@ -763,7 +738,6 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
-                "instruction_date": date(2023, 12, 12),
                 "instruction_pic": "T-901",
                 "moving_reason": "検品（異常なし）",
                 "site_type_from": SiteType.inspect_product,
@@ -772,7 +746,6 @@ def upgrade() -> None:
                 "moving_quantity": 3,
             },
             {
-                "instruction_date": date(2023, 12, 12),
                 "instruction_pic": "T-901",
                 "moving_reason": "検品（不良品）",
                 "site_type_from": SiteType.inspect_product,
@@ -795,7 +768,6 @@ def upgrade() -> None:
         pch_purchase_return_instructions,
         [
             {
-                "instruction_date": date(2023, 12, 14),
                 "instruction_pic": "T-901",
                 "return_reason": "検品不良の対応",
                 "wearhousing_detail_no": 8,
@@ -809,7 +781,6 @@ def upgrade() -> None:
         inv_other_inventory_instructions,
         [
             {
-                "instruction_date": date(2023, 12, 14),
                 "instruction_pic": "T-901",
                 "transition_reason": "検品不良により廃棄、費用は雑費用として処理",
                 "site_type": SiteType.damaged_product,
@@ -833,7 +804,7 @@ def upgrade() -> None:
         SET payment_check_date = '2023-12-15', payment_check_pic = 'T-901'
         WHERE payment_no = 'PM-0000005';
         """
-    )
+    )  # FIXME:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 24-01-03 出荷 INFO:
@@ -846,7 +817,6 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "shipping_date": date(2024, 1, 3),
                 "coustomer_id": "C001",
                 "shipping_pic": "T-901",
             },
@@ -875,7 +845,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2024, 1, 5),
                 "supplier_id": "S001",
                 "purchase_pic": "T-901",
             },
@@ -904,7 +873,6 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
-                "wearhousing_date": date(2024, 1, 15),
                 "supplier_id": "S001",
                 "wearhousing_pic": "T-901",
             },
@@ -935,7 +903,6 @@ def upgrade() -> None:
         inv_other_inventory_instructions,
         [
             {
-                "instruction_date": date(2024, 1, 18),
                 "instruction_pic": "T-901",
                 "transition_reason": "棚卸結果反映、帳簿在庫増",
                 "site_type": SiteType.main,
@@ -956,7 +923,6 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "receive_date": date(2024, 1, 20),
                 "coustomer_id": "C002",
                 "receiving_pic": "T-902",
             },
@@ -983,7 +949,6 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "shipping_date": date(2024, 1, 20),
                 "coustomer_id": "C002",
                 "shipping_pic": "T-902",
             },
@@ -1037,7 +1002,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2024, 2, 10),
                 "supplier_id": "S001",
                 "purchase_pic": "T-901",
             },
@@ -1066,7 +1030,6 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
-                "order_date": date(2024, 2, 13),
                 "supplier_id": "S001",
                 "purchase_pic": "T-901",
             },
@@ -1095,9 +1058,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "receive_date": date(2024, 2, 16),
-                "coustomer_id": "C001",
-                "receiving_pic": "T-901",
+                "coustomer_id": "C002",
+                "receiving_pic": "T-902",
             },
         ],
     )
@@ -1122,9 +1084,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "receive_date": date(2024, 2, 16),
-                "coustomer_id": "C002",
-                "receiving_pic": "T-902",
+                "coustomer_id": "C001",
+                "receiving_pic": "T-901",
                 "shipping_priority": 1,
             },
         ],
@@ -1155,6 +1116,34 @@ def upgrade() -> None:
                 "product_id": "S005-00001",
                 "receive_quantity": 3,
                 "selling_unit_price": 5000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-02-18 出荷 INFO:
+    op.execute(
+        """
+        update business_date SET date = '2024-02-18';
+        """
+    )
+    op.bulk_insert(
+        sel_shippings,
+        [
+            {
+                "coustomer_id": "C001",
+                "shipping_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_shipping_details,
+        [
+            {
+                "shipping_no": "SP-0000003",
+                "receive_detail_no": 7,
+                "shipping_quantity": 2,
+                "selling_unit_price": 35000.0,
             },
         ],
     )

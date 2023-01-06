@@ -816,6 +816,31 @@ def create_moving_instructions_table() -> None:
         """
     )
 
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION inventory.calc_moving_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_moving_instructions
+            BEFORE INSERT
+            ON inventory.moving_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.calc_moving_instructions();
+        """
+    )
+
     # 登録後、在庫変動履歴を自動作成
     op.execute(
         """
@@ -930,6 +955,31 @@ def create_other_inventory_instructions_table() -> None:
             ON inventory.other_inventory_instructions
             FOR EACH ROW
         EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION inventory.calc_other_inventory_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_other_inventory_instructions
+            BEFORE INSERT
+            ON inventory.other_inventory_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE inventory.calc_other_inventory_instructions();
         """
     )
 

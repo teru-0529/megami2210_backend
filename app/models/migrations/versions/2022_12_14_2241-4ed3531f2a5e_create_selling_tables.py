@@ -462,6 +462,12 @@ def create_receivings_table() -> None:
         CREATE FUNCTION selling.create_receivings() RETURNS TRIGGER AS $$
         BEGIN
             NEW.receiving_no:='RO-'||to_char(nextval('selling.receiving_no_seed'),'FM0000000');
+
+            -- 処理日付を取得
+            SELECT date INTO NEW.receive_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -769,10 +775,18 @@ def create_shippings_table() -> None:
 
         BEGIN
             NEW.shipping_no:='SP-'||to_char(nextval('selling.shipping_no_seed'),'FM0000000');
+
+            -- 処理日付を取得
+            SELECT date INTO NEW.shipping_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            -- 締日・入金期限の計算
             rec:=mst.calc_deposit_deadline(New.shipping_date, New.coustomer_id);
             New.closing_date:=rec.closing_date;
             New.deposit_deadline:=rec.deposit_deadline;
             New.note:=rec.dummy;
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;

@@ -320,7 +320,7 @@ def create_costomers_table() -> None:
             {
                 "company_id": "C002",
                 "cutoff_day": 99,
-                "month_of_deposit_term": 1,
+                "month_of_deposit_term": 2,
                 "deposit_day": 5,
                 "sales_pic": "T-902",
                 "contact_person": "仙道彰",

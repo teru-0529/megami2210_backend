@@ -454,6 +454,12 @@ def create_orderings_table() -> None:
         CREATE FUNCTION purchase.calc_orderings() RETURNS TRIGGER AS $$
         BEGIN
             NEW.ordering_no:='PO-'||to_char(nextval('purchase.ordering_no_seed'),'FM0000000');
+
+            -- 処理日付を取得
+            SELECT date INTO NEW.order_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -814,10 +820,18 @@ def create_wearhousings_table() -> None:
 
         BEGIN
             NEW.wearhousing_no:='WH-'||to_char(nextval('purchase.warehousing_no_seed'),'FM0000000');
+
+            -- 処理日付を取得
+            SELECT date INTO NEW.wearhousing_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            -- 締日・支払期限の計算
             rec:=mst.calc_payment_deadline(New.wearhousing_date, New.supplier_id);
             New.closing_date:=rec.closing_date;
             New.payment_deadline:=rec.payment_deadline;
             New.note:=rec.dummy;
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -1132,6 +1146,31 @@ def create_payment_instructions_table() -> None:
         """
     )
 
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION purchase.calc_payment_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_payment_instructions
+            BEFORE INSERT
+            ON purchase.payment_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.calc_payment_instructions();
+        """
+    )
+
     # 入金指示後、入金日時更新、買掛変動履歴を自動作成TODO:
     op.execute(
         """
@@ -1243,6 +1282,31 @@ def create_order_cancel_instructions_table() -> None:
         """
     )
 
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION purchase.calc_order_cancel_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_order_cancel_instructions
+            BEFORE INSERT
+            ON purchase.order_cancel_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.calc_order_cancel_instructions();
+        """
+    )
+
     # 発注明細の変更TODO:
     op.execute(
         """
@@ -1333,6 +1397,31 @@ def create_arrival_date_instructions_table() -> None:
             ON purchase.arrival_date_instructions
             FOR EACH ROW
         EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION purchase.calc_arrival_date_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_arrival_date_instructions
+            BEFORE INSERT
+            ON purchase.arrival_date_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.calc_arrival_date_instructions();
         """
     )
 
@@ -1472,6 +1561,11 @@ def create_purchase_return_instructions_table() -> None:
         DECLARE
             rec record;
         BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
             IF NEW.wearhousing_detail_no IS NOT NULL THEN
                 -- 入荷明細から当社商品ID、仕入先ID、返品単価を取得
                 SELECT * INTO rec
@@ -1655,6 +1749,31 @@ def create_other_purchase_instructions_table() -> None:
             ON purchase.other_purchase_instructions
             FOR EACH ROW
         EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION purchase.calc_other_purchase_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_other_purchase_instructions
+            BEFORE INSERT
+            ON purchase.other_purchase_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.calc_other_purchase_instructions();
         """
     )
 
