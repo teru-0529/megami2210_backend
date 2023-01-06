@@ -8,7 +8,11 @@ Create Date: 2022-12-14 22:41:16.215287
 import sqlalchemy as sa
 from alembic import op
 
-from app.models.segment_values import ShippingProductSituation
+from app.models.segment_values import (
+    ShippingProductSituation,
+    SiteType,
+    ReceivableTransitionType,
+)
 from app.models.migrations.util import timestamps
 
 # revision identifiers, used by Alembic.
@@ -16,6 +20,369 @@ revision = "4ed3531f2a5e"
 down_revision = "76241be00f1b"
 branch_labels = None
 depends_on = None
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_accounts_receivables_table() -> None:
+    op.create_table(
+        "accounts_receivables",
+        sa.Column("coustomer_id", sa.String(4), primary_key=True, comment="得意先ID"),
+        sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
+        sa.Column(
+            "init_balance",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="月初残高",
+        ),
+        sa.Column(
+            "selling_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="販売額",
+        ),
+        sa.Column(
+            "deposit_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="入金額",
+        ),
+        sa.Column(
+            "other_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="その他変動額",
+        ),
+        sa.Column(
+            "balance", sa.Numeric, nullable=False, server_default="0.0", comment="残高"
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_costomer_id",
+        "accounts_receivables",
+        "costomers",
+        ["coustomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER accounts_receivable_modified
+            BEFORE UPDATE
+            ON selling.accounts_receivables
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_accounts_receivables() RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.balance:=NEW.init_balance + NEW.selling_amount - NEW.deposit_amount + NEW.other_amount;
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER upsert_accounts_receivable
+            BEFORE INSERT OR UPDATE
+            ON selling.accounts_receivables
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_accounts_receivables();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_accounts_receivable_histories_table() -> None:
+    op.create_table(
+        "accounts_receivable_histories",
+        sa.Column("no", sa.Integer, primary_key=True, comment="売掛履歴NO"),
+        sa.Column(
+            "transaction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="取引日",
+        ),
+        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column(
+            "transaction_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="取引金額",
+        ),
+        sa.Column(
+            "transition_type",
+            sa.Enum(
+                *ReceivableTransitionType.list(),
+                name="transition_type",
+                schema="selling",
+            ),
+            nullable=False,
+            comment="売掛変動区分",
+        ),
+        sa.Column("transaction_no", sa.Integer, nullable=True, comment="取引管理NO"),
+        sa.Column("billing_no", sa.String(10), nullable=False, comment="請求NO"),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_costomer_id",
+        "accounts_receivable_histories",
+        "costomers",
+        ["coustomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+    op.create_index(
+        "ix_accounts_receivable_histories_supplier",
+        "accounts_receivable_histories",
+        ["coustomer_id", "transaction_date"],
+        schema="selling",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER accounts_receivable_histories_modified
+            BEFORE UPDATE
+            ON selling.accounts_receivable_histories
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 登録後、月次売掛金サマリーを自動作成TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.set_summaries() RETURNS TRIGGER AS $$
+        DECLARE
+            yyyymm character(6);
+            t_init_balance numeric;
+            t_selling_amount numeric;
+            t_deposit_amount numeric;
+            t_other_amount numeric;
+
+            recent_rec RECORD;
+            last_rec RECORD;
+        BEGIN
+            yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
+
+            SELECT * INTO recent_rec
+            FROM selling.accounts_receivables
+            WHERE coustomer_id = NEW.coustomer_id AND year_month = yyyymm
+            FOR UPDATE;
+
+            IF recent_rec IS NULL THEN
+                SELECT * INTO last_rec
+                FROM selling.accounts_receivables
+                WHERE coustomer_id = NEW.coustomer_id
+                ORDER BY year_month DESC
+                LIMIT 1;
+
+                IF last_rec IS NULL THEN
+                    t_init_balance:=0.00;
+                ELSE
+                    t_init_balance:=last_rec.balance;
+                END IF;
+
+                t_selling_amount:=0.00;
+                t_deposit_amount:=0.00;
+                t_other_amount:=0.00;
+
+            ELSE
+                t_init_balance:=recent_rec.init_balance;
+                t_selling_amount:=recent_rec.selling_amount;
+                t_deposit_amount:=recent_rec.deposit_amount;
+                t_other_amount:=recent_rec.other_amount;
+            END IF;
+
+            IF NEW.transition_type='SELLING' OR NEW.transition_type='SALES_RETURN' THEN
+                t_selling_amount:=t_selling_amount + NEW.transaction_amount;
+            ELSEIF NEW.transition_type='DEPOSIT' THEN
+                t_deposit_amount:=t_deposit_amount - NEW.transaction_amount;
+            ELSEIF NEW.transition_type='BALANCE_OUT' OR NEW.transition_type='OTHER_TRANSITION' THEN
+                t_other_amount:=t_other_amount + NEW.transaction_amount;
+            END IF;
+
+            IF recent_rec IS NULL THEN
+                INSERT INTO selling.accounts_receivables
+                VALUES (
+                    NEW.coustomer_id,
+                    yyyymm,
+                    t_init_balance,
+                    t_selling_amount,
+                    t_deposit_amount,
+                    t_other_amount
+                );
+            ELSE
+                UPDATE selling.accounts_receivables
+                SET selling_amount = t_selling_amount,
+                    deposit_amount = t_deposit_amount,
+                    other_amount = t_other_amount
+                WHERE coustomer_id = NEW.coustomer_id AND year_month = yyyymm;
+            END IF;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_accounts_receivable_histories
+            AFTER INSERT
+            ON selling.accounts_receivable_histories
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.set_summaries();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_billings_table() -> None:
+    op.create_table(
+        "billings",
+        sa.Column(
+            "billing_no",
+            sa.String(10),
+            primary_key=True,
+            server_default="set_me",
+            comment="請求NO",
+        ),
+        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column(
+            "closing_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="請求締日",
+        ),
+        sa.Column(
+            "deposit_deadline",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="入金期限日",
+        ),
+        sa.Column(
+            "billing_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="請求金額",
+        ),
+        sa.Column(
+            "deposited_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="入金済金額",
+        ),
+        sa.Column(
+            "fully_paid",
+            sa.Boolean,
+            nullable=False,
+            server_default="false",
+            comment="入金済",
+        ),
+        sa.Column(
+            "billing_send_date",
+            sa.Date,
+            nullable=True,
+            comment="請求書送付日",
+        ),
+        sa.Column(
+            "billing_send_pic", sa.String(5), nullable=True, comment="請求書送付担当者ID"
+        ),
+        sa.Column("note", sa.Text, nullable=True, comment="摘要"),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_costomer_id",
+        "billings",
+        "costomers",
+        ["coustomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+    op.create_foreign_key(
+        "fk_billing_send_pic",
+        "billings",
+        "profiles",
+        ["billing_send_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+    op.create_unique_constraint(
+        "uk_deposit_deadline",
+        "billings",
+        ["coustomer_id", "closing_date", "deposit_deadline"],
+        schema="selling",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER billings_modified
+            BEFORE UPDATE
+            ON selling.billings
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_billings() RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.billing_no:='BL-'||to_char(nextval('selling.billing_no_seed'),'FM0000000');
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_billings
+            BEFORE INSERT
+            ON selling.billings
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_billings();
+        """
+    )
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -143,11 +510,11 @@ def create_receiving_details_table() -> None:
             comment="キャンセル済数",
         ),
         sa.Column(
-            "receiving_unit_price",
+            "selling_unit_price",
             sa.Numeric,
             nullable=False,
             server_default="0.0",
-            comment="受注単価",
+            comment="販売単価",
         ),
         sa.Column(
             "assumption_profit_rate",
@@ -185,9 +552,9 @@ def create_receiving_details_table() -> None:
         schema="selling",
     )
     op.create_check_constraint(
-        "ck_receiving_unit_price",
+        "ck_selling_unit_price",
         "receiving_details",
-        "receiving_unit_price > 0",
+        "selling_unit_price > 0",
         schema="selling",
     )
     op.create_foreign_key(
@@ -239,7 +606,7 @@ def create_receiving_details_table() -> None:
             FROM mst.products
             WHERE product_id = NEW.product_id;
 
-            NEW.assumption_profit_rate:=ROUND((NEW.receiving_unit_price - t_cost_price) / NEW.receiving_unit_price, 2);
+            NEW.assumption_profit_rate:=ROUND((NEW.selling_unit_price - t_cost_price) / NEW.selling_unit_price, 2);
 
             -- 発注済数、キャンセル済数の設定
             NEW.shipping_quantity:=0;
@@ -324,6 +691,370 @@ def create_receiving_details_table() -> None:
 
 
 # INFO:
+def create_shippings_table() -> None:
+    op.create_table(
+        "shippings",
+        sa.Column(
+            "shipping_no",
+            sa.String(10),
+            primary_key=True,
+            server_default="set_me",
+            comment="出荷NO",
+        ),
+        sa.Column(
+            "shipping_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="出荷日",
+        ),
+        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("shipping_pic", sa.String(5), nullable=True, comment="出荷担当者ID"),
+        sa.Column(
+            "closing_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="請求締日",
+        ),
+        sa.Column(
+            "deposit_deadline",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="入金期限日",
+        ),
+        sa.Column("note", sa.Text, nullable=True, comment="摘要"),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_costomer_id",
+        "shippings",
+        "costomers",
+        ["coustomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+    op.create_foreign_key(
+        "fk_shipping_pic",
+        "shippings",
+        "profiles",
+        ["shipping_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER shippings_modified
+            BEFORE UPDATE
+            ON selling.shippings
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_shippings() RETURNS TRIGGER AS $$
+        DECLARE
+            rec record;
+
+        BEGIN
+            NEW.shipping_no:='SP-'||to_char(nextval('selling.shipping_no_seed'),'FM0000000');
+            rec:=mst.calc_deposit_deadline(New.shipping_date, New.coustomer_id);
+            New.closing_date:=rec.closing_date;
+            New.deposit_deadline:=rec.deposit_deadline;
+            New.note:=rec.dummy;
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_shippings
+            BEFORE INSERT
+            ON selling.shippings
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_shippings();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_shipping_details_table() -> None:
+    op.create_table(
+        "shipping_details",
+        sa.Column("detail_no", sa.Integer, primary_key=True, comment="出荷明細NO"),
+        sa.Column("shipping_no", sa.String(10), nullable=False, comment="出荷NO"),
+        sa.Column("receive_detail_no", sa.Integer, nullable=False, comment="受注明細NO"),
+        sa.Column(
+            "product_id",
+            sa.String(10),
+            nullable=False,
+            server_default="set_me",
+            comment="当社商品ID",
+        ),
+        sa.Column(
+            "shipping_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="出荷数",
+        ),
+        sa.Column(
+            "return_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="返品数",
+        ),
+        sa.Column(
+            "selling_unit_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="販売単価",
+        ),
+        sa.Column(
+            "cost_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="原価",
+        ),
+        sa.Column(
+            "real_profit_rate",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="実利益率",
+        ),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            server_default=SiteType.main,
+            comment="出荷倉庫種別 ",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_check_constraint(
+        "ck_shipping_quantity",
+        "shipping_details",
+        "shipping_quantity > 0",
+        schema="selling",
+    )
+    op.create_check_constraint(
+        "ck_return_quantity",
+        "shipping_details",
+        "return_quantity >= 0",
+        schema="selling",
+    )
+    op.create_check_constraint(
+        "ck_quantity",
+        "shipping_details",
+        "return_quantity <= shipping_quantity",
+        schema="selling",
+    )
+    op.create_check_constraint(
+        "ck_selling_unit_price",
+        "shipping_details",
+        "selling_unit_price > 0",
+        schema="selling",
+    )
+    op.create_check_constraint(
+        "ck_cost_price",
+        "shipping_details",
+        "cost_price > 0",
+        schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_shipping_no",
+        "shipping_details",
+        "shippings",
+        ["shipping_no"],
+        ["shipping_no"],
+        ondelete="CASCADE",
+        source_schema="selling",
+        referent_schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_receive_detail_no",
+        "shipping_details",
+        "receiving_details",
+        ["receive_detail_no"],
+        ["detail_no"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="selling",
+    )
+    op.create_index(
+        "ix_shipping_details_shipping",
+        "shipping_details",
+        ["shipping_no", "detail_no"],
+        schema="selling",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER shipping_details_modified
+            BEFORE UPDATE
+            ON selling.shipping_details
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_shipping_details() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 受注明細から商品番号を取得
+            SELECT product_id INTO NEW.product_id
+            FROM selling.receiving_details
+            WHERE detail_no = NEW.receive_detail_no;
+
+            -- 在庫サマリから原価を取得
+            SELECT cost_price INTO NEW.cost_price
+            FROM inventory.current_summaries
+            WHERE product_id = NEW.product_id;
+
+            -- 実利益率を計算
+            NEW.real_profit_rate:=ROUND((NEW.selling_unit_price - NEW.cost_price) / NEW.selling_unit_price, 2);
+            NEW.return_quantity:=0;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_shipping_details
+            BEFORE INSERT
+            ON selling.shipping_details
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_shipping_details();
+        """
+    )
+
+    # 在庫変動履歴/入金/売掛金変動履歴の登録TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.set_inventories_and_deposits() RETURNS TRIGGER AS $$
+        DECLARE
+            t_shipping_quantity integer;
+            t_billing_price numeric;
+            t_billing_no text;
+
+            shipping_rec record;
+        BEGIN
+            -- 受注残数の更新
+            SELECT shipping_quantity INTO t_shipping_quantity
+            FROM selling.receiving_details
+            WHERE detail_no = NEW.receive_detail_no
+            FOR UPDATE;
+
+            UPDATE selling.receiving_details
+            SET shipping_quantity = t_shipping_quantity + NEW.shipping_quantity
+            WHERE detail_no = NEW.receive_detail_no;
+
+            -- 在庫変動履歴の登録
+            SELECT * INTO shipping_rec
+            FROM selling.shippings
+            WHERE shipping_no = NEW.shipping_no;
+
+            INSERT INTO inventory.transition_histories
+            VALUES (
+                default,
+                shipping_rec.shipping_date,
+                NEW.site_type,
+                NEW.product_id,
+                - NEW.shipping_quantity,
+                - NEW.shipping_quantity * NEW.cost_price,
+                'SELLING',
+                NEW.detail_no
+            );
+
+            -- 請求の登録、更新
+            SELECT billing_price INTO t_billing_price
+            FROM selling.billings
+            WHERE coustomer_id = shipping_rec.coustomer_id
+            AND closing_date = shipping_rec.closing_date
+            AND deposit_deadline = shipping_rec.deposit_deadline
+            FOR UPDATE;
+
+            IF t_billing_price IS NOT NULL THEN
+                UPDATE selling.billings
+                SET billing_price = t_billing_price + NEW.shipping_quantity * NEW.selling_unit_price
+                WHERE coustomer_id = shipping_rec.coustomer_id
+                AND closing_date = shipping_rec.closing_date
+                AND deposit_deadline = shipping_rec.deposit_deadline;
+
+            ELSE
+                INSERT INTO selling.billings
+                VALUES (
+                    default,
+                    shipping_rec.coustomer_id,
+                    shipping_rec.closing_date,
+                    shipping_rec.deposit_deadline,
+                    NEW.shipping_quantity * NEW.selling_unit_price
+                );
+            END IF;
+
+            -- 売掛変動履歴の登録
+            SELECT billing_no INTO t_billing_no
+            FROM selling.billings
+            WHERE coustomer_id = shipping_rec.coustomer_id
+            AND closing_date = shipping_rec.closing_date
+            AND deposit_deadline = shipping_rec.deposit_deadline;
+
+            INSERT INTO selling.accounts_receivable_histories
+            VALUES (
+                default,
+                shipping_rec.shipping_date,
+                shipping_rec.coustomer_id,
+                NEW.shipping_quantity * NEW.selling_unit_price,
+                'SELLING',
+                NEW.detail_no,
+                t_billing_no
+            );
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_shipping_details
+            AFTER INSERT
+            ON selling.shipping_details
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.set_inventories_and_deposits();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def create_shipping_plan_products_table() -> None:
     op.create_table(
         "shipping_plan_products",
@@ -400,7 +1131,6 @@ def create_shipping_plan_products_table() -> None:
             rec RECORD;
 
             ordering_dates RECORD;
-            --FIXME:
 
         BEGIN
             i_product_id:=NEW.product_id;
@@ -409,7 +1139,6 @@ def create_shipping_plan_products_table() -> None:
             SELECT date INTO t_today
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
-            --FIXME:
 
             -- 指定商品の出荷計画を削除
             DELETE
@@ -633,15 +1362,27 @@ def create_view() -> None:
 def upgrade() -> None:
     op.execute("CREATE SEQUENCE selling.receiving_no_seed START 1;")
     op.execute("CREATE SEQUENCE selling.shipping_no_seed START 1;")
+    op.execute("CREATE SEQUENCE selling.billing_no_seed START 1;")
+    create_accounts_receivables_table()
+    create_accounts_receivable_histories_table()
+    create_billings_table()
     create_receivings_table()
     create_receiving_details_table()
+    create_shippings_table()
+    create_shipping_details_table()
     create_shipping_plan_products_table()
     create_view()
 
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS selling.shipping_plan_products CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.shipping_details CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.shippings CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.receiving_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.receivings CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.billings CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.accounts_receivable_histories CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.accounts_receivables CASCADE;")
+    op.execute("DROP SEQUENCE IF EXISTS selling.billing_no_seed CASCADE;")
     op.execute("DROP SEQUENCE IF EXISTS selling.receiving_no_seed CASCADE;")
     op.execute("DROP SEQUENCE IF EXISTS selling.shipping_no_seed CASCADE;")

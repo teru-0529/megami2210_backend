@@ -195,16 +195,16 @@ def create_accounts_payable_histories_table() -> None:
             yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
 
             SELECT * INTO recent_rec
-                FROM purchase.accounts_payables
-                WHERE supplier_id = NEW.supplier_id AND year_month = yyyymm
-                FOR UPDATE;
+            FROM purchase.accounts_payables
+            WHERE supplier_id = NEW.supplier_id AND year_month = yyyymm
+            FOR UPDATE;
 
             IF recent_rec IS NULL THEN
                 SELECT * INTO last_rec
-                    FROM purchase.accounts_payables
-                    WHERE supplier_id = NEW.supplier_id
-                    ORDER BY year_month DESC
-                    LIMIT 1;
+                FROM purchase.accounts_payables
+                WHERE supplier_id = NEW.supplier_id
+                ORDER BY year_month DESC
+                LIMIT 1;
 
                 IF last_rec IS NULL THEN
                     t_init_balance:=0.00;
@@ -302,14 +302,14 @@ def create_payments_table() -> None:
             comment="支払金額",
         ),
         sa.Column(
-            "payment_check_datetime",
+            "payment_check_date",
             sa.Date,
             nullable=True,
             comment="請求書確認日",
         ),
         sa.Column("payment_check_pic", sa.String(5), nullable=True, comment="請求書確認者ID"),
         sa.Column(
-            "payment_datetime",
+            "payment_date",
             sa.Date,
             nullable=True,
             comment="支払実施日",
@@ -870,7 +870,7 @@ def create_wearhousing_details_table() -> None:
             sa.Numeric,
             nullable=False,
             server_default="0.0",
-            comment="入荷単価",
+            comment="入荷原価",
         ),
         sa.Column(
             "site_type",
@@ -975,7 +975,6 @@ def create_wearhousing_details_table() -> None:
         CREATE FUNCTION purchase.set_inventories_and_payments() RETURNS TRIGGER AS $$
         DECLARE
             t_wearhousing_quantity integer;
-            t_wearhousing_date date;
             t_payment_price numeric;
             t_payment_no text;
 
@@ -1143,7 +1142,7 @@ def create_payment_instructions_table() -> None:
 
             -- 支払へ、入金日、入金担当者の登録
             UPDATE purchase.payments
-            SET payment_datetime = NEW.instruction_date, payment_pic = NEW.instruction_pic
+            SET payment_date = NEW.instruction_date, payment_pic = NEW.instruction_pic
             WHERE payment_no = NEW.payment_no;
 
             -- 買掛変動履歴の登録
@@ -1770,10 +1769,10 @@ def create_view() -> None:
                 PM.payment_deadline,
                 PM.payment_price,
                 CASE
-                    WHEN PM.payment_datetime IS NOT NULL THEN 'PAYMENT_PROCESSED'
+                    WHEN PM.payment_date IS NOT NULL THEN 'PAYMENT_PROCESSED'
                     WHEN PM.closing_date >= (SELECT date FROM date_with) THEN 'BEFORE_CLOSING'
                     WHEN PM.payment_deadline < (SELECT date FROM date_with) THEN 'OVERDUE_PAYMENT'
-                    WHEN PM.payment_check_datetime IS NOT NULL THEN 'INVOICE_CONFIRMED'
+                    WHEN PM.payment_check_date IS NOT NULL THEN 'INVOICE_CONFIRMED'
                     ELSE 'CLOSING'
                 END AS situation
             FROM purchase.payments PM;

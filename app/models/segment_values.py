@@ -182,6 +182,27 @@ class PayableTransitionType(Base):
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
+class ReceivableTransitionType(Base):
+    selling = "SELLING"
+    sales_return = "SALES_RETURN"
+    deposit = "DEPOSIT"
+    balance_out = "BALANCE_OUT"
+    other_transition = "OTHER_TRANSITION"
+
+    def description() -> str:
+        return """
+買掛変動区分:
+  * `SELLING` - 販売売上
+  * `SALES_RETURN` - 売上返品
+  * `DEPOSIT` - 入金
+  * `BALANCE_OUT` - 相殺
+  * `OTHER_TRANSITION` - その他取引
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
 class Weeks(Base):
     sun = "SUN"
     mon = "MON"

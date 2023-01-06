@@ -238,14 +238,14 @@ def create_costomers_table() -> None:
             "cutoff_day", sa.Integer, nullable=False, server_default="99", comment="締日"
         ),
         sa.Column(
-            "month_of_payment_term",
+            "month_of_deposit_term",
             sa.Integer,
             nullable=False,
             server_default="1",
             comment="入金猶予月数",
         ),
         sa.Column(
-            "payment_day",
+            "deposit_day",
             sa.Integer,
             nullable=False,
             server_default="99",
@@ -264,15 +264,15 @@ def create_costomers_table() -> None:
         schema="mst",
     )
     op.create_check_constraint(
-        "ck_month_of_payment_term",
+        "ck_month_of_deposit_term",
         "costomers",
-        "month_of_payment_term > 0",
+        "month_of_deposit_term > 0",
         schema="mst",
     )
     op.create_check_constraint(
-        "ck_payment_day",
+        "ck_deposit_day",
         "costomers",
-        "payment_day > 0 and payment_day < 100",
+        "deposit_day > 0 and deposit_day < 100",
         schema="mst",
     )
     op.execute(
@@ -311,8 +311,8 @@ def create_costomers_table() -> None:
             {
                 "company_id": "C001",
                 "cutoff_day": 10,
-                "month_of_payment_term": 1,
-                "payment_day": 20,
+                "month_of_deposit_term": 1,
+                "deposit_day": 20,
                 "sales_pic": "T-901",
                 "contact_person": "牧真一",
                 "note": "海南大附属",
@@ -320,8 +320,8 @@ def create_costomers_table() -> None:
             {
                 "company_id": "C002",
                 "cutoff_day": 99,
-                "month_of_payment_term": 1,
-                "payment_day": 5,
+                "month_of_deposit_term": 1,
+                "deposit_day": 5,
                 "sales_pic": "T-902",
                 "contact_person": "仙道彰",
                 "note": "陵南",
@@ -329,8 +329,8 @@ def create_costomers_table() -> None:
             {
                 "company_id": "C003",
                 "cutoff_day": 15,
-                "month_of_payment_term": 2,
-                "payment_day": 99,
+                "month_of_deposit_term": 2,
+                "deposit_day": 99,
                 "sales_pic": None,
                 "contact_person": None,
                 "note": None,
@@ -338,13 +338,69 @@ def create_costomers_table() -> None:
             {
                 "company_id": "S001",
                 "cutoff_day": 15,
-                "month_of_payment_term": 1,
-                "payment_day": 25,
+                "month_of_deposit_term": 1,
+                "deposit_day": 25,
                 "sales_pic": "T-902",
                 "contact_person": "桜木花道",
                 "note": "湘北",
             },
         ],
+    )
+
+    # 請求締日、入金期限の計算TODO:
+    op.execute(
+        """
+        CREATE FUNCTION mst.calc_deposit_deadline(
+            operation_date date,
+            coustomer_id text,
+            OUT closing_date date,
+            OUT deposit_deadline date,
+            OUT dummy text
+        ) AS $$
+        DECLARE
+            rec record;
+            cuurent_last_date date;
+            cutoff_day_interval interval;
+
+            deposit_month_first_date date;
+            deposit_month_last_date date;
+            deposit_day_interval interval;
+
+        BEGIN
+            SELECT * INTO rec
+            FROM mst.costomers
+            WHERE company_id = coustomer_id;
+
+            -- 締日の計算
+            cuurent_last_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' +'-1 Day');
+            cutoff_day_interval:=CAST((rec.cutoff_day - 1) || ' Day' AS interval);
+
+            IF EXTRACT(day FROM cuurent_last_date) < rec.cutoff_day THEN
+                closing_date:=cuurent_last_date;
+                dummy:='※月末締';
+            ELSEIF rec.cutoff_day < EXTRACT(day FROM operation_date) THEN
+                closing_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' + cutoff_day_interval);
+                dummy:='翌月締';
+            ELSE
+                closing_date:=DATE(DATE_TRUNC('month', operation_date) + cutoff_day_interval);
+                dummy:='当月締';
+            END IF;
+
+            -- 支払期限日の計算
+            deposit_month_first_date:=DATE(DATE_TRUNC('month', closing_date) + CAST(rec.month_of_deposit_term || ' month' AS interval));
+            deposit_month_last_date:=deposit_month_first_date + CAST('1 month' AS interval) +CAST('-1 Day' AS interval);
+            deposit_day_interval:=CAST((rec.deposit_day - 1) || ' Day' AS interval);
+
+            IF EXTRACT(day FROM deposit_month_last_date) < rec.deposit_day THEN
+                deposit_deadline:=deposit_month_last_date;
+                dummy:=dummy || '、※入金期限は月末';
+            ELSE
+                deposit_deadline:=deposit_month_first_date + deposit_day_interval;
+            END IF;
+
+        END;
+        $$ LANGUAGE plpgsql;
+        """
     )
 
 
