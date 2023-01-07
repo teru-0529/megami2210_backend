@@ -42,6 +42,7 @@ def upgrade() -> None:
     pch_order_cancel_instructions = Table("purchase.order_cancel_instructions", meta)
     pch_arrival_date_instructions = Table("purchase.arrival_date_instructions", meta)
     pch_payment_instructions = Table("purchase.payment_instructions", meta)
+    pch_payment_check_instructions = Table("purchase.payment_check_instructions", meta)
     pch_purchase_return_instructions = Table(
         "purchase.purchase_return_instructions", meta
     )
@@ -395,13 +396,15 @@ def upgrade() -> None:
         ],
     )
     # 請求書確認
-    op.execute(
-        """
-        UPDATE purchase.payments
-        SET payment_check_date = '2023-2-8', payment_check_pic = 'T-901'
-        WHERE payment_no = 'PM-0000001';
-        """
-    )  # FIXME:
+    op.bulk_insert(
+        pch_payment_check_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "payment_no": "PM-0000001",
+            },
+        ],
+    )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-02-09 その他買掛金取引INFO:
@@ -426,16 +429,18 @@ def upgrade() -> None:
     # 23-03-01 請求書確認INFO:
     op.execute(
         """
-        update business_date SET date = '2023-02-08';
+        update business_date SET date = '2023-03-01';
         """
     )
-    op.execute(
-        """
-        UPDATE purchase.payments
-        SET payment_check_date = '2023-3-1', payment_check_pic = 'T-902'
-        WHERE payment_no = 'PM-0000003';
-        """
-    )  # FIXME:
+    op.bulk_insert(
+        pch_payment_check_instructions,
+        [
+            {
+                "instruction_pic": "T-902",
+                "payment_no": "PM-0000003",
+            },
+        ],
+    )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-03-10 請求書確認INFO:
@@ -444,13 +449,15 @@ def upgrade() -> None:
         update business_date SET date = '2023-03-10';
         """
     )
-    op.execute(
-        """
-        UPDATE purchase.payments
-        SET payment_check_date = '2023-3-10', payment_check_pic = 'T-901'
-        WHERE payment_no = 'PM-0000002';
-        """
-    )  # FIXME:
+    op.bulk_insert(
+        pch_payment_check_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "payment_no": "PM-0000002",
+            },
+        ],
+    )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-03-20 支払INFO:
@@ -567,13 +574,15 @@ def upgrade() -> None:
         update business_date SET date = '2023-11-06';
         """
     )
-    op.execute(
-        """
-        UPDATE purchase.payments
-        SET payment_check_date = '2023-11-6', payment_check_pic = 'T-901'
-        WHERE payment_no = 'PM-0000004';
-        """
-    )  # FIXME:
+    op.bulk_insert(
+        pch_payment_check_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "payment_no": "PM-0000004",
+            },
+        ],
+    )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-11-21 予約受注 INFO:FIXME:受注キャンセルを追加する
@@ -798,13 +807,15 @@ def upgrade() -> None:
         update business_date SET date = '2023-12-15';
         """
     )
-    op.execute(
-        """
-        UPDATE purchase.payments
-        SET payment_check_date = '2023-12-15', payment_check_pic = 'T-901'
-        WHERE payment_no = 'PM-0000005';
-        """
-    )  # FIXME:
+    op.bulk_insert(
+        pch_payment_check_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "payment_no": "PM-0000005",
+            },
+        ],
+    )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 24-01-03 出荷 INFO:

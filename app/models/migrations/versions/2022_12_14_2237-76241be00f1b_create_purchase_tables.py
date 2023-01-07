@@ -551,7 +551,7 @@ def create_ordering_details_table() -> None:
             FROM mst.products
             WHERE product_id = t_product_id;
 
-        RETURN supplier_id_from_ordering=supplier_id_from_product;
+        RETURN supplier_id_from_ordering = supplier_id_from_product;
         END;
         $$ LANGUAGE plpgsql;
         """
@@ -897,6 +897,37 @@ def create_wearhousing_details_table() -> None:
         schema="purchase",
     )
 
+    # 発注時の仕入先と等しいこと(相関チェック)
+    op.execute(
+        """
+        CREATE FUNCTION purchase.ck_supplier_with_ordering(
+            t_wearhousing_no character(10),
+            t_order_detail_no integer
+        ) RETURNS boolean AS $$
+        DECLARE
+            supplier_id_from_ordering character(4);
+            supplier_id_from_wearhousing character(4);
+        BEGIN
+            SELECT O.supplier_id INTO supplier_id_from_ordering
+            FROM purchase.ordering_details OD
+            LEFT OUTER JOIN purchase.orderings O ON OD.ordering_no = O.ordering_no
+            WHERE OD.detail_no = t_order_detail_no;
+
+            SELECT supplier_id INTO supplier_id_from_wearhousing
+            FROM purchase.wearhousings
+            WHERE wearhousing_no = t_wearhousing_no;
+
+        RETURN supplier_id_from_ordering = supplier_id_from_wearhousing;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.create_check_constraint(
+        "ck_supplier_id",
+        "wearhousing_details",
+        "purchase.ck_supplier_with_ordering(wearhousing_no, order_detail_no)",
+        schema="purchase",
+    )
     op.create_check_constraint(
         "ck_wearhousing_quantity",
         "wearhousing_details",
@@ -1212,6 +1243,125 @@ def create_payment_instructions_table() -> None:
             ON purchase.payment_instructions
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.set_payment();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_payment_check_instructions_table() -> None:
+    op.create_table(
+        "payment_check_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="支払確認NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="確認日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="確認者ID"),
+        sa.Column(
+            "payment_no",
+            sa.String(10),
+            nullable=False,
+            server_default="set_me",
+            comment="支払NO",
+        ),
+        *timestamps(),
+        schema="purchase",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "payment_check_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_payment_no",
+        "payment_check_instructions",
+        "payments",
+        ["payment_no"],
+        ["payment_no"],
+        ondelete="RESTRICT",
+        source_schema="purchase",
+        referent_schema="purchase",
+    )
+    op.create_index(
+        "ix_payment_check_instructions_payment_no",
+        "payment_check_instructions",
+        ["payment_no"],
+        unique=True,
+        schema="purchase",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER payment_check_instructions_modified
+            BEFORE UPDATE
+            ON purchase.payment_check_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION purchase.calc_payment_check_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_payment_check_instructions
+            BEFORE INSERT
+            ON purchase.payment_check_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.calc_payment_check_instructions();
+        """
+    )
+
+    # 請求書確認後処理TODO:
+    op.execute(
+        """
+        CREATE FUNCTION purchase.set_check_payment() RETURNS TRIGGER AS $$
+        DECLARE
+            rec RECORD;
+        BEGIN
+
+            -- 支払へ、確認日、確認担当者の登録
+            UPDATE purchase.payments
+            SET payment_check_date = NEW.instruction_date, payment_check_pic = NEW.instruction_pic
+            WHERE payment_no = NEW.payment_no;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_payment_check_instructions
+            AFTER INSERT
+            ON purchase.payment_check_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE purchase.set_check_payment();
         """
     )
 
@@ -1917,6 +2067,7 @@ def upgrade() -> None:
     create_order_cancel_instructions_table()
     create_arrival_date_instructions_table()
     create_payment_instructions_table()
+    create_payment_check_instructions_table()
     create_purchase_return_instructions_table()
     create_other_purchase_instructions_table()
     create_view()
@@ -1925,6 +2076,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS purchase.other_purchase_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.purchase_return_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS purchase.payment_check_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.payment_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.arrival_date_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS purchase.order_cancel_instructions CASCADE;")

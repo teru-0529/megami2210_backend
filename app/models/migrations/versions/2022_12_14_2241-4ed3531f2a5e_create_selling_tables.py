@@ -866,6 +866,37 @@ def create_shipping_details_table() -> None:
         schema="selling",
     )
 
+    # 受注時の得意先と等しいこと(相関チェック)
+    op.execute(
+        """
+        CREATE FUNCTION selling.ck_coustomer_with_receiving(
+            t_shipping_no character(10),
+            t_receive_detail_no integer
+        ) RETURNS boolean AS $$
+        DECLARE
+            coustomer_id_from_receiving character(4);
+            coustomer_id_from_shipping character(4);
+        BEGIN
+            SELECT R.coustomer_id INTO coustomer_id_from_receiving
+            FROM selling.receiving_details RD
+            LEFT OUTER JOIN selling.receivings R ON RD.receiving_no = R.receiving_no
+            WHERE RD.detail_no = t_receive_detail_no;
+
+            SELECT coustomer_id INTO coustomer_id_from_shipping
+            FROM selling.shippings
+            WHERE shipping_no = t_shipping_no;
+
+        RETURN coustomer_id_from_receiving = coustomer_id_from_shipping;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.create_check_constraint(
+        "ck_coustomer_id",
+        "shipping_details",
+        "selling.ck_coustomer_with_receiving(shipping_no, receive_detail_no)",
+        schema="selling",
+    )
     op.create_check_constraint(
         "ck_shipping_quantity",
         "shipping_details",
