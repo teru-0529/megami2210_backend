@@ -685,58 +685,6 @@ def create_ordering_details_table() -> None:
         """
     )
 
-    # 在庫変動予定の登録TODO:
-    op.execute(
-        """
-        CREATE FUNCTION purchase.set_transition_estimates() RETURNS TRIGGER AS $$
-        DECLARE
-            t_remaining_quantity integer;
-        BEGIN
-            t_remaining_quantity:=NEW.purchase_quantity - NEW.wearhousing_quantity - NEW.cancel_quantity;
-
-            IF TG_OP = 'UPDATE' THEN
-                IF t_remaining_quantity = 0 THEN
-                    -- 発注残数が0になった場合は受払予定を削除
-                    DELETE FROM inventory.transition_estimates
-                    WHERE transaction_no = NEW.detail_no;
-
-                ELSE
-                    -- 受払予定を更新
-                    UPDATE inventory.transition_estimates
-                    SET transaction_date = NEW.estimate_arrival_date,
-                        transaction_quantity = t_remaining_quantity,
-                        transaction_amount = t_remaining_quantity * NEW.purchase_unit_price
-                    WHERE transaction_no = NEW.detail_no;
-                END IF;
-
-            ELSEIF TG_OP = 'INSERT' THEN
-
-                INSERT INTO inventory.transition_estimates
-                VALUES (
-                    default,
-                    NEW.estimate_arrival_date,
-                    NEW.product_id,
-                    t_remaining_quantity,
-                    t_remaining_quantity * NEW.purchase_unit_price,
-                    'PURCHASE',
-                    NEW.detail_no
-                );
-            END IF;
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER hook_upsert_ordering_details
-            AFTER INSERT OR UPDATE
-            ON purchase.ordering_details
-            FOR EACH ROW
-        EXECUTE PROCEDURE purchase.set_transition_estimates();
-        """
-    )
-
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 

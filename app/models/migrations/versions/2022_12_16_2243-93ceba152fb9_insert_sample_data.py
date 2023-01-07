@@ -20,12 +20,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    DUMMY_AMOUNT = 0.0
 
     meta = MetaData(bind=op.get_bind())
     meta.reflect(schema="inventory")
-    # FIXME:在庫変動予定(受注-出荷予定)
-    inv_transition_estimates = Table("inventory.transition_estimates", meta)
     # FIXME:在庫変動履歴(出荷、売上返品)
     inv_transition_histories = Table("inventory.transition_histories", meta)
     inv_moving_instructions = Table("inventory.moving_instructions", meta)
@@ -56,31 +53,6 @@ def upgrade() -> None:
     sel_receiving_details = Table("selling.receiving_details", meta)
     sel_shippings = Table("selling.shippings", meta)
     sel_shipping_details = Table("selling.shipping_details", meta)
-
-    # 受注-出荷予定FIXME:在庫変動予定WARNING:
-    op.bulk_insert(
-        inv_transition_estimates,
-        [
-            {
-                "transaction_date": date(2023, 1, 11),
-                "site_type": SiteType.main,
-                "product_id": "S001-00003",
-                "transaction_quantity": -5,
-                "transaction_amount": DUMMY_AMOUNT,
-                "transition_type": StockTransitionType.selling,
-                "transaction_no": 801,
-            },
-            {
-                "transaction_date": date(2023, 1, 11),
-                "site_type": SiteType.main,
-                "product_id": "S001-00002",
-                "transaction_quantity": -2,
-                "transaction_amount": DUMMY_AMOUNT,
-                "transition_type": StockTransitionType.selling,
-                "transaction_no": 802,
-            },
-        ],
-    )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-01-20 発注 INFO:

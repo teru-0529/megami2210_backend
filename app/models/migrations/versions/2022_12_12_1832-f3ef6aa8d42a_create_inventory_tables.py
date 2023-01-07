@@ -654,82 +654,6 @@ def create_transition_histories_table() -> None:
 
 
 # INFO:
-def create_transition_estimates_table() -> None:
-    op.create_table(
-        "transition_estimates",
-        sa.Column("no", sa.Integer, primary_key=True, comment="受払予定NO"),
-        sa.Column(
-            "transaction_date",
-            sa.Date,
-            nullable=False,
-            server_default=sa.func.now(),
-            comment="取引予定日",
-        ),
-        sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
-        sa.Column(
-            "transaction_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="取引予定数",
-        ),
-        sa.Column(
-            "transaction_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="取引予定金額",
-        ),
-        sa.Column(
-            "transition_type",
-            sa.Enum(
-                *StockTransitionType.list(), name="transition_type", schema="inventory"
-            ),
-            nullable=False,
-            comment="在庫変動区分",
-        ),  # FIXME:変動区分整理
-        sa.Column(
-            "transaction_no",
-            sa.Integer,
-            nullable=False,
-            comment="取引管理NO",
-        ),
-        *timestamps(),
-        schema="inventory",
-    )
-
-    op.create_foreign_key(
-        "fk_product_id",
-        "transition_estimates",
-        "products",
-        ["product_id"],
-        ["product_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
-    op.create_index(
-        "ix_transition_estimates_product",
-        "transition_estimates",
-        ["product_id", "transaction_date"],
-        schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER transition_estimates_modified
-            BEFORE UPDATE
-            ON inventory.transition_estimates
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-# INFO:
 def create_moving_instructions_table() -> None:
     op.create_table(
         "moving_instructions",
@@ -1027,7 +951,6 @@ def upgrade() -> None:
     create_transition_histories_table()
     create_moving_instructions_table()
     create_other_inventory_instructions_table()
-    create_transition_estimates_table()
 
 
 def downgrade() -> None:
@@ -1037,6 +960,5 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS inventory.monthry_summaries CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.moving_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.other_inventory_instructions CASCADE;")
-    op.execute("DROP TABLE IF EXISTS inventory.transition_estimates CASCADE;")
     op.execute("DROP TABLE IF EXISTS inventory.transition_histories CASCADE;")
     op.execute("DROP TYPE IF EXISTS inventory.transition_type;")
