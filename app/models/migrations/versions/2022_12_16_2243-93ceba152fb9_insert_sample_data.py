@@ -116,7 +116,7 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000002",
                 "product_id": "S002-00001",
-                "purchase_quantity": 5,
+                "purchase_quantity": 8,
                 "purchase_unit_price": 19000.0,
             },
         ],
@@ -319,7 +319,7 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000004",
                 "order_detail_no": 4,
-                "wearhousing_quantity": 2,
+                "wearhousing_quantity": 5,
                 "wearhousing_unit_price": 17000.0,
                 "site_type": SiteType.main,
             },
@@ -393,6 +393,94 @@ def upgrade() -> None:
                 "supplier_id": "S002",
                 "transition_reason": "誤請求返金(2022年10月分)",
                 "transition_amount": -10000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-02-15 即時受注/出荷 INFO:
+    op.execute(
+        """
+        update business_date SET date = '2023-02-10';
+        """
+    )
+    op.bulk_insert(
+        sel_receivings,
+        [
+            {
+                "coustomer_id": "S001",
+                "receiving_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_receiving_details,
+        [
+            {
+                "receiving_no": "RO-0000001",
+                "product_id": "S002-00001",
+                "receive_quantity": 1,
+                "selling_unit_price": 43000.0,
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_shippings,
+        [
+            {
+                "coustomer_id": "S001",
+                "shipping_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_shipping_details,
+        [
+            {
+                "shipping_no": "SP-0000001",
+                "receive_detail_no": 1,
+                "shipping_quantity": 1,
+                "selling_unit_price": 43000.0,
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_receivings,
+        [
+            {
+                "coustomer_id": "C001",
+                "receiving_pic": "T-902",
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_receiving_details,
+        [
+            {
+                "receiving_no": "RO-0000002",
+                "product_id": "S002-00001",
+                "receive_quantity": 2,
+                "selling_unit_price": 45000.0,
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_shippings,
+        [
+            {
+                "coustomer_id": "C001",
+                "shipping_pic": "T-901",
+            },
+        ],
+    )
+    op.bulk_insert(
+        sel_shipping_details,
+        [
+            {
+                "shipping_no": "SP-0000002",
+                "receive_detail_no": 2,
+                "shipping_quantity": 2,
+                "selling_unit_price": 44000.0,
             },
         ],
     )
@@ -576,7 +664,7 @@ def upgrade() -> None:
         sel_receiving_details,
         [
             {
-                "receiving_no": "RO-0000001",
+                "receiving_no": "RO-0000003",
                 "product_id": "S001-00002",
                 "receive_quantity": 2,
                 "selling_unit_price": 30000.0,
@@ -809,8 +897,8 @@ def upgrade() -> None:
         sel_shipping_details,
         [
             {
-                "shipping_no": "SP-0000001",
-                "receive_detail_no": 1,
+                "shipping_no": "SP-0000003",
+                "receive_detail_no": 3,
                 "shipping_quantity": 2,
                 "selling_unit_price": 30000.0,
             },
@@ -915,13 +1003,13 @@ def upgrade() -> None:
         sel_receiving_details,
         [
             {
-                "receiving_no": "RO-0000002",
+                "receiving_no": "RO-0000004",
                 "product_id": "S001-00002",
                 "receive_quantity": 1,
                 "selling_unit_price": 32000.0,
             },
             {
-                "receiving_no": "RO-0000002",
+                "receiving_no": "RO-0000004",
                 "product_id": "S001-00001",
                 "receive_quantity": 3,
                 "selling_unit_price": 26000.0,
@@ -941,14 +1029,14 @@ def upgrade() -> None:
         sel_shipping_details,
         [
             {
-                "shipping_no": "SP-0000002",
-                "receive_detail_no": 2,
+                "shipping_no": "SP-0000004",
+                "receive_detail_no": 4,
                 "shipping_quantity": 1,
                 "selling_unit_price": 32000.0,
             },
             {
-                "shipping_no": "SP-0000002",
-                "receive_detail_no": 3,
+                "shipping_no": "SP-0000004",
+                "receive_detail_no": 5,
                 "shipping_quantity": 3,
                 "selling_unit_price": 26000.0,
             },
@@ -1050,13 +1138,13 @@ def upgrade() -> None:
         sel_receiving_details,
         [
             {
-                "receiving_no": "RO-0000003",
+                "receiving_no": "RO-0000005",
                 "product_id": "S001-00001",
                 "receive_quantity": 5,
                 "selling_unit_price": 25000.0,
             },
             {
-                "receiving_no": "RO-0000003",
+                "receiving_no": "RO-0000005",
                 "product_id": "S001-00002",
                 "receive_quantity": 3,
                 "selling_unit_price": 30000.0,
@@ -1077,25 +1165,25 @@ def upgrade() -> None:
         sel_receiving_details,
         [
             {
-                "receiving_no": "RO-0000004",
+                "receiving_no": "RO-0000006",
                 "product_id": "S001-00001",
                 "receive_quantity": 8,
                 "selling_unit_price": 28000.0,
             },
             {
-                "receiving_no": "RO-0000004",
+                "receiving_no": "RO-0000006",
                 "product_id": "S002-00001",
                 "receive_quantity": 6,
                 "selling_unit_price": 33000.0,
             },
             {
-                "receiving_no": "RO-0000004",
+                "receiving_no": "RO-0000006",
                 "product_id": "S001-00003",
                 "receive_quantity": 1,
                 "selling_unit_price": 33000.0,
             },
             {
-                "receiving_no": "RO-0000004",
+                "receiving_no": "RO-0000006",
                 "product_id": "S005-00001",
                 "receive_quantity": 3,
                 "selling_unit_price": 5000.0,
@@ -1123,8 +1211,8 @@ def upgrade() -> None:
         sel_shipping_details,
         [
             {
-                "shipping_no": "SP-0000003",
-                "receive_detail_no": 7,
+                "shipping_no": "SP-0000005",
+                "receive_detail_no": 9,
                 "shipping_quantity": 2,
                 "selling_unit_price": 35000.0,
             },
