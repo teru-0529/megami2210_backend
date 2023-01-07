@@ -53,6 +53,7 @@ def upgrade() -> None:
     sel_shipping_details = Table("selling.shipping_details", meta)
     sel_receive_cancel_instructions = Table("selling.receive_cancel_instructions", meta)
     sel_sending_bill_instructions = Table("selling.sending_bill_instructions", meta)
+    sel_deposit_instructions = Table("selling.deposit_instructions", meta)
     sel_selling_return_instructions = Table("selling.selling_return_instructions", meta)
     sel_other_selling_instructions = Table("selling.other_selling_instructions", meta)
 
@@ -573,6 +574,24 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-03-21 入金INFO:FIXME:
+    op.execute(
+        """
+        update business_date SET date = '2023-03-21';
+        """
+    )
+    op.bulk_insert(
+        sel_deposit_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "costomer_id": "S001",
+                "deposit_amount": 43000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-04-10 支払INFO:
     op.execute(
         """
@@ -585,6 +604,42 @@ def upgrade() -> None:
             {
                 "instruction_pic": "T-902",
                 "payment_no": "PM-0000003",
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-04-15 入金INFO:FIXME:
+    op.execute(
+        """
+        update business_date SET date = '2023-04-15';
+        """
+    )
+    op.bulk_insert(
+        sel_deposit_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "costomer_id": "C001",
+                "deposit_amount": 30000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-04-19 入金INFO:FIXME:
+    op.execute(
+        """
+        update business_date SET date = '2023-04-19';
+        """
+    )
+    op.bulk_insert(
+        sel_deposit_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "costomer_id": "C001",
+                "deposit_amount": 48000.0,
             },
         ],
     )
@@ -1250,6 +1305,24 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-02-15 入金INFO:FIXME:
+    op.execute(
+        """
+        update business_date SET date = '2024-02-15';
+        """
+    )
+    op.bulk_insert(
+        sel_deposit_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "costomer_id": "C001",
+                "deposit_amount": 30000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 24-02-16 受注 INFO:
     op.execute(
         """
@@ -1346,6 +1419,24 @@ def upgrade() -> None:
                 "receive_detail_no": 9,
                 "shipping_quantity": 2,
                 "selling_unit_price": 35000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-03-01 入金INFO:FIXME:
+    op.execute(
+        """
+        update business_date SET date = '2024-03-01';
+        """
+    )
+    op.bulk_insert(
+        sel_deposit_instructions,
+        [
+            {
+                "instruction_pic": "T-902",
+                "costomer_id": "C002",
+                "deposit_amount": 90000.0,
             },
         ],
     )

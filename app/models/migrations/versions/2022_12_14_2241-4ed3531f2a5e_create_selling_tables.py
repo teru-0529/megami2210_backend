@@ -1112,7 +1112,6 @@ def create_shipping_plan_products_table() -> None:
             --検品日数(1日)
             instpect_interval interval:=CAST('+1 Day' AS interval);
 
-            tttt RECORD;
             ordered_cursor refcursor;
             rec RECORD;
 
@@ -1525,6 +1524,210 @@ def create_sending_bill_instructions_table() -> None:
             ON selling.sending_bill_instructions
             FOR EACH ROW
         EXECUTE PROCEDURE selling.set_send_bill();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_deposit_instructions_table() -> None:
+    op.create_table(
+        "deposit_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="入金NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="入金日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="入金確認者ID"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column(
+            "deposit_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="入金額",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "deposit_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_costomer_id",
+        "deposit_instructions",
+        "costomers",
+        ["costomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER deposit_instructions_modified
+            BEFORE UPDATE
+            ON selling.deposit_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_deposit_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_deposit_instructions
+            BEFORE INSERT
+            ON selling.deposit_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_deposit_instructions();
+        """
+    )
+
+    # 入金指示後、入金日時更新、売掛変動履歴を自動作成TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.set_deposit() RETURNS TRIGGER AS $$
+        DECLARE
+            billing_cursor refcursor;
+            rec record;
+
+            t_deposit numeric;
+
+            t_closing_date date;
+            t_deposit_deadline date;
+            t_deposited_price numeric;
+            --t_billing_no text;
+
+            --rec record;
+        BEGIN
+
+            -- 売掛変動履歴の登録
+            INSERT INTO selling.accounts_receivable_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.costomer_id,
+                - NEW.deposit_amount,
+                'DEPOSIT',
+                NEW.no
+            );
+
+            -- 請求へ、金額の充当
+            OPEN billing_cursor FOR
+            SELECT *
+            FROM selling.billings
+            WHERE costomer_id = NEW.costomer_id
+            AND fully_paid = false
+            ORDER BY closing_date ASC;
+
+            t_deposit:=NEW.deposit_amount;
+            LOOP
+                FETCH billing_cursor INTO rec;
+                IF NOT FOUND THEN
+                    EXIT;
+                END IF;
+                IF t_deposit = 0.0 THEN
+                    EXIT;
+                END IF;
+
+                IF rec.billing_price - rec.deposited_price > t_deposit THEN
+                    UPDATE selling.billings
+                    SET deposited_price = rec.deposited_price + t_deposit
+                    WHERE billing_no = rec.billing_no;
+
+                    t_deposit:=0.0;
+
+                ELSE
+                    UPDATE selling.billings
+                    SET deposited_price = rec.billing_price,
+                        fully_paid = true
+                    WHERE billing_no = rec.billing_no;
+
+                    t_deposit:=t_deposit - (rec.billing_price - rec.deposited_price);
+
+                END IF;
+
+            END LOOP;
+            CLOSE billing_cursor;
+
+            --残額がある場合は、新規の請求に計上
+            IF t_deposit = 0.0 THEN
+                return NEW;
+            END IF;
+
+            -- 締日、入金期限の算出
+            rec:=mst.calc_deposit_deadline(New.instruction_date, New.costomer_id);
+            t_closing_date:=rec.closing_date;
+            t_deposit_deadline:=rec.deposit_deadline;
+
+            -- 請求の登録、更新
+            SELECT deposited_price INTO t_deposited_price
+            FROM selling.billings
+            WHERE costomer_id = NEW.costomer_id
+            AND closing_date = t_closing_date
+            AND deposit_deadline = t_deposit_deadline
+            FOR UPDATE;
+
+            IF t_deposited_price IS NOT NULL THEN
+                UPDATE selling.billings
+                SET deposited_price = t_deposited_price + t_deposit
+                WHERE costomer_id = NEW.costomer_id
+                AND closing_date = t_closing_date
+                AND deposit_deadline = t_deposit_deadline;
+
+            ELSE
+                INSERT INTO selling.billings
+                VALUES (
+                    default,
+                    NEW.costomer_id,
+                    t_closing_date,
+                    t_deposit_deadline,
+                    0.0,
+                    t_deposit
+                );
+            END IF;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_deposit_instructions
+            AFTER INSERT
+            ON selling.deposit_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.set_deposit();
         """
     )
 
@@ -2020,6 +2223,7 @@ def upgrade() -> None:
     create_shipping_plan_products_table()
     create_receive_cancel_instructions_table()
     create_sending_bill_instructions_table()
+    create_deposit_instructions_table()
     create_selling_return_instructions_table()
     create_other_selling_instructions_table()
     create_view()
@@ -2028,6 +2232,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS selling.other_selling_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.selling_return_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.deposit_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.sending_bill_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.receive_cancel_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.shipping_plan_products CASCADE;")
