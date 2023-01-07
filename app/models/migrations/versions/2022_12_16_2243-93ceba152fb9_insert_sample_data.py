@@ -53,6 +53,9 @@ def upgrade() -> None:
     sel_receiving_details = Table("selling.receiving_details", meta)
     sel_shippings = Table("selling.shippings", meta)
     sel_shipping_details = Table("selling.shipping_details", meta)
+    sel_receive_cancel_instructions = Table("selling.receive_cancel_instructions", meta)
+    sel_sending_bill_instructions = Table("selling.sending_bill_instructions", meta)
+    sel_other_selling_instructions = Table("selling.other_selling_instructions", meta)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-01-20 発注 INFO:
@@ -163,7 +166,7 @@ def upgrade() -> None:
             {
                 "instruction_pic": "T-902",
                 "change_reason": "メーカー在庫なし",
-                "ordering_detail_no": 1,
+                "order_detail_no": 1,
                 "arrival_date": date(2023, 2, 5),
             },
         ],
@@ -182,7 +185,7 @@ def upgrade() -> None:
             {
                 "instruction_pic": "T-902",
                 "cancel_reason": "護発注",
-                "ordering_detail_no": 2,
+                "order_detail_no": 2,
                 "calcel_quantity": 2,
             },
         ],
@@ -201,7 +204,7 @@ def upgrade() -> None:
             {
                 "instruction_pic": "T-902",
                 "cancel_reason": "受注キャンセルの対応",
-                "ordering_detail_no": 3,
+                "order_detail_no": 3,
                 "calcel_quantity": 1,
             },
         ],
@@ -401,7 +404,7 @@ def upgrade() -> None:
     # 23-02-15 即時受注/出荷 INFO:
     op.execute(
         """
-        update business_date SET date = '2023-02-10';
+        update business_date SET date = '2023-02-15';
         """
     )
     op.bulk_insert(
@@ -486,6 +489,23 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-02-16 請求書送付INFO:
+    op.execute(
+        """
+        update business_date SET date = '2023-02-16';
+        """
+    )
+    op.bulk_insert(
+        sel_sending_bill_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "billing_no": "BL-0000001",
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 23-03-01 請求書確認INFO:
     op.execute(
         """
@@ -515,6 +535,23 @@ def upgrade() -> None:
             {
                 "instruction_pic": "T-901",
                 "payment_no": "PM-0000002",
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-03-11 請求書送付INFO:
+    op.execute(
+        """
+        update business_date SET date = '2023-03-11';
+        """
+    )
+    op.bulk_insert(
+        sel_sending_bill_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "billing_no": "BL-0000002",
             },
         ],
     )
@@ -666,8 +703,27 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000003",
                 "product_id": "S001-00002",
-                "receive_quantity": 2,
+                "receive_quantity": 3,
                 "selling_unit_price": 30000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 23-11-23 受注キャンセル INFO:
+    op.execute(
+        """
+        update business_date SET date = '2023-11-23';
+        """
+    )
+    op.bulk_insert(
+        sel_receive_cancel_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "cancel_reason": "顧客要望",
+                "receive_detail_no": 3,
+                "calcel_quantity": 1,
             },
         ],
     )
@@ -719,7 +775,7 @@ def upgrade() -> None:
             {
                 "instruction_pic": "T-901",
                 "change_reason": "輸送業者都合",
-                "ordering_detail_no": 7,
+                "order_detail_no": 7,
                 "arrival_date": date(2023, 12, 12),
             },
         ],
@@ -934,6 +990,23 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-01-11 請求書送付INFO:
+    op.execute(
+        """
+        update business_date SET date = '2024-01-11';
+        """
+    )
+    op.bulk_insert(
+        sel_sending_bill_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "billing_no": "BL-0000003",
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 24-01-15 入荷(mainに直接入荷:検品を省略) INFO:
     op.execute(
         """
@@ -1063,6 +1136,23 @@ def upgrade() -> None:
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-02-01 請求書送付INFO:
+    op.execute(
+        """
+        update business_date SET date = '2024-02-01';
+        """
+    )
+    op.bulk_insert(
+        sel_sending_bill_instructions,
+        [
+            {
+                "instruction_pic": "T-902",
+                "billing_no": "BL-0000004",
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 24-02-10 発注 INFO:
     op.execute(
         """
@@ -1086,6 +1176,25 @@ def upgrade() -> None:
                 "product_id": "S001-00001",
                 "purchase_quantity": 1,
                 "purchase_unit_price": 11000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-02-11 その他売掛金取引INFO:
+    op.execute(
+        """
+        update business_date SET date = '2024-02-11';
+        """
+    )
+    op.bulk_insert(
+        sel_other_selling_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "coustomer_id": "C001",
+                "transition_reason": "延滞金請求(BL-0000003)",
+                "transition_amount": 10000.0,
             },
         ],
     )

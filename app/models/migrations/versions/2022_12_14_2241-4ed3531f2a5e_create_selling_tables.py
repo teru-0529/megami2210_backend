@@ -142,7 +142,7 @@ def create_accounts_receivable_histories_table() -> None:
             comment="売掛変動区分",
         ),
         sa.Column("transaction_no", sa.Integer, nullable=True, comment="取引管理NO"),
-        sa.Column("billing_no", sa.String(10), nullable=False, comment="請求NO"),
+        sa.Column("billing_no", sa.String(10), nullable=True, comment="請求NO"),
         *timestamps(),
         schema="selling",
     )
@@ -1290,6 +1290,411 @@ def create_shipping_plan_products_table() -> None:
 
 
 # INFO:
+def create_receive_cancel_instructions_table() -> None:
+    op.create_table(
+        "receive_cancel_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="キャンセル指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("cancel_reason", sa.Text, nullable=False, comment="キャンセル理由"),
+        sa.Column("receive_detail_no", sa.Integer, nullable=False, comment="受注明細NO"),
+        sa.Column(
+            "calcel_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="キャンセル数",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_check_constraint(
+        "ck_calcel_quantity",
+        "receive_cancel_instructions",
+        "calcel_quantity > 0",
+        schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "receive_cancel_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_receive_detail_no",
+        "receive_cancel_instructions",
+        "receiving_details",
+        ["receive_detail_no"],
+        ["detail_no"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="selling",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER receive_cancel_instructions_modified
+            BEFORE UPDATE
+            ON selling.receive_cancel_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_receive_cancel_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_receive_cancel_instructions
+            BEFORE INSERT
+            ON selling.receive_cancel_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_receive_cancel_instructions();
+        """
+    )
+
+    # 発注明細の変更TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.update_receive_quantity() RETURNS TRIGGER AS $$
+        DECLARE
+            t_cancel_quantity integer;
+        BEGIN
+            -- キャンセル数の更新
+            SELECT cancel_quantity INTO t_cancel_quantity
+            FROM selling.receiving_details
+            WHERE detail_no = NEW.receive_detail_no
+            FOR UPDATE;
+
+            UPDATE selling.receiving_details
+            SET cancel_quantity = t_cancel_quantity + NEW.calcel_quantity
+            WHERE detail_no = NEW.receive_detail_no;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_receive_cancel_instructions
+            AFTER INSERT
+            ON selling.receive_cancel_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.update_receive_quantity();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_sending_bill_instructions_table() -> None:
+    op.create_table(
+        "sending_bill_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="請求書送付NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="送付日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="送付担当者ID"),
+        sa.Column(
+            "billing_no",
+            sa.String(10),
+            nullable=False,
+            server_default="set_me",
+            comment="請求NO",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "sending_bill_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_payment_no",
+        "sending_bill_instructions",
+        "billings",
+        ["billing_no"],
+        ["billing_no"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="selling",
+    )
+    op.create_index(
+        "ix_sending_bill_instructions_billing_no",
+        "sending_bill_instructions",
+        ["billing_no"],
+        unique=True,
+        schema="selling",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER sending_bill_instructions_modified
+            BEFORE UPDATE
+            ON selling.sending_bill_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_sending_bill_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_sending_bill_instructions
+            BEFORE INSERT
+            ON selling.sending_bill_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_sending_bill_instructions();
+        """
+    )
+
+    # 請求書送付後処理TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.set_send_bill() RETURNS TRIGGER AS $$
+        DECLARE
+            rec RECORD;
+        BEGIN
+
+            -- 請求へ、送付日、送付担当者の登録
+            UPDATE selling.billings
+            SET billing_send_date = NEW.instruction_date, billing_send_pic = NEW.instruction_pic
+            WHERE billing_no = NEW.billing_no;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_sending_bill_instructions
+            AFTER INSERT
+            ON selling.sending_bill_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.set_send_bill();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
+def create_other_selling_instructions_table() -> None:
+    op.create_table(
+        "other_selling_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="雑売上指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("transition_reason", sa.Text, nullable=False, comment="変動理由"),
+        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column(
+            "transition_amount",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="変動金額",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "other_selling_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_coustomer_id",
+        "other_selling_instructions",
+        "costomers",
+        ["coustomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER other_selling_instructions_modified
+            BEFORE UPDATE
+            ON selling.other_selling_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_other_selling_instructions() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_other_selling_instructions
+            BEFORE INSERT
+            ON selling.other_selling_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_other_selling_instructions();
+        """
+    )
+
+    # 請求/売掛金変動履歴の登録TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.set_billings_by_other_instruction() RETURNS TRIGGER AS $$
+        DECLARE
+            t_closing_date date;
+            t_deposit_deadline date;
+            t_billing_price numeric;
+            t_billing_no text;
+
+            rec record;
+        BEGIN
+            -- 締日、入金期限の算出
+            rec:=mst.calc_deposit_deadline(New.instruction_date, New.coustomer_id);
+            t_closing_date:=rec.closing_date;
+            t_deposit_deadline:=rec.deposit_deadline;
+
+            -- 請求の登録、更新
+            SELECT billing_price INTO t_billing_price
+            FROM selling.billings
+            WHERE coustomer_id = NEW.coustomer_id
+            AND closing_date = t_closing_date
+            AND deposit_deadline = t_deposit_deadline
+            FOR UPDATE;
+
+            IF t_billing_price IS NOT NULL THEN
+                UPDATE selling.billings
+                SET billing_price = t_billing_price + NEW.transition_amount
+                WHERE coustomer_id = NEW.coustomer_id
+                AND closing_date = t_closing_date
+                AND deposit_deadline = t_deposit_deadline;
+
+            ELSE
+                INSERT INTO selling.billings
+                VALUES (
+                    default,
+                    NEW.coustomer_id,
+                    t_closing_date,
+                    t_deposit_deadline,
+                    NEW.transition_amount
+                );
+            END IF;
+
+            -- 売掛変動履歴の登録
+            SELECT billing_no INTO t_billing_no
+            FROM selling.billings
+            WHERE coustomer_id = NEW.coustomer_id
+            AND closing_date = t_closing_date
+            AND deposit_deadline = t_deposit_deadline;
+
+            INSERT INTO selling.accounts_receivable_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.coustomer_id,
+                NEW.transition_amount,
+                'OTHER_TRANSITION',
+                NEW.no,
+                t_billing_no
+            );
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_other_selling_instructions
+            AFTER INSERT
+            ON selling.other_selling_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.set_billings_by_other_instruction();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def create_view() -> None:
     op.execute(
         """
@@ -1357,10 +1762,16 @@ def upgrade() -> None:
     create_shippings_table()
     create_shipping_details_table()
     create_shipping_plan_products_table()
+    create_receive_cancel_instructions_table()
+    create_sending_bill_instructions_table()
+    create_other_selling_instructions_table()
     create_view()
 
 
 def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS selling.other_selling_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.sending_bill_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.receive_cancel_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.shipping_plan_products CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.shipping_details CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.shippings CASCADE;")

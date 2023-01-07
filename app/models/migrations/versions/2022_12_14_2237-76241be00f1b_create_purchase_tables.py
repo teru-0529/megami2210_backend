@@ -1331,7 +1331,7 @@ def create_order_cancel_instructions_table() -> None:
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("cancel_reason", sa.Text, nullable=False, comment="キャンセル理由"),
-        sa.Column("ordering_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
+        sa.Column("order_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
         sa.Column(
             "calcel_quantity",
             sa.Integer,
@@ -1360,10 +1360,10 @@ def create_order_cancel_instructions_table() -> None:
         referent_schema="account",
     )
     op.create_foreign_key(
-        "fk_ordering_detail_no",
+        "fk_order_detail_no",
         "order_cancel_instructions",
         "ordering_details",
-        ["ordering_detail_no"],
+        ["order_detail_no"],
         ["detail_no"],
         ondelete="RESTRICT",
         source_schema="purchase",
@@ -1415,12 +1415,12 @@ def create_order_cancel_instructions_table() -> None:
             -- キャンセル数の更新
             SELECT cancel_quantity INTO t_cancel_quantity
             FROM purchase.ordering_details
-            WHERE detail_no = NEW.ordering_detail_no
+            WHERE detail_no = NEW.order_detail_no
             FOR UPDATE;
 
             UPDATE purchase.ordering_details
             SET cancel_quantity = t_cancel_quantity + NEW.calcel_quantity
-            WHERE detail_no = NEW.ordering_detail_no;
+            WHERE detail_no = NEW.order_detail_no;
 
             return NEW;
         END;
@@ -1429,7 +1429,7 @@ def create_order_cancel_instructions_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER hook_insert_purchase_cancel_instructions
+        CREATE TRIGGER hook_insert_order_cancel_instructions
             AFTER INSERT
             ON purchase.order_cancel_instructions
             FOR EACH ROW
@@ -1455,7 +1455,7 @@ def create_arrival_date_instructions_table() -> None:
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="変更者ID"),
         sa.Column("change_reason", sa.Text, nullable=False, comment="変更理由"),
-        sa.Column("ordering_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
+        sa.Column("order_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
         sa.Column(
             "arrival_date",
             sa.Date,
@@ -1478,10 +1478,10 @@ def create_arrival_date_instructions_table() -> None:
         referent_schema="account",
     )
     op.create_foreign_key(
-        "fk_ordering_detail_no",
+        "fk_order_detail_no",
         "arrival_date_instructions",
         "ordering_details",
-        ["ordering_detail_no"],
+        ["order_detail_no"],
         ["detail_no"],
         ondelete="RESTRICT",
         source_schema="purchase",
@@ -1531,7 +1531,7 @@ def create_arrival_date_instructions_table() -> None:
             -- 入荷予定日の更新
             UPDATE purchase.ordering_details
             SET estimate_arrival_date = NEW.arrival_date
-            WHERE detail_no = NEW.ordering_detail_no;
+            WHERE detail_no = NEW.order_detail_no;
 
             return NEW;
         END;
@@ -1887,7 +1887,7 @@ def create_other_purchase_instructions_table() -> None:
 
             rec record;
         BEGIN
-            -- 締日、支払期限の産出
+            -- 締日、支払期限の算出
             rec:=mst.calc_payment_deadline(New.instruction_date, New.supplier_id);
             t_closing_date:=rec.closing_date;
             t_payment_deadline:=rec.payment_deadline;
