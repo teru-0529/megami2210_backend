@@ -10,7 +10,7 @@ from datetime import date
 from alembic import op
 from sqlalchemy import MetaData, Table
 
-from app.models.segment_values import StockTransitionType, SiteType
+from app.models.segment_values import SiteType
 
 # revision identifiers, used by Alembic.
 revision = "93ceba152fb9"
@@ -23,8 +23,6 @@ def upgrade() -> None:
 
     meta = MetaData(bind=op.get_bind())
     meta.reflect(schema="inventory")
-    # FIXME:在庫変動履歴(出荷、売上返品)
-    inv_transition_histories = Table("inventory.transition_histories", meta)
     inv_moving_instructions = Table("inventory.moving_instructions", meta)
     inv_other_inventory_instructions = Table(
         "inventory.other_inventory_instructions", meta
@@ -55,6 +53,7 @@ def upgrade() -> None:
     sel_shipping_details = Table("selling.shipping_details", meta)
     sel_receive_cancel_instructions = Table("selling.receive_cancel_instructions", meta)
     sel_sending_bill_instructions = Table("selling.sending_bill_instructions", meta)
+    sel_selling_return_instructions = Table("selling.selling_return_instructions", meta)
     sel_other_selling_instructions = Table("selling.other_selling_instructions", meta)
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
@@ -411,7 +410,7 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "coustomer_id": "S001",
+                "costomer_id": "S001",
                 "receiving_pic": "T-901",
             },
         ],
@@ -431,7 +430,7 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "coustomer_id": "S001",
+                "costomer_id": "S001",
                 "shipping_pic": "T-901",
             },
         ],
@@ -451,7 +450,7 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "receiving_pic": "T-902",
             },
         ],
@@ -471,7 +470,7 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "shipping_pic": "T-901",
             },
         ],
@@ -682,7 +681,7 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 23-11-21 予約受注 INFO:FIXME:受注キャンセルを追加する
+    # 23-11-21 予約受注 INFO:
     op.execute(
         """
         update business_date SET date = '2023-11-21';
@@ -692,7 +691,7 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "receiving_pic": "T-901",
             },
         ],
@@ -944,7 +943,7 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "shipping_pic": "T-901",
             },
         ],
@@ -985,6 +984,28 @@ def upgrade() -> None:
                 "product_id": "S001-00002",
                 "purchase_quantity": 3,
                 "purchase_unit_price": 12000.0,
+            },
+        ],
+    )
+
+    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+    # 24-01-09 売上返品INFO:
+    op.execute(
+        """
+        update business_date SET date = '2024-01-09';
+        """
+    )
+    op.bulk_insert(
+        sel_selling_return_instructions,
+        [
+            {
+                "instruction_pic": "T-901",
+                "return_reason": "クレーム返品",
+                "costomer_id": "C001",
+                "product_id": "S001-00002",
+                "return_quantity": 1,
+                "selling_unit_price": 27000.0,
+                "cost_price": 10000.0,
             },
         ],
     )
@@ -1067,7 +1088,7 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "coustomer_id": "C002",
+                "costomer_id": "C002",
                 "receiving_pic": "T-902",
             },
         ],
@@ -1093,7 +1114,7 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "coustomer_id": "C002",
+                "costomer_id": "C002",
                 "shipping_pic": "T-902",
             },
         ],
@@ -1117,24 +1138,25 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 売上返品FIXME:
+    # 24-01-25 売上返品INFO:
+    op.execute(
+        """
+        update business_date SET date = '2024-01-25';
+        """
+    )
     op.bulk_insert(
-        inv_transition_histories,
+        sel_selling_return_instructions,
         [
             {
-                "transaction_date": date(2024, 1, 25),
-                "site_type": SiteType.main,
-                "product_id": "S001-00002",
-                "transaction_quantity": 1,
-                "transaction_amount": 20000.0,
-                "transition_type": StockTransitionType.sales_return,
-                "transaction_no": 509,
+                "instruction_pic": "T-902",
+                "return_reason": "破損による返品",
+                "shipping_detail_no": 4,
+                "return_quantity": 1,
+                "site_type": SiteType.damaged_product,
             },
         ],
     )
 
-    # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
     # 24-02-01 請求書送付INFO:
     op.execute(
@@ -1192,7 +1214,7 @@ def upgrade() -> None:
         [
             {
                 "instruction_pic": "T-901",
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "transition_reason": "延滞金請求(BL-0000003)",
                 "transition_amount": 10000.0,
             },
@@ -1238,7 +1260,7 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "coustomer_id": "C002",
+                "costomer_id": "C002",
                 "receiving_pic": "T-902",
             },
         ],
@@ -1264,7 +1286,7 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "receiving_pic": "T-901",
                 "shipping_priority": 1,
             },
@@ -1311,7 +1333,7 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
-                "coustomer_id": "C001",
+                "costomer_id": "C001",
                 "shipping_pic": "T-901",
             },
         ],

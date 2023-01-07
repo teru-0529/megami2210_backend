@@ -1712,7 +1712,7 @@ def create_purchase_return_instructions_table() -> None:
 
             rec record;
         BEGIN
-            -- 締日、支払期限の産出
+            -- 締日、支払期限の算出
             rec:=mst.calc_payment_deadline(New.instruction_date, New.supplier_id);
             t_closing_date:=rec.closing_date;
             t_payment_deadline:=rec.payment_deadline;

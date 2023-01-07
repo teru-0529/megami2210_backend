@@ -352,7 +352,7 @@ def create_costomers_table() -> None:
         """
         CREATE FUNCTION mst.calc_deposit_deadline(
             operation_date date,
-            coustomer_id text,
+            costomer_id text,
             OUT closing_date date,
             OUT deposit_deadline date,
             OUT dummy text
@@ -369,7 +369,7 @@ def create_costomers_table() -> None:
         BEGIN
             SELECT * INTO rec
             FROM mst.costomers
-            WHERE company_id = coustomer_id;
+            WHERE company_id = costomer_id;
 
             -- 締日の計算
             cuurent_last_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' +'-1 Day');

@@ -28,7 +28,7 @@ depends_on = None
 def create_accounts_receivables_table() -> None:
     op.create_table(
         "accounts_receivables",
-        sa.Column("coustomer_id", sa.String(4), primary_key=True, comment="得意先ID"),
+        sa.Column("costomer_id", sa.String(4), primary_key=True, comment="得意先ID"),
         sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
         sa.Column(
             "init_balance",
@@ -69,7 +69,7 @@ def create_accounts_receivables_table() -> None:
         "fk_costomer_id",
         "accounts_receivables",
         "costomers",
-        ["coustomer_id"],
+        ["costomer_id"],
         ["company_id"],
         ondelete="RESTRICT",
         source_schema="selling",
@@ -123,7 +123,7 @@ def create_accounts_receivable_histories_table() -> None:
             nullable=False,
             comment="取引日",
         ),
-        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column(
             "transaction_amount",
             sa.Numeric,
@@ -151,7 +151,7 @@ def create_accounts_receivable_histories_table() -> None:
         "fk_costomer_id",
         "accounts_receivable_histories",
         "costomers",
-        ["coustomer_id"],
+        ["costomer_id"],
         ["company_id"],
         ondelete="RESTRICT",
         source_schema="selling",
@@ -160,7 +160,7 @@ def create_accounts_receivable_histories_table() -> None:
     op.create_index(
         "ix_accounts_receivable_histories_supplier",
         "accounts_receivable_histories",
-        ["coustomer_id", "transaction_date"],
+        ["costomer_id", "transaction_date"],
         schema="selling",
     )
 
@@ -192,13 +192,13 @@ def create_accounts_receivable_histories_table() -> None:
 
             SELECT * INTO recent_rec
             FROM selling.accounts_receivables
-            WHERE coustomer_id = NEW.coustomer_id AND year_month = yyyymm
+            WHERE costomer_id = NEW.costomer_id AND year_month = yyyymm
             FOR UPDATE;
 
             IF recent_rec IS NULL THEN
                 SELECT * INTO last_rec
                 FROM selling.accounts_receivables
-                WHERE coustomer_id = NEW.coustomer_id
+                WHERE costomer_id = NEW.costomer_id
                 ORDER BY year_month DESC
                 LIMIT 1;
 
@@ -230,7 +230,7 @@ def create_accounts_receivable_histories_table() -> None:
             IF recent_rec IS NULL THEN
                 INSERT INTO selling.accounts_receivables
                 VALUES (
-                    NEW.coustomer_id,
+                    NEW.costomer_id,
                     yyyymm,
                     t_init_balance,
                     t_selling_amount,
@@ -242,7 +242,7 @@ def create_accounts_receivable_histories_table() -> None:
                 SET selling_amount = t_selling_amount,
                     deposit_amount = t_deposit_amount,
                     other_amount = t_other_amount
-                WHERE coustomer_id = NEW.coustomer_id AND year_month = yyyymm;
+                WHERE costomer_id = NEW.costomer_id AND year_month = yyyymm;
             END IF;
 
             return NEW;
@@ -275,7 +275,7 @@ def create_billings_table() -> None:
             server_default="set_me",
             comment="請求NO",
         ),
-        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column(
             "closing_date",
             sa.Date,
@@ -329,7 +329,7 @@ def create_billings_table() -> None:
         "fk_costomer_id",
         "billings",
         "costomers",
-        ["coustomer_id"],
+        ["costomer_id"],
         ["company_id"],
         ondelete="RESTRICT",
         source_schema="selling",
@@ -348,7 +348,7 @@ def create_billings_table() -> None:
     op.create_unique_constraint(
         "uk_deposit_deadline",
         "billings",
-        ["coustomer_id", "closing_date", "deposit_deadline"],
+        ["costomer_id", "closing_date", "deposit_deadline"],
         schema="selling",
     )
 
@@ -405,7 +405,7 @@ def create_receivings_table() -> None:
             nullable=False,
             comment="受注日",
         ),
-        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column("receiving_pic", sa.String(5), nullable=True, comment="受注担当者ID"),
         sa.Column(
             "shipping_priority",
@@ -429,7 +429,7 @@ def create_receivings_table() -> None:
         "fk_costomer_id",
         "receivings",
         "costomers",
-        ["coustomer_id"],
+        ["costomer_id"],
         ["company_id"],
         ondelete="RESTRICT",
         source_schema="selling",
@@ -655,7 +655,7 @@ def create_shippings_table() -> None:
             nullable=False,
             comment="出荷日",
         ),
-        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column("shipping_pic", sa.String(5), nullable=True, comment="出荷担当者ID"),
         sa.Column(
             "closing_date",
@@ -680,7 +680,7 @@ def create_shippings_table() -> None:
         "fk_costomer_id",
         "shippings",
         "costomers",
-        ["coustomer_id"],
+        ["costomer_id"],
         ["company_id"],
         ondelete="RESTRICT",
         source_schema="selling",
@@ -723,7 +723,7 @@ def create_shippings_table() -> None:
             WHERE date_type = 'BUSINESS_DATE';
 
             -- 締日・入金期限の計算
-            rec:=mst.calc_deposit_deadline(New.shipping_date, New.coustomer_id);
+            rec:=mst.calc_deposit_deadline(New.shipping_date, New.costomer_id);
             New.closing_date:=rec.closing_date;
             New.deposit_deadline:=rec.deposit_deadline;
             New.note:=rec.dummy;
@@ -815,25 +815,25 @@ def create_shipping_details_table() -> None:
             t_receive_detail_no integer
         ) RETURNS boolean AS $$
         DECLARE
-            coustomer_id_from_receiving character(4);
-            coustomer_id_from_shipping character(4);
+            costomer_id_from_receiving character(4);
+            costomer_id_from_shipping character(4);
         BEGIN
-            SELECT R.coustomer_id INTO coustomer_id_from_receiving
+            SELECT R.costomer_id INTO costomer_id_from_receiving
             FROM selling.receiving_details RD
             LEFT OUTER JOIN selling.receivings R ON RD.receiving_no = R.receiving_no
             WHERE RD.detail_no = t_receive_detail_no;
 
-            SELECT coustomer_id INTO coustomer_id_from_shipping
+            SELECT costomer_id INTO costomer_id_from_shipping
             FROM selling.shippings
             WHERE shipping_no = t_shipping_no;
 
-        RETURN coustomer_id_from_receiving = coustomer_id_from_shipping;
+        RETURN costomer_id_from_receiving = costomer_id_from_shipping;
         END;
         $$ LANGUAGE plpgsql;
         """
     )
     op.create_check_constraint(
-        "ck_coustomer_id",
+        "ck_costomer_id",
         "shipping_details",
         "selling.ck_coustomer_with_receiving(shipping_no, receive_detail_no)",
         schema="selling",
@@ -980,7 +980,7 @@ def create_shipping_details_table() -> None:
             -- 請求の登録、更新
             SELECT billing_price INTO t_billing_price
             FROM selling.billings
-            WHERE coustomer_id = shipping_rec.coustomer_id
+            WHERE costomer_id = shipping_rec.costomer_id
             AND closing_date = shipping_rec.closing_date
             AND deposit_deadline = shipping_rec.deposit_deadline
             FOR UPDATE;
@@ -988,7 +988,7 @@ def create_shipping_details_table() -> None:
             IF t_billing_price IS NOT NULL THEN
                 UPDATE selling.billings
                 SET billing_price = t_billing_price + NEW.shipping_quantity * NEW.selling_unit_price
-                WHERE coustomer_id = shipping_rec.coustomer_id
+                WHERE costomer_id = shipping_rec.costomer_id
                 AND closing_date = shipping_rec.closing_date
                 AND deposit_deadline = shipping_rec.deposit_deadline;
 
@@ -996,7 +996,7 @@ def create_shipping_details_table() -> None:
                 INSERT INTO selling.billings
                 VALUES (
                     default,
-                    shipping_rec.coustomer_id,
+                    shipping_rec.costomer_id,
                     shipping_rec.closing_date,
                     shipping_rec.deposit_deadline,
                     NEW.shipping_quantity * NEW.selling_unit_price
@@ -1006,7 +1006,7 @@ def create_shipping_details_table() -> None:
             -- 売掛変動履歴の登録
             SELECT billing_no INTO t_billing_no
             FROM selling.billings
-            WHERE coustomer_id = shipping_rec.coustomer_id
+            WHERE costomer_id = shipping_rec.costomer_id
             AND closing_date = shipping_rec.closing_date
             AND deposit_deadline = shipping_rec.deposit_deadline;
 
@@ -1014,7 +1014,7 @@ def create_shipping_details_table() -> None:
             VALUES (
                 default,
                 shipping_rec.shipping_date,
-                shipping_rec.coustomer_id,
+                shipping_rec.costomer_id,
                 NEW.shipping_quantity * NEW.selling_unit_price,
                 'SELLING',
                 NEW.detail_no,
@@ -1533,6 +1533,262 @@ def create_sending_bill_instructions_table() -> None:
 
 
 # INFO:
+def create_selling_return_instructions_table() -> None:
+    op.create_table(
+        "selling_return_instructions",
+        sa.Column("no", sa.Integer, primary_key=True, comment="返品指示NO"),
+        sa.Column(
+            "instruction_date",
+            sa.Date,
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="指示日",
+        ),
+        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("return_reason", sa.Text, nullable=False, comment="返品理由"),
+        sa.Column("shipping_detail_no", sa.Integer, nullable=True, comment="出荷明細NO"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column(
+            "product_id",
+            sa.String(10),
+            nullable=False,
+            server_default="set_me",
+            comment="当社商品ID",
+        ),
+        sa.Column(
+            "return_quantity",
+            sa.Integer,
+            nullable=False,
+            server_default="0",
+            comment="返品数",
+        ),
+        sa.Column(
+            "selling_unit_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="返品単価",
+        ),
+        sa.Column(
+            "cost_price",
+            sa.Numeric,
+            nullable=False,
+            server_default="0.0",
+            comment="返品原価",
+        ),
+        sa.Column(
+            "site_type",
+            sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
+            nullable=False,
+            server_default=SiteType.main,
+            comment="返品先倉庫種別 ",
+        ),
+        *timestamps(),
+        schema="selling",
+    )
+
+    op.create_check_constraint(
+        "ck_return_quantity",
+        "selling_return_instructions",
+        "return_quantity > 0",
+        schema="selling",
+    )
+    op.create_check_constraint(
+        "ck_selling_unit_price",
+        "selling_return_instructions",
+        "selling_unit_price > 0",
+        schema="selling",
+    )
+    op.create_check_constraint(
+        "ck_cost_price",
+        "selling_return_instructions",
+        "cost_price > 0",
+        schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_instruction_pic",
+        "selling_return_instructions",
+        "profiles",
+        ["instruction_pic"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
+    op.create_foreign_key(
+        "fk_shipping_detail_no",
+        "selling_return_instructions",
+        "shipping_details",
+        ["shipping_detail_no"],
+        ["detail_no"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_costomer_id",
+        "selling_return_instructions",
+        "costomers",
+        ["costomer_id"],
+        ["company_id"],
+        ondelete="RESTRICT",
+        source_schema="selling",
+        referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER selling_return_instructions_modified
+            BEFORE UPDATE
+            ON selling.selling_return_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION selling.calc_selling_return_instructions() RETURNS TRIGGER AS $$
+        DECLARE
+            rec record;
+        BEGIN
+            -- 処理日付を取得
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
+            IF NEW.shipping_detail_no IS NOT NULL THEN
+                -- 出荷明細から当社商品ID、得意先ID、返品単価、返品原価を取得
+                SELECT * INTO rec
+                FROM selling.shipping_details
+                WHERE detail_no = NEW.shipping_detail_no
+                FOR UPDATE;
+
+                SELECT costomer_id INTO NEW.costomer_id
+                FROM selling.shippings
+                WHERE shipping_no = rec.shipping_no;
+
+                -- 入荷明細に返品数を登録
+                UPDATE selling.shipping_details
+                SET return_quantity = rec.return_quantity + NEW.return_quantity
+                WHERE detail_no = NEW.shipping_detail_no;
+
+                NEW.product_id:= rec.product_id;
+                NEW.selling_unit_price:= rec.selling_unit_price;
+                NEW.cost_price:= rec.cost_price;
+
+            END iF;
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER insert_selling_return_instructions
+            BEFORE INSERT
+            ON selling.selling_return_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.calc_selling_return_instructions();
+        """
+    )
+
+    # 在庫変動履歴/請求/売掛金変動履歴の登録TODO:
+    op.execute(
+        """
+        CREATE FUNCTION selling.set_inventories_and_billings_by_return() RETURNS TRIGGER AS $$
+        DECLARE
+            t_closing_date date;
+            t_deposit_deadline date;
+            t_billing_price numeric;
+            t_billing_no text;
+
+            rec record;
+        BEGIN
+            -- 締日、入金期限の算出
+            rec:=mst.calc_deposit_deadline(New.instruction_date, New.costomer_id);
+            t_closing_date:=rec.closing_date;
+            t_deposit_deadline:=rec.deposit_deadline;
+
+            -- 在庫変動履歴の登録
+            INSERT INTO inventory.transition_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.site_type,
+                NEW.product_id,
+                NEW.return_quantity,
+                NEW.return_quantity * NEW.cost_price,
+                'SALES_RETURN',
+                NEW.no
+            );
+
+            -- 請求の登録、更新
+            SELECT billing_price INTO t_billing_price
+            FROM selling.billings
+            WHERE costomer_id = NEW.costomer_id
+            AND closing_date = t_closing_date
+            AND deposit_deadline = t_deposit_deadline
+            FOR UPDATE;
+
+            IF t_billing_price IS NOT NULL THEN
+                UPDATE selling.billings
+                SET billing_price = t_billing_price - NEW.return_quantity * NEW.selling_unit_price
+                WHERE costomer_id = NEW.costomer_id
+                AND closing_date = t_closing_date
+                AND deposit_deadline = t_deposit_deadline;
+
+            ELSE
+                INSERT INTO selling.billings
+                VALUES (
+                    default,
+                    NEW.costomer_id,
+                    t_closing_date,
+                    t_deposit_deadline,
+                    - NEW.return_quantity * NEW.selling_unit_price
+                );
+            END IF;
+
+            -- 売掛変動履歴の登録
+            SELECT billing_no INTO t_billing_no
+            FROM selling.billings
+            WHERE costomer_id = NEW.costomer_id
+            AND closing_date = t_closing_date
+            AND deposit_deadline = t_deposit_deadline;
+
+            INSERT INTO selling.accounts_receivable_histories
+            VALUES (
+                default,
+                NEW.instruction_date,
+                NEW.costomer_id,
+                - NEW.return_quantity * NEW.selling_unit_price,
+                'SALES_RETURN',
+                NEW.no,
+                t_billing_no
+            );
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER hook_insert_selling_return_instructions
+            AFTER INSERT
+            ON selling.selling_return_instructions
+            FOR EACH ROW
+        EXECUTE PROCEDURE selling.set_inventories_and_billings_by_return();
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+# INFO:
 def create_other_selling_instructions_table() -> None:
     op.create_table(
         "other_selling_instructions",
@@ -1546,7 +1802,7 @@ def create_other_selling_instructions_table() -> None:
         ),
         sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("transition_reason", sa.Text, nullable=False, comment="変動理由"),
-        sa.Column("coustomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column(
             "transition_amount",
             sa.Numeric,
@@ -1569,10 +1825,10 @@ def create_other_selling_instructions_table() -> None:
         referent_schema="account",
     )
     op.create_foreign_key(
-        "fk_coustomer_id",
+        "fk_costomer_id",
         "other_selling_instructions",
         "costomers",
-        ["coustomer_id"],
+        ["costomer_id"],
         ["company_id"],
         ondelete="RESTRICT",
         source_schema="selling",
@@ -1627,14 +1883,14 @@ def create_other_selling_instructions_table() -> None:
             rec record;
         BEGIN
             -- 締日、入金期限の算出
-            rec:=mst.calc_deposit_deadline(New.instruction_date, New.coustomer_id);
+            rec:=mst.calc_deposit_deadline(New.instruction_date, New.costomer_id);
             t_closing_date:=rec.closing_date;
             t_deposit_deadline:=rec.deposit_deadline;
 
             -- 請求の登録、更新
             SELECT billing_price INTO t_billing_price
             FROM selling.billings
-            WHERE coustomer_id = NEW.coustomer_id
+            WHERE costomer_id = NEW.costomer_id
             AND closing_date = t_closing_date
             AND deposit_deadline = t_deposit_deadline
             FOR UPDATE;
@@ -1642,7 +1898,7 @@ def create_other_selling_instructions_table() -> None:
             IF t_billing_price IS NOT NULL THEN
                 UPDATE selling.billings
                 SET billing_price = t_billing_price + NEW.transition_amount
-                WHERE coustomer_id = NEW.coustomer_id
+                WHERE costomer_id = NEW.costomer_id
                 AND closing_date = t_closing_date
                 AND deposit_deadline = t_deposit_deadline;
 
@@ -1650,7 +1906,7 @@ def create_other_selling_instructions_table() -> None:
                 INSERT INTO selling.billings
                 VALUES (
                     default,
-                    NEW.coustomer_id,
+                    NEW.costomer_id,
                     t_closing_date,
                     t_deposit_deadline,
                     NEW.transition_amount
@@ -1660,7 +1916,7 @@ def create_other_selling_instructions_table() -> None:
             -- 売掛変動履歴の登録
             SELECT billing_no INTO t_billing_no
             FROM selling.billings
-            WHERE coustomer_id = NEW.coustomer_id
+            WHERE costomer_id = NEW.costomer_id
             AND closing_date = t_closing_date
             AND deposit_deadline = t_deposit_deadline;
 
@@ -1668,7 +1924,7 @@ def create_other_selling_instructions_table() -> None:
             VALUES (
                 default,
                 NEW.instruction_date,
-                NEW.coustomer_id,
+                NEW.costomer_id,
                 NEW.transition_amount,
                 'OTHER_TRANSITION',
                 NEW.no,
@@ -1704,7 +1960,7 @@ def create_view() -> None:
                 RD.product_id,
                 RD.receive_quantity,
                 (RD.receive_quantity - RD.shipping_quantity - RD.cancel_quantity) AS remaining_quantity,
-                R.coustomer_id,
+                R.costomer_id,
                 R.shipping_priority
             FROM selling.receiving_details RD
             LEFT OUTER JOIN selling.receivings R ON RD.receiving_no = R.receiving_no
@@ -1764,12 +2020,14 @@ def upgrade() -> None:
     create_shipping_plan_products_table()
     create_receive_cancel_instructions_table()
     create_sending_bill_instructions_table()
+    create_selling_return_instructions_table()
     create_other_selling_instructions_table()
     create_view()
 
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS selling.other_selling_instructions CASCADE;")
+    op.execute("DROP TABLE IF EXISTS selling.selling_return_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.sending_bill_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.receive_cancel_instructions CASCADE;")
     op.execute("DROP TABLE IF EXISTS selling.shipping_plan_products CASCADE;")
