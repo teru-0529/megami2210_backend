@@ -164,7 +164,7 @@ def upgrade() -> None:
         pch_arrival_date_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "change_reason": "メーカー在庫なし",
                 "order_detail_no": 1,
                 "arrival_date": date(2023, 2, 5),
@@ -183,7 +183,7 @@ def upgrade() -> None:
         pch_order_cancel_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "cancel_reason": "護発注",
                 "order_detail_no": 2,
                 "calcel_quantity": 2,
@@ -202,7 +202,7 @@ def upgrade() -> None:
         pch_order_cancel_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "cancel_reason": "受注キャンセルの対応",
                 "order_detail_no": 3,
                 "calcel_quantity": 1,
@@ -250,12 +250,12 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
-                "instruction_pic": "T-901",
-                "moving_reason": "検品（異常なし）",
+                "operator_id": "T-901",
+                "instruction_cause": "検品（異常なし）",
                 "site_type_from": SiteType.inspect_product,
                 "site_type_to": SiteType.main,
                 "product_id": "S001-00001",
-                "moving_quantity": 1,
+                "quantity": 1,
             },
         ],
     )
@@ -348,7 +348,7 @@ def upgrade() -> None:
         pch_purchase_return_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "return_reason": "お客様受注のキャンセル対応",
                 "supplier_id": "S002",
                 "product_id": "S002-00001",
@@ -363,9 +363,9 @@ def upgrade() -> None:
         pch_other_purchase_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "transition_reason": "輸送費追加計上",
+                "instruction_cause": "輸送費追加計上",
                 "transition_amount": 2800.0,
             },
         ],
@@ -375,7 +375,7 @@ def upgrade() -> None:
         pch_payment_check_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "payment_no": "PM-0000001",
             },
         ],
@@ -392,9 +392,9 @@ def upgrade() -> None:
         pch_other_purchase_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "supplier_id": "S002",
-                "transition_reason": "誤請求返金(2022年10月分)",
+                "instruction_cause": "誤請求返金(2022年10月分)",
                 "transition_amount": -10000.0,
             },
         ],
@@ -499,7 +499,7 @@ def upgrade() -> None:
         sel_sending_bill_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "billing_no": "BL-0000001",
             },
         ],
@@ -516,7 +516,7 @@ def upgrade() -> None:
         pch_payment_check_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "payment_no": "PM-0000003",
             },
         ],
@@ -533,7 +533,7 @@ def upgrade() -> None:
         pch_payment_check_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "payment_no": "PM-0000002",
             },
         ],
@@ -550,7 +550,7 @@ def upgrade() -> None:
         sel_sending_bill_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "billing_no": "BL-0000002",
             },
         ],
@@ -567,7 +567,7 @@ def upgrade() -> None:
         pch_payment_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "payment_no": "PM-0000001",
             },
         ],
@@ -584,7 +584,7 @@ def upgrade() -> None:
         sel_deposit_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "costomer_id": "S001",
                 "deposit_amount": 43000.0,
             },
@@ -602,7 +602,7 @@ def upgrade() -> None:
         pch_payment_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "payment_no": "PM-0000003",
             },
         ],
@@ -619,7 +619,7 @@ def upgrade() -> None:
         sel_deposit_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "costomer_id": "C001",
                 "deposit_amount": 30000.0,
             },
@@ -637,7 +637,7 @@ def upgrade() -> None:
         sel_deposit_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "costomer_id": "C001",
                 "deposit_amount": 48000.0,
             },
@@ -655,7 +655,7 @@ def upgrade() -> None:
         pch_payment_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "payment_no": "PM-0000002",
             },
         ],
@@ -729,7 +729,7 @@ def upgrade() -> None:
         pch_payment_check_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "payment_no": "PM-0000004",
             },
         ],
@@ -774,7 +774,7 @@ def upgrade() -> None:
         sel_receive_cancel_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "cancel_reason": "顧客要望",
                 "receive_detail_no": 3,
                 "calcel_quantity": 1,
@@ -827,7 +827,7 @@ def upgrade() -> None:
         pch_arrival_date_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "change_reason": "輸送業者都合",
                 "order_detail_no": 7,
                 "arrival_date": date(2023, 12, 12),
@@ -874,12 +874,12 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
-                "instruction_pic": "T-902",
-                "moving_reason": "検品（異常なし）",
+                "operator_id": "T-902",
+                "instruction_cause": "検品（異常なし）",
                 "site_type_from": SiteType.inspect_product,
                 "site_type_to": SiteType.main,
                 "product_id": "S001-00002",
-                "moving_quantity": 2,
+                "quantity": 2,
             },
         ],
     )
@@ -917,20 +917,20 @@ def upgrade() -> None:
         inv_moving_instructions,
         [
             {
-                "instruction_pic": "T-901",
-                "moving_reason": "検品（異常なし）",
+                "operator_id": "T-901",
+                "instruction_cause": "検品（異常なし）",
                 "site_type_from": SiteType.inspect_product,
                 "site_type_to": SiteType.main,
                 "product_id": "S001-00001",
-                "moving_quantity": 3,
+                "quantity": 3,
             },
             {
-                "instruction_pic": "T-901",
-                "moving_reason": "検品（不良品）",
+                "operator_id": "T-901",
+                "instruction_cause": "検品（不良品）",
                 "site_type_from": SiteType.inspect_product,
                 "site_type_to": SiteType.damaged_product,
                 "product_id": "S001-00001",
-                "moving_quantity": 2,
+                "quantity": 2,
             },
         ],
     )
@@ -947,7 +947,7 @@ def upgrade() -> None:
         pch_purchase_return_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "return_reason": "検品不良の対応",
                 "wearhousing_detail_no": 8,
                 "return_quantity": 1,
@@ -960,8 +960,8 @@ def upgrade() -> None:
         inv_other_inventory_instructions,
         [
             {
-                "instruction_pic": "T-901",
-                "transition_reason": "検品不良により廃棄、費用は雑費用として処理",
+                "operator_id": "T-901",
+                "instruction_cause": "検品不良により廃棄、費用は雑費用として処理",
                 "site_type": SiteType.damaged_product,
                 "product_id": "S001-00001",
                 "quantity": -1,
@@ -981,7 +981,7 @@ def upgrade() -> None:
         pch_payment_check_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "payment_no": "PM-0000005",
             },
         ],
@@ -1054,7 +1054,7 @@ def upgrade() -> None:
         sel_selling_return_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "return_reason": "クレーム返品",
                 "costomer_id": "C001",
                 "product_id": "S001-00002",
@@ -1076,7 +1076,7 @@ def upgrade() -> None:
         sel_sending_bill_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "billing_no": "BL-0000003",
             },
         ],
@@ -1123,8 +1123,8 @@ def upgrade() -> None:
         inv_other_inventory_instructions,
         [
             {
-                "instruction_pic": "T-901",
-                "transition_reason": "棚卸結果反映、帳簿在庫増",
+                "operator_id": "T-901",
+                "instruction_cause": "棚卸結果反映、帳簿在庫増",
                 "site_type": SiteType.main,
                 "product_id": "S001-00002",
                 "quantity": 1,
@@ -1203,7 +1203,7 @@ def upgrade() -> None:
         sel_selling_return_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "return_reason": "破損による返品",
                 "shipping_detail_no": 4,
                 "return_quantity": 1,
@@ -1223,7 +1223,7 @@ def upgrade() -> None:
         sel_sending_bill_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "billing_no": "BL-0000004",
             },
         ],
@@ -1268,9 +1268,9 @@ def upgrade() -> None:
         sel_other_selling_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "costomer_id": "C001",
-                "transition_reason": "延滞金請求(BL-0000003)",
+                "instruction_cause": "延滞金請求(BL-0000003)",
                 "transition_amount": 10000.0,
             },
         ],
@@ -1315,7 +1315,7 @@ def upgrade() -> None:
         sel_deposit_instructions,
         [
             {
-                "instruction_pic": "T-901",
+                "operator_id": "T-901",
                 "costomer_id": "C001",
                 "deposit_amount": 30000.0,
             },
@@ -1434,7 +1434,7 @@ def upgrade() -> None:
         sel_deposit_instructions,
         [
             {
-                "instruction_pic": "T-902",
+                "operator_id": "T-902",
                 "costomer_id": "C002",
                 "deposit_amount": 90000.0,
             },

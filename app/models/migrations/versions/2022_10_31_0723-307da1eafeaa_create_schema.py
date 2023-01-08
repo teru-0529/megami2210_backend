@@ -21,12 +21,28 @@ depends_on = None
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
-def create_updated_at_trigger() -> None:
+def create_trigger() -> None:
     op.execute(
         """
         CREATE FUNCTION set_modified_at() RETURNS TRIGGER AS $$
         BEGIN
+            -- 更新日時
             NEW.modified_at := now();
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+
+    op.execute(
+        """
+        CREATE FUNCTION set_instruction_date() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付
+            SELECT date INTO NEW.instruction_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -70,13 +86,14 @@ def upgrade() -> None:
     op.execute("CREATE SCHEMA mst;")
     op.execute("CREATE SCHEMA todo;")
     op.execute("CREATE SCHEMA account;")
-    create_updated_at_trigger()
+    create_trigger()
     create_business_date_table()
 
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS business_date CASCADE;")
     op.execute("DROP FUNCTION IF EXISTS set_modified_at CASCADE;")
+    op.execute("DROP FUNCTION IF EXISTS set_instruction_date CASCADE;")
     op.execute("DROP TYPE IF EXISTS date_type;")
     op.execute("DROP SCHEMA IF EXISTS todo CASCADE;")
     op.execute("DROP SCHEMA IF EXISTS account CASCADE;")

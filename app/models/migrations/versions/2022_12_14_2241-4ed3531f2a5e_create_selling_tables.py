@@ -1199,9 +1199,13 @@ def create_shipping_plan_products_table() -> None:
 
             -- 既発注数の計算TODO:
             OPEN ordered_cursor FOR
-            SELECT *
-            FROM purchase.view_remaining_order
+            SELECT
+                detail_no,
+                (purchase_quantity - wearhousing_quantity - cancel_quantity) AS remaining_quantity,
+                estimate_arrival_date
+            FROM purchase.ordering_details
             WHERE product_id = i_product_id
+            AND   (purchase_quantity - wearhousing_quantity - cancel_quantity) > 0
             ORDER BY estimate_arrival_date ASC;
 
             LOOP
@@ -1215,7 +1219,7 @@ def create_shipping_plan_products_table() -> None:
 
                 IF rec.remaining_quantity < t_plan_quantity THEN
                     t_quantity:=rec.remaining_quantity;
-                    t_plan_quantity:=t_plan_quantity-t_quantity;
+                    t_plan_quantity:=t_plan_quantity - t_quantity;
                 ELSE
                     t_quantity:=t_plan_quantity;
                     t_plan_quantity:=0;
@@ -1300,7 +1304,7 @@ def create_receive_cancel_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("cancel_reason", sa.Text, nullable=False, comment="キャンセル理由"),
         sa.Column("receive_detail_no", sa.Integer, nullable=False, comment="受注明細NO"),
         sa.Column(
@@ -1321,10 +1325,10 @@ def create_receive_cancel_instructions_table() -> None:
         schema="selling",
     )
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "receive_cancel_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="selling",
@@ -1424,7 +1428,7 @@ def create_sending_bill_instructions_table() -> None:
             nullable=False,
             comment="送付日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="送付担当者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="送付担当者ID"),
         sa.Column(
             "billing_no",
             sa.String(10),
@@ -1437,10 +1441,10 @@ def create_sending_bill_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "sending_bill_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="selling",
@@ -1509,7 +1513,7 @@ def create_sending_bill_instructions_table() -> None:
 
             -- 請求へ、送付日、送付担当者の登録
             UPDATE selling.billings
-            SET billing_send_date = NEW.instruction_date, billing_send_pic = NEW.instruction_pic
+            SET billing_send_date = NEW.instruction_date, billing_send_pic = NEW.operator_id
             WHERE billing_no = NEW.billing_no;
 
             return NEW;
@@ -1543,7 +1547,7 @@ def create_deposit_instructions_table() -> None:
             nullable=False,
             comment="入金日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="入金確認者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="入金確認者ID"),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column(
             "deposit_amount",
@@ -1557,10 +1561,10 @@ def create_deposit_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "deposit_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="selling",
@@ -1747,7 +1751,7 @@ def create_selling_return_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("return_reason", sa.Text, nullable=False, comment="返品理由"),
         sa.Column("shipping_detail_no", sa.Integer, nullable=True, comment="出荷明細NO"),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
@@ -1809,10 +1813,10 @@ def create_selling_return_instructions_table() -> None:
         schema="selling",
     )
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "selling_return_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="selling",
@@ -2003,8 +2007,8 @@ def create_other_selling_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
-        sa.Column("transition_reason", sa.Text, nullable=False, comment="変動理由"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("instruction_cause", sa.Text, nullable=False, comment="変動理由"),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
         sa.Column(
             "transition_amount",
@@ -2018,10 +2022,10 @@ def create_other_selling_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "other_selling_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="selling",

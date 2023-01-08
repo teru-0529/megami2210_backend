@@ -1075,7 +1075,7 @@ def create_payment_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column(
             "payment_no",
             sa.String(10),
@@ -1088,10 +1088,10 @@ def create_payment_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "payment_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="purchase",
@@ -1160,7 +1160,7 @@ def create_payment_instructions_table() -> None:
 
             -- 支払へ、入金日、入金担当者の登録
             UPDATE purchase.payments
-            SET payment_date = NEW.instruction_date, payment_pic = NEW.instruction_pic
+            SET payment_date = NEW.instruction_date, payment_pic = NEW.operator_id
             WHERE payment_no = NEW.payment_no;
 
             -- 買掛変動履歴の登録
@@ -1210,7 +1210,7 @@ def create_payment_check_instructions_table() -> None:
             nullable=False,
             comment="確認日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="確認者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="確認者ID"),
         sa.Column(
             "payment_no",
             sa.String(10),
@@ -1223,10 +1223,10 @@ def create_payment_check_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "payment_check_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="purchase",
@@ -1295,7 +1295,7 @@ def create_payment_check_instructions_table() -> None:
 
             -- 支払へ、確認日、確認担当者の登録
             UPDATE purchase.payments
-            SET payment_check_date = NEW.instruction_date, payment_check_pic = NEW.instruction_pic
+            SET payment_check_date = NEW.instruction_date, payment_check_pic = NEW.operator_id
             WHERE payment_no = NEW.payment_no;
 
             return NEW;
@@ -1329,7 +1329,7 @@ def create_order_cancel_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("cancel_reason", sa.Text, nullable=False, comment="キャンセル理由"),
         sa.Column("order_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
         sa.Column(
@@ -1350,10 +1350,10 @@ def create_order_cancel_instructions_table() -> None:
         schema="purchase",
     )
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "order_cancel_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="purchase",
@@ -1453,7 +1453,7 @@ def create_arrival_date_instructions_table() -> None:
             nullable=False,
             comment="変更実施日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="変更者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="変更者ID"),
         sa.Column("change_reason", sa.Text, nullable=False, comment="変更理由"),
         sa.Column("order_detail_no", sa.Integer, nullable=True, comment="発注明細NO"),
         sa.Column(
@@ -1468,10 +1468,10 @@ def create_arrival_date_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "arrival_date_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="purchase",
@@ -1564,7 +1564,7 @@ def create_purchase_return_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("return_reason", sa.Text, nullable=False, comment="返品理由"),
         sa.Column("wearhousing_detail_no", sa.Integer, nullable=True, comment="入荷明細NO"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
@@ -1612,10 +1612,10 @@ def create_purchase_return_instructions_table() -> None:
         schema="purchase",
     )
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "purchase_return_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="purchase",
@@ -1805,8 +1805,8 @@ def create_other_purchase_instructions_table() -> None:
             nullable=False,
             comment="指示日",
         ),
-        sa.Column("instruction_pic", sa.String(5), nullable=True, comment="指示者ID"),
-        sa.Column("transition_reason", sa.Text, nullable=False, comment="変動理由"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
+        sa.Column("instruction_cause", sa.Text, nullable=False, comment="変動理由"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
         sa.Column(
             "transition_amount",
@@ -1820,10 +1820,10 @@ def create_other_purchase_instructions_table() -> None:
     )
 
     op.create_foreign_key(
-        "fk_instruction_pic",
+        "fk_operator_id",
         "other_purchase_instructions",
         "profiles",
-        ["instruction_pic"],
+        ["operator_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="purchase",

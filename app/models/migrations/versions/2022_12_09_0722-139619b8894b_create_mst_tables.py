@@ -7,7 +7,6 @@ Create Date: 2022-12-09 07:22:27.697717
 """
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import ENUM
 
 from app.models.migrations.util import timestamps
 from app.models.segment_values import MasterStatus, OrderPolicy
@@ -18,42 +17,23 @@ down_revision = "e85dfc42f48d"
 branch_labels = None
 depends_on = None
 
-# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-
-
-def create_status_type() -> ENUM:
-    return ENUM(
-        *MasterStatus.list(),
-        name="status",
-        schema="mst",
-        create_type=True,
-        checkfirst=True,
-    )
-
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 # INFO:
-def create_companies_table(status_type: ENUM) -> None:
+def create_companies_table() -> None:
     companies_table = op.create_table(
         "companies",
         sa.Column("company_id", sa.String(4), primary_key=True, comment="企業ID"),
-        sa.Column(
-            "name",
-            sa.String(30),
-            unique=True,
-            nullable=False,
-            index=True,
-            comment="企業名",
-        ),
+        sa.Column("name", sa.String(30), unique=True, nullable=False, comment="企業名"),
         sa.Column("postal_code", sa.String(8), nullable=False, comment="郵便番号"),
         sa.Column("address", sa.Text, nullable=False, comment="住所"),
         sa.Column("phone_no", sa.String(10), nullable=False, comment="電話番号"),
         sa.Column("fax_no", sa.String(10), nullable=True, comment="FAX番号"),
         sa.Column(
             "status",
-            status_type,
+            sa.Enum(*MasterStatus.list(), name="status", schema="mst"),
             nullable=False,
             server_default=MasterStatus.ready,
             index=True,
@@ -71,19 +51,18 @@ def create_companies_table(status_type: ENUM) -> None:
     )
 
     # 「ステータス」が「取引中」の場合は、「取引銀行コード」「取引支店コード」「取引銀行名称」「取引口座番号」が必須
-    ck_active: str = """
-    CASE
-        WHEN status='ACTIVE' AND bank_code IS NULL THEN FALSE
-        WHEN status='ACTIVE' AND bank_branch_code IS NULL THEN FALSE
-        WHEN status='ACTIVE' AND bank_name IS NULL THEN FALSE
-        WHEN status='ACTIVE' AND bank_account_number IS NULL THEN FALSE
-        ELSE TRUE
-    END
-    """
     op.create_check_constraint(
         "ck_status_active",
         "companies",
-        ck_active,
+        """
+        CASE
+            WHEN status='ACTIVE' AND bank_code IS NULL THEN FALSE
+            WHEN status='ACTIVE' AND bank_branch_code IS NULL THEN FALSE
+            WHEN status='ACTIVE' AND bank_name IS NULL THEN FALSE
+            WHEN status='ACTIVE' AND bank_account_number IS NULL THEN FALSE
+            ELSE TRUE
+        END
+        """,
         schema="mst",
     )
     op.create_check_constraint(
@@ -249,9 +228,9 @@ def create_costomers_table() -> None:
             sa.Integer,
             nullable=False,
             server_default="99",
-            comment="入金予定日",
+            comment="入金期限日",
         ),
-        sa.Column("sales_pic", sa.String(5), nullable=True, comment="営業担当者ID"),
+        sa.Column("pic_id", sa.String(5), nullable=True, comment="営業担当者ID"),
         sa.Column("contact_person", sa.String(20), nullable=True, comment="相手先担当者名"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
         *timestamps(),
@@ -275,15 +254,6 @@ def create_costomers_table() -> None:
         "deposit_day > 0 and deposit_day < 100",
         schema="mst",
     )
-    op.execute(
-        """
-        CREATE TRIGGER costomers_modified
-            BEFORE UPDATE
-            ON mst.costomers
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
     op.create_foreign_key(
         "fk_company_id",
         "costomers",
@@ -295,59 +265,27 @@ def create_costomers_table() -> None:
         referent_schema="mst",
     )
     op.create_foreign_key(
-        "fk_sales_pic",
+        "fk_pic_id",
         "costomers",
         "profiles",
-        ["sales_pic"],
+        ["pic_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="mst",
         referent_schema="account",
     )
 
-    op.bulk_insert(
-        costomers_table,
-        [
-            {
-                "company_id": "C001",
-                "cutoff_day": 10,
-                "month_of_deposit_term": 1,
-                "deposit_day": 20,
-                "sales_pic": "T-901",
-                "contact_person": "牧真一",
-                "note": "海南大附属",
-            },
-            {
-                "company_id": "C002",
-                "cutoff_day": 99,
-                "month_of_deposit_term": 2,
-                "deposit_day": 5,
-                "sales_pic": "T-902",
-                "contact_person": "仙道彰",
-                "note": "陵南",
-            },
-            {
-                "company_id": "C003",
-                "cutoff_day": 15,
-                "month_of_deposit_term": 2,
-                "deposit_day": 99,
-                "sales_pic": None,
-                "contact_person": None,
-                "note": None,
-            },
-            {
-                "company_id": "S001",
-                "cutoff_day": 15,
-                "month_of_deposit_term": 1,
-                "deposit_day": 25,
-                "sales_pic": "T-902",
-                "contact_person": "桜木花道",
-                "note": "湘北",
-            },
-        ],
+    op.execute(
+        """
+        CREATE TRIGGER costomers_modified
+            BEFORE UPDATE
+            ON mst.costomers
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
     )
 
-    # 請求締日、入金期限の計算TODO:
+    # 締日、入金期限の計算TODO:
     op.execute(
         """
         CREATE FUNCTION mst.calc_deposit_deadline(
@@ -367,6 +305,7 @@ def create_costomers_table() -> None:
             deposit_day_interval interval;
 
         BEGIN
+            --得意先マスタの検索
             SELECT * INTO rec
             FROM mst.costomers
             WHERE company_id = costomer_id;
@@ -403,6 +342,48 @@ def create_costomers_table() -> None:
         """
     )
 
+    op.bulk_insert(
+        costomers_table,
+        [
+            {
+                "company_id": "C001",
+                "cutoff_day": 10,
+                "month_of_deposit_term": 1,
+                "deposit_day": 20,
+                "pic_id": "T-901",
+                "contact_person": "牧真一",
+                "note": "海南大附属",
+            },
+            {
+                "company_id": "C002",
+                "cutoff_day": 99,
+                "month_of_deposit_term": 2,
+                "deposit_day": 5,
+                "pic_id": "T-902",
+                "contact_person": "仙道彰",
+                "note": "陵南",
+            },
+            {
+                "company_id": "C003",
+                "cutoff_day": 15,
+                "month_of_deposit_term": 2,
+                "deposit_day": 99,
+                "pic_id": None,
+                "contact_person": None,
+                "note": None,
+            },
+            {
+                "company_id": "S001",
+                "cutoff_day": 15,
+                "month_of_deposit_term": 1,
+                "deposit_day": 25,
+                "pic_id": "T-902",
+                "contact_person": "桜木花道",
+                "note": "湘北",
+            },
+        ],
+    )
+
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -427,9 +408,9 @@ def create_suppliers_table() -> None:
             sa.Integer,
             nullable=False,
             server_default="99",
-            comment="支払予定日",
+            comment="支払期限日",
         ),
-        sa.Column("purchase_pic", sa.String(5), nullable=True, comment="仕入担当者ID"),
+        sa.Column("pic_id", sa.String(5), nullable=True, comment="仕入担当者ID"),
         sa.Column("contact_person", sa.String(20), nullable=True, comment="相手先担当者名"),
         sa.Column(
             "order_policy",
@@ -439,11 +420,7 @@ def create_suppliers_table() -> None:
             comment="発注方針",
         ),
         sa.Column(
-            "order_week_num",
-            sa.Integer,
-            nullable=True,
-            index=True,
-            comment="発注曜日",
+            "order_week_num", sa.Integer, nullable=True, index=True, comment="発注曜日"
         ),
         sa.Column("days_to_arrive", sa.Integer, nullable=False, comment="標準入荷日数"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
@@ -475,27 +452,17 @@ def create_suppliers_table() -> None:
         schema="mst",
     )
     # 「発注方針」が「定期発注」の場合は、「発注曜日」が必須、「発注方針」が「随時発注」の場合は、「発注曜日」を指定してはいけない
-    ck_order_week_num: str = """
-    CASE
-        WHEN order_policy='PERIODICALLY' AND order_week_num IS NULL THEN FALSE
-        WHEN order_policy='AS_NEEDED' AND order_week_num IS NOT NULL THEN FALSE
-        ELSE TRUE
-    END
-    """
     op.create_check_constraint(
         "ck_order_week_num",
         "suppliers",
-        ck_order_week_num,
+        """
+        CASE
+            WHEN order_policy='PERIODICALLY' AND order_week_num IS NULL THEN FALSE
+            WHEN order_policy='AS_NEEDED' AND order_week_num IS NOT NULL THEN FALSE
+            ELSE TRUE
+        END
+        """,
         schema="mst",
-    )
-    op.execute(
-        """
-        CREATE TRIGGER suppliers_modified
-            BEFORE UPDATE
-            ON mst.suppliers
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
     op.create_foreign_key(
         "fk_company_id",
@@ -508,83 +475,27 @@ def create_suppliers_table() -> None:
         referent_schema="mst",
     )
     op.create_foreign_key(
-        "fk_purchase_pic",
+        "fk_pic_id",
         "suppliers",
         "profiles",
-        ["purchase_pic"],
+        ["pic_id"],
         ["account_id"],
         ondelete="SET NULL",
         source_schema="mst",
         referent_schema="account",
     )
 
-    op.bulk_insert(
-        suppliers_table,
-        [
-            {
-                "company_id": "S001",
-                "cutoff_day": 5,
-                "month_of_payment_term": 1,
-                "payment_day": 99,
-                "purchase_pic": "T-902",
-                "contact_person": "桜木花道",
-                "order_policy": OrderPolicy.periodically,
-                "order_week_num": 4,
-                "days_to_arrive": 10,
-                "note": "湘北",
-            },
-            {
-                "company_id": "S002",
-                "cutoff_day": 99,
-                "month_of_payment_term": 2,
-                "payment_day": 15,
-                "purchase_pic": "T-902",
-                "contact_person": "流川楓",
-                "order_policy": OrderPolicy.as_needed,
-                "order_week_num": None,
-                "days_to_arrive": 15,
-                "note": "湘北",
-            },
-            {
-                "company_id": "S003",
-                "cutoff_day": 25,
-                "month_of_payment_term": 1,
-                "payment_day": 5,
-                "purchase_pic": "T-902",
-                "contact_person": "赤木剛憲",
-                "order_policy": OrderPolicy.periodically,
-                "order_week_num": 4,
-                "days_to_arrive": 12,
-                "note": "湘北",
-            },
-            {
-                "company_id": "S004",
-                "cutoff_day": 99,
-                "month_of_payment_term": 2,
-                "payment_day": 10,
-                "purchase_pic": None,
-                "contact_person": None,
-                "order_policy": OrderPolicy.periodically,
-                "order_week_num": 4,
-                "days_to_arrive": 10,
-                "note": "湘北",
-            },
-            {
-                "company_id": "S005",
-                "cutoff_day": 5,
-                "month_of_payment_term": 2,
-                "payment_day": 15,
-                "purchase_pic": None,
-                "contact_person": "三井寿",
-                "order_policy": OrderPolicy.periodically,
-                "order_week_num": 3,
-                "days_to_arrive": 10,
-                "note": "湘北",
-            },
-        ],
+    op.execute(
+        """
+        CREATE TRIGGER suppliers_modified
+            BEFORE UPDATE
+            ON mst.suppliers
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
     )
 
-    # 支払締日、支払期限の計算TODO:
+    # 締日、支払期限の計算TODO:
     op.execute(
         """
         CREATE FUNCTION mst.calc_payment_deadline(
@@ -604,6 +515,7 @@ def create_suppliers_table() -> None:
             payment_day_interval interval;
 
         BEGIN
+            --仕入先マスタの検索
             SELECT * INTO rec
             FROM mst.suppliers
             WHERE company_id = supplier_id;
@@ -638,6 +550,72 @@ def create_suppliers_table() -> None:
         END;
         $$ LANGUAGE plpgsql;
         """
+    )
+
+    op.bulk_insert(
+        suppliers_table,
+        [
+            {
+                "company_id": "S001",
+                "cutoff_day": 5,
+                "month_of_payment_term": 1,
+                "payment_day": 99,
+                "pic_id": "T-902",
+                "contact_person": "桜木花道",
+                "order_policy": OrderPolicy.periodically,
+                "order_week_num": 4,
+                "days_to_arrive": 10,
+                "note": "湘北",
+            },
+            {
+                "company_id": "S002",
+                "cutoff_day": 99,
+                "month_of_payment_term": 2,
+                "payment_day": 15,
+                "pic_id": "T-902",
+                "contact_person": "流川楓",
+                "order_policy": OrderPolicy.as_needed,
+                "order_week_num": None,
+                "days_to_arrive": 15,
+                "note": "湘北",
+            },
+            {
+                "company_id": "S003",
+                "cutoff_day": 25,
+                "month_of_payment_term": 1,
+                "payment_day": 5,
+                "pic_id": "T-902",
+                "contact_person": "赤木剛憲",
+                "order_policy": OrderPolicy.periodically,
+                "order_week_num": 4,
+                "days_to_arrive": 12,
+                "note": "湘北",
+            },
+            {
+                "company_id": "S004",
+                "cutoff_day": 99,
+                "month_of_payment_term": 2,
+                "payment_day": 10,
+                "pic_id": None,
+                "contact_person": None,
+                "order_policy": OrderPolicy.periodically,
+                "order_week_num": 4,
+                "days_to_arrive": 10,
+                "note": "湘北",
+            },
+            {
+                "company_id": "S005",
+                "cutoff_day": 5,
+                "month_of_payment_term": 2,
+                "payment_day": 15,
+                "pic_id": None,
+                "contact_person": "三井寿",
+                "order_policy": OrderPolicy.periodically,
+                "order_week_num": 3,
+                "days_to_arrive": 10,
+                "note": "湘北",
+            },
+        ],
     )
 
 
@@ -678,16 +656,6 @@ def create_destination_address_table() -> None:
         "fax_no ~* '^0[0-9]{9,10}$'",
         schema="mst",
     )
-
-    op.execute(
-        """
-        CREATE TRIGGER destination_address_modified
-            BEFORE UPDATE
-            ON mst.destination_address
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
     op.create_foreign_key(
         "fk_company_id",
         "destination_address",
@@ -697,6 +665,16 @@ def create_destination_address_table() -> None:
         ondelete="CASCADE",
         source_schema="mst",
         referent_schema="mst",
+    )
+
+    op.execute(
+        """
+        CREATE TRIGGER destination_address_modified
+            BEFORE UPDATE
+            ON mst.destination_address
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
     )
 
     op.bulk_insert(
@@ -731,7 +709,7 @@ def create_destination_address_table() -> None:
 
 
 # INFO:
-def create_products_table(status_type: ENUM) -> None:
+def create_products_table() -> None:
     products_table = op.create_table(
         "products",
         sa.Column("product_id", sa.String(10), primary_key=True, comment="当社商品ID"),
@@ -743,20 +721,21 @@ def create_products_table(status_type: ENUM) -> None:
             "selling_price",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
+            server_default="0.00",
             comment="標準売価",
         ),
         sa.Column(
             "cost_price",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
+            server_default="0.00",
             comment="標準原価",
         ),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="標準利益率"),
         sa.Column("days_to_arrive", sa.Integer, nullable=True, comment="標準入荷日数"),
         sa.Column(
             "status",
-            status_type,
+            sa.Enum(*MasterStatus.list(), name="status", schema="mst"),
             nullable=False,
             server_default=MasterStatus.ready,
             index=True,
@@ -769,13 +748,13 @@ def create_products_table(status_type: ENUM) -> None:
     op.create_check_constraint(
         "ck_selling_price",
         "products",
-        "selling_price >= 0.0",
+        "selling_price > 0.00",
         schema="mst",
     )
     op.create_check_constraint(
         "ck_cost_price",
         "products",
-        "cost_price >= 0.0",
+        "cost_price > 0.00",
         schema="mst",
     )
     op.create_check_constraint(
@@ -789,16 +768,6 @@ def create_products_table(status_type: ENUM) -> None:
         "products",
         "days_to_arrive > 0",
         schema="mst",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER products_modified
-            BEFORE UPDATE
-            ON mst.products
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
     op.create_foreign_key(
         "fk_supplier_id",
@@ -817,7 +786,40 @@ def create_products_table(status_type: ENUM) -> None:
         schema="mst",
     )
 
-    # 指定日付以降に発注した場合の発注日、納期予定日を計算TODO:
+    op.execute(
+        """
+        CREATE TRIGGER products_modified
+            BEFORE UPDATE
+            ON mst.products
+            FOR EACH ROW
+        EXECUTE PROCEDURE set_modified_at();
+        """
+    )
+
+    # 導出項目計算
+    op.execute(
+        """
+        CREATE FUNCTION mst.calc_products() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 標準利益率
+            NEW.profit_rate:=ROUND((NEW.selling_price - NEW.cost_price) / NEW.selling_price * 100, 1);
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER upsert_shipping_details
+            BEFORE INSERT OR UPDATE
+            ON mst.products
+            FOR EACH ROW
+        EXECUTE PROCEDURE mst.calc_products();
+        """
+    )
+
+    # 最短発注日、納期予定日の計算TODO:
     op.execute(
         """
         CREATE FUNCTION mst.calc_ordering_date(
@@ -872,7 +874,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_id": "S001-00001",
                 "supplier_id": "S001",
                 "product_code": "B00F4J8EZ0",
-                "product_name": "EVA B錠（TABLETS 60錠）",
+                "product_name": "EVA B錠(TABLETS 60錠)",
                 "capacity": "100セット",
                 "selling_price": 25000.00,
                 "cost_price": 10000.00,
@@ -884,7 +886,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_id": "S001-00002",
                 "supplier_id": "S001",
                 "product_code": "B09JYBSFS3",
-                "product_name": "EVA B錠（TABLETS 90錠）",
+                "product_name": "EVA B錠(TABLETS 90錠)",
                 "capacity": "100セット",
                 "selling_price": 30000.00,
                 "cost_price": 12000.00,
@@ -911,7 +913,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_name": "アレジウンFX 56錠",
                 "capacity": "50セット",
                 "selling_price": 150000.00,
-                "cost_price": 100000.00,
+                "cost_price": 45000.00,
                 "days_to_arrive": None,
                 "status": MasterStatus.stop_dealing,
                 "note": "仕入先廃止商品",
@@ -923,7 +925,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_name": "ガストン10 12錠",
                 "capacity": "20セット",
                 "selling_price": 40000.00,
-                "cost_price": 25000.00,
+                "cost_price": 15000.00,
                 "days_to_arrive": None,
                 "status": MasterStatus.ready,
                 "note": None,
@@ -934,7 +936,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_code": "Z0615",
                 "product_name": "デスクチェア メッシュチェア ブラック",
                 "capacity": "1脚",
-                "selling_price": 40000.00,
+                "selling_price": 60000.00,
                 "cost_price": 20000.00,
                 "days_to_arrive": None,
                 "status": MasterStatus.active,
@@ -947,7 +949,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_name": "シルバーブレンド 120g",
                 "capacity": "200本",
                 "selling_price": 150000.00,
-                "cost_price": 100000.00,
+                "cost_price": 40000.00,
                 "days_to_arrive": None,
                 "status": MasterStatus.active,
                 "note": None,
@@ -959,7 +961,7 @@ def create_products_table(status_type: ENUM) -> None:
                 "product_name": "H鋼 1000×100×6/8",
                 "capacity": "1m",
                 "selling_price": 5000.00,
-                "cost_price": 3000.00,
+                "cost_price": 1800.00,
                 "days_to_arrive": None,
                 "status": MasterStatus.active,
                 "note": None,
@@ -1003,13 +1005,11 @@ def create_view() -> None:
 
 # INFO:
 def upgrade() -> None:
-    status_type = create_status_type()
-
-    create_companies_table(status_type)
+    create_companies_table()
     create_costomers_table()
     create_suppliers_table()
     create_destination_address_table()
-    create_products_table(status_type)
+    create_products_table()
     create_view()
 
 
