@@ -8,12 +8,13 @@ Create Date: 2022-12-14 22:41:16.215287
 import sqlalchemy as sa
 from alembic import op
 
+from app.models.migrations.util import timestamps
 from app.models.segment_values import (
+    DepositStatus,
+    ReceivableTransitionType,
     ShippingProductSituation,
     SiteType,
-    ReceivableTransitionType,
 )
-from app.models.migrations.util import timestamps
 
 # revision identifiers, used by Alembic.
 revision = "4ed3531f2a5e"
@@ -30,60 +31,12 @@ def create_accounts_receivables_table() -> None:
         "accounts_receivables",
         sa.Column("costomer_id", sa.String(4), primary_key=True, comment="得意先ID"),
         sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
-        sa.Column(
-            "init_balance",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="月初残高",
-        ),
-        sa.Column(
-            "selling_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="販売額",
-        ),
-        sa.Column(
-            "deposit_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="入金額",
-        ),
-        sa.Column(
-            "other_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="その他変動額",
-        ),
-        sa.Column(
-            "balance", sa.Numeric, nullable=False, server_default="0.0", comment="残高"
-        ),
-        *timestamps(),
+        sa.Column("init_balance", sa.Numeric, nullable=False, comment="月初残高"),
+        sa.Column("selling_amount", sa.Numeric, nullable=False, comment="販売額"),
+        sa.Column("deposit_amount", sa.Numeric, nullable=False, comment="入金額"),
+        sa.Column("other_amount", sa.Numeric, nullable=False, comment="その他変動額"),
+        sa.Column("balance", sa.Numeric, nullable=False, comment="残高"),
         schema="selling",
-    )
-
-    op.create_foreign_key(
-        "fk_costomer_id",
-        "accounts_receivables",
-        "costomers",
-        ["costomer_id"],
-        ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="selling",
-        referent_schema="mst",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER accounts_receivable_modified
-            BEFORE UPDATE
-            ON selling.accounts_receivables
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 導出項目計算
@@ -91,7 +44,9 @@ def create_accounts_receivables_table() -> None:
         """
         CREATE FUNCTION selling.calc_accounts_receivables() RETURNS TRIGGER AS $$
         BEGIN
+            --残高
             NEW.balance:=NEW.init_balance + NEW.selling_amount - NEW.deposit_amount + NEW.other_amount;
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -115,22 +70,10 @@ def create_accounts_receivables_table() -> None:
 def create_accounts_receivable_histories_table() -> None:
     op.create_table(
         "accounts_receivable_histories",
-        sa.Column("no", sa.Integer, primary_key=True, comment="売掛履歴NO"),
-        sa.Column(
-            "transaction_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="取引日",
-        ),
+        sa.Column("no", sa.Integer, primary_key=True, comment="売掛変動NO"),
+        sa.Column("transaction_date", sa.Date, nullable=False, comment="取引日"),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
-        sa.Column(
-            "transaction_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="取引金額",
-        ),
+        sa.Column("amount", sa.Numeric, nullable=False, comment="取引額"),
         sa.Column(
             "transition_type",
             sa.Enum(
@@ -141,61 +84,42 @@ def create_accounts_receivable_histories_table() -> None:
             nullable=False,
             comment="売掛変動区分",
         ),
-        sa.Column("transaction_no", sa.Integer, nullable=True, comment="取引管理NO"),
+        sa.Column("transaction_no", sa.Integer, nullable=False, comment="取引管理NO"),
         sa.Column("billing_no", sa.String(10), nullable=True, comment="請求NO"),
-        *timestamps(),
         schema="selling",
     )
 
-    op.create_foreign_key(
-        "fk_costomer_id",
-        "accounts_receivable_histories",
-        "costomers",
-        ["costomer_id"],
-        ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="selling",
-        referent_schema="mst",
-    )
     op.create_index(
         "ix_accounts_receivable_histories_supplier",
         "accounts_receivable_histories",
-        ["costomer_id", "transaction_date"],
+        ["costomer_id", "no"],
         schema="selling",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER accounts_receivable_histories_modified
-            BEFORE UPDATE
-            ON selling.accounts_receivable_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    # 登録後、月次売掛金サマリーを自動作成TODO:
+    # 登録後処理：月次売掛金サマリーを自動作成TODO:
     op.execute(
         """
         CREATE FUNCTION selling.set_summaries() RETURNS TRIGGER AS $$
         DECLARE
-            yyyymm character(6);
+            yyyymm text:=to_char(NEW.transaction_date, 'YYYYMM');
+
             t_init_balance numeric;
             t_selling_amount numeric;
             t_deposit_amount numeric;
             t_other_amount numeric;
 
-            recent_rec RECORD;
-            last_rec RECORD;
+            recent_rec record;
+            last_rec record;
         BEGIN
-            yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
-
+            --月次売掛金サマリー(当月)検索
             SELECT * INTO recent_rec
             FROM selling.accounts_receivables
             WHERE costomer_id = NEW.costomer_id AND year_month = yyyymm
             FOR UPDATE;
 
+            --月初残高,販売額,入金額,その他変動額判定
             IF recent_rec IS NULL THEN
+                --月次売掛金サマリー(過去)検索
                 SELECT * INTO last_rec
                 FROM selling.accounts_receivables
                 WHERE costomer_id = NEW.costomer_id
@@ -219,14 +143,16 @@ def create_accounts_receivable_histories_table() -> None:
                 t_other_amount:=recent_rec.other_amount;
             END IF;
 
+            --取引額計上
             IF NEW.transition_type='SELLING' OR NEW.transition_type='SALES_RETURN' THEN
-                t_selling_amount:=t_selling_amount + NEW.transaction_amount;
+                t_selling_amount:=t_selling_amount + NEW.amount;
             ELSEIF NEW.transition_type='DEPOSIT' THEN
-                t_deposit_amount:=t_deposit_amount - NEW.transaction_amount;
+                t_deposit_amount:=t_deposit_amount - NEW.amount;
             ELSEIF NEW.transition_type='BALANCE_OUT' OR NEW.transition_type='OTHER_TRANSITION' THEN
-                t_other_amount:=t_other_amount + NEW.transaction_amount;
+                t_other_amount:=t_other_amount + NEW.amount;
             END IF;
 
+            --登録
             IF recent_rec IS NULL THEN
                 INSERT INTO selling.accounts_receivables
                 VALUES (
@@ -272,79 +198,53 @@ def create_billings_table() -> None:
             "billing_no",
             sa.String(10),
             primary_key=True,
-            server_default="set_me",
+            server_default="auto",
             comment="請求NO",
         ),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
+        sa.Column("closing_date", sa.Date, nullable=False, comment="締日"),
+        sa.Column("deposit_deadline", sa.Date, nullable=False, comment="入金期限日"),
+        sa.Column("amount", sa.Numeric, nullable=False, comment="請求額"),
         sa.Column(
-            "closing_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="請求締日",
-        ),
-        sa.Column(
-            "deposit_deadline",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="入金期限日",
-        ),
-        sa.Column(
-            "billing_price",
+            "deposited_amount",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
-            comment="請求金額",
+            server_default="0.00",
+            comment="入金額",
         ),
         sa.Column(
-            "deposited_price",
+            "remaining_amount",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
-            comment="入金済金額",
+            server_default="0.00",
+            comment="請求残",
+        ),
+        sa.Column(
+            "status",
+            sa.Enum(*DepositStatus.list(), name="deposit_status", schema="selling"),
+            nullable=False,
+            server_default=DepositStatus.before_deposit,
+            comment="ステータス",
         ),
         sa.Column(
             "fully_paid",
             sa.Boolean,
             nullable=False,
             server_default="false",
-            comment="入金済",
+            comment="（消す）入金済",
         ),
         sa.Column(
             "billing_send_date",
             sa.Date,
             nullable=True,
-            comment="請求書送付日",
+            comment="（消す）請求書送付日",
         ),
         sa.Column(
-            "billing_send_pic", sa.String(5), nullable=True, comment="請求書送付担当者ID"
+            "billing_send_pic", sa.String(5), nullable=True, comment="（消す）請求書送付担当者ID"
         ),
-        sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
         schema="selling",
-    )
+    )  # FIXME:項目消す
 
-    op.create_foreign_key(
-        "fk_costomer_id",
-        "billings",
-        "costomers",
-        ["costomer_id"],
-        ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="selling",
-        referent_schema="mst",
-    )
-    op.create_foreign_key(
-        "fk_billing_send_pic",
-        "billings",
-        "profiles",
-        ["billing_send_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="selling",
-        referent_schema="account",
-    )
     op.create_unique_constraint(
         "uk_deposit_deadline",
         "billings",
@@ -352,22 +252,19 @@ def create_billings_table() -> None:
         schema="selling",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER billings_modified
-            BEFORE UPDATE
-            ON selling.billings
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算
     op.execute(
         """
         CREATE FUNCTION selling.calc_billings() RETURNS TRIGGER AS $$
         BEGIN
-            NEW.billing_no:='BL-'||to_char(nextval('selling.billing_no_seed'),'FM0000000');
+            IF TG_OP = 'INSERT' THEN
+                --請求NO
+                NEW.billing_no:='BL-'||to_char(nextval('selling.billing_no_seed'),'FM0000000');
+            END IF;
+
+            --請求残
+            NEW.remaining_amount:=NEW.amount - NEW.deposited_amount;
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -375,8 +272,8 @@ def create_billings_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_billings
-            BEFORE INSERT
+        CREATE TRIGGER upsert_billings
+            BEFORE INSERT OR UPDATE
             ON selling.billings
             FOR EACH ROW
         EXECUTE PROCEDURE selling.calc_billings();
@@ -395,18 +292,12 @@ def create_receivings_table() -> None:
             "receiving_no",
             sa.String(10),
             primary_key=True,
-            server_default="set_me",
+            server_default="auto",
             comment="受注NO",
         ),
-        sa.Column(
-            "receive_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="受注日",
-        ),
+        sa.Column("operation_date", sa.Date, nullable=False, comment="受注日"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="受注担当者ID"),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
-        sa.Column("receiving_pic", sa.String(5), nullable=True, comment="受注担当者ID"),
         sa.Column(
             "shipping_priority",
             sa.Integer,
@@ -415,7 +306,6 @@ def create_receivings_table() -> None:
             comment="優先出荷度数",
         ),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
         schema="selling",
     )
 
@@ -424,6 +314,16 @@ def create_receivings_table() -> None:
         "receivings",
         "shipping_priority > 0 and shipping_priority < 100",
         schema="selling",
+    )
+    op.create_foreign_key(
+        "fk_operator_id",
+        "receivings",
+        "profiles",
+        ["operator_id"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
     )
     op.create_foreign_key(
         "fk_costomer_id",
@@ -435,25 +335,11 @@ def create_receivings_table() -> None:
         source_schema="selling",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_receiving_pic",
+    op.create_index(
+        "ix_receivings_costomer",
         "receivings",
-        "profiles",
-        ["receiving_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="selling",
-        referent_schema="account",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER receivings_modified
-            BEFORE UPDATE
-            ON selling.receivings
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
+        ["costomer_id", "receiving_no"],
+        schema="selling",
     )
 
     # 導出項目計算
@@ -461,12 +347,11 @@ def create_receivings_table() -> None:
         """
         CREATE FUNCTION selling.create_receivings() RETURNS TRIGGER AS $$
         BEGIN
+            --受注NO
             NEW.receiving_no:='RO-'||to_char(nextval('selling.receiving_no_seed'),'FM0000000');
 
-            -- 処理日付を取得
-            SELECT date INTO NEW.receive_date
-            FROM business_date
-            WHERE date_type = 'BUSINESS_DATE';
+            -- 処理日付
+            NEW.operation_date:=get_operation_date();
 
             return NEW;
         END;
@@ -645,37 +530,28 @@ def create_shippings_table() -> None:
             "shipping_no",
             sa.String(10),
             primary_key=True,
-            server_default="set_me",
+            server_default="auto",
             comment="出荷NO",
         ),
-        sa.Column(
-            "shipping_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="出荷日",
-        ),
+        sa.Column("operation_date", sa.Date, nullable=False, comment="出荷日"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="出荷担当者ID"),
         sa.Column("costomer_id", sa.String(4), nullable=False, comment="得意先ID"),
-        sa.Column("shipping_pic", sa.String(5), nullable=True, comment="出荷担当者ID"),
-        sa.Column(
-            "closing_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="請求締日",
-        ),
-        sa.Column(
-            "deposit_deadline",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="入金期限日",
-        ),
+        sa.Column("closing_date", sa.Date, nullable=False, comment="締日"),
+        sa.Column("deposit_deadline", sa.Date, nullable=False, comment="入金期限日"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
         schema="selling",
     )
 
+    op.create_foreign_key(
+        "fk_operator_id",
+        "shippings",
+        "profiles",
+        ["operator_id"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="selling",
+        referent_schema="account",
+    )
     op.create_foreign_key(
         "fk_costomer_id",
         "shippings",
@@ -686,25 +562,11 @@ def create_shippings_table() -> None:
         source_schema="selling",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_shipping_pic",
+    op.create_index(
+        "ix_shippings_costomer",
         "shippings",
-        "profiles",
-        ["shipping_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="selling",
-        referent_schema="account",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER shippings_modified
-            BEFORE UPDATE
-            ON selling.shippings
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
+        ["costomer_id", "shipping_no"],
+        schema="selling",
     )
 
     # 導出項目計算
@@ -715,18 +577,21 @@ def create_shippings_table() -> None:
             rec record;
 
         BEGIN
+            --出荷NO
             NEW.shipping_no:='SP-'||to_char(nextval('selling.shipping_no_seed'),'FM0000000');
 
-            -- 処理日付を取得
-            SELECT date INTO NEW.shipping_date
-            FROM business_date
-            WHERE date_type = 'BUSINESS_DATE';
+            -- 処理日付
+            NEW.operation_date:=get_operation_date();
 
-            -- 締日・入金期限の計算
-            rec:=mst.calc_deposit_deadline(New.shipping_date, New.costomer_id);
-            New.closing_date:=rec.closing_date;
-            New.deposit_deadline:=rec.deposit_deadline;
-            New.note:=rec.dummy;
+            --締日,入金期限
+            rec:=mst.calc_deposit_deadline(NEW.operation_date, NEW.costomer_id);
+            NEW.closing_date:=rec.closing_date;
+            NEW.deposit_deadline:=rec.deposit_deadline;
+            IF NEW.note IS NULL THEN
+                NEW.note:=rec.note;
+            ELSE
+                NEW.note:=NEW.note||'、'||rec.note;
+            END IF;
 
             return NEW;
         END;
@@ -945,7 +810,7 @@ def create_shipping_details_table() -> None:
         CREATE FUNCTION selling.set_inventories_and_deposits() RETURNS TRIGGER AS $$
         DECLARE
             t_shipping_quantity integer;
-            t_billing_price numeric;
+            t_amount numeric;
             t_billing_no text;
 
             shipping_rec record;
@@ -968,7 +833,7 @@ def create_shipping_details_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                shipping_rec.shipping_date,
+                shipping_rec.operation_date,
                 NEW.site_type,
                 NEW.product_id,
                 - NEW.shipping_quantity,
@@ -978,16 +843,16 @@ def create_shipping_details_table() -> None:
             );
 
             -- 請求の登録、更新
-            SELECT billing_price INTO t_billing_price
+            SELECT amount INTO t_amount
             FROM selling.billings
             WHERE costomer_id = shipping_rec.costomer_id
             AND closing_date = shipping_rec.closing_date
             AND deposit_deadline = shipping_rec.deposit_deadline
             FOR UPDATE;
 
-            IF t_billing_price IS NOT NULL THEN
+            IF t_amount IS NOT NULL THEN
                 UPDATE selling.billings
-                SET billing_price = t_billing_price + NEW.shipping_quantity * NEW.selling_unit_price
+                SET amount = t_amount + NEW.shipping_quantity * NEW.selling_unit_price
                 WHERE costomer_id = shipping_rec.costomer_id
                 AND closing_date = shipping_rec.closing_date
                 AND deposit_deadline = shipping_rec.deposit_deadline;
@@ -1013,7 +878,7 @@ def create_shipping_details_table() -> None:
             INSERT INTO selling.accounts_receivable_histories
             VALUES (
                 default,
-                shipping_rec.shipping_date,
+                shipping_rec.operation_date,
                 shipping_rec.costomer_id,
                 NEW.shipping_quantity * NEW.selling_unit_price,
                 'SELLING',
@@ -1298,7 +1163,7 @@ def create_receive_cancel_instructions_table() -> None:
         "receive_cancel_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="キャンセル指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1361,7 +1226,7 @@ def create_receive_cancel_instructions_table() -> None:
         CREATE FUNCTION selling.calc_receive_cancel_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1422,7 +1287,7 @@ def create_sending_bill_instructions_table() -> None:
         "sending_bill_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="請求書送付NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1484,7 +1349,7 @@ def create_sending_bill_instructions_table() -> None:
         CREATE FUNCTION selling.calc_sending_bill_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1513,7 +1378,7 @@ def create_sending_bill_instructions_table() -> None:
 
             -- 請求へ、送付日、送付担当者の登録
             UPDATE selling.billings
-            SET billing_send_date = NEW.instruction_date, billing_send_pic = NEW.operator_id
+            SET billing_send_date = NEW.operation_date, billing_send_pic = NEW.operator_id
             WHERE billing_no = NEW.billing_no;
 
             return NEW;
@@ -1541,7 +1406,7 @@ def create_deposit_instructions_table() -> None:
         "deposit_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="入金NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1597,7 +1462,7 @@ def create_deposit_instructions_table() -> None:
         CREATE FUNCTION selling.calc_deposit_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1628,7 +1493,7 @@ def create_deposit_instructions_table() -> None:
 
             t_closing_date date;
             t_deposit_deadline date;
-            t_deposited_price numeric;
+            t_deposited_amount numeric;
             --t_billing_no text;
 
             --rec record;
@@ -1638,7 +1503,7 @@ def create_deposit_instructions_table() -> None:
             INSERT INTO selling.accounts_receivable_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.costomer_id,
                 - NEW.deposit_amount,
                 'DEPOSIT',
@@ -1663,20 +1528,20 @@ def create_deposit_instructions_table() -> None:
                     EXIT;
                 END IF;
 
-                IF rec.billing_price - rec.deposited_price > t_deposit THEN
+                IF rec.amount - rec.deposited_amount > t_deposit THEN
                     UPDATE selling.billings
-                    SET deposited_price = rec.deposited_price + t_deposit
+                    SET deposited_amount = rec.deposited_amount + t_deposit
                     WHERE billing_no = rec.billing_no;
 
                     t_deposit:=0.0;
 
                 ELSE
                     UPDATE selling.billings
-                    SET deposited_price = rec.billing_price,
+                    SET deposited_amount = rec.amount,
                         fully_paid = true
                     WHERE billing_no = rec.billing_no;
 
-                    t_deposit:=t_deposit - (rec.billing_price - rec.deposited_price);
+                    t_deposit:=t_deposit - (rec.amount - rec.deposited_amount);
 
                 END IF;
 
@@ -1689,21 +1554,21 @@ def create_deposit_instructions_table() -> None:
             END IF;
 
             -- 締日、入金期限の算出
-            rec:=mst.calc_deposit_deadline(New.instruction_date, New.costomer_id);
+            rec:=mst.calc_deposit_deadline(New.operation_date, New.costomer_id);
             t_closing_date:=rec.closing_date;
             t_deposit_deadline:=rec.deposit_deadline;
 
             -- 請求の登録、更新
-            SELECT deposited_price INTO t_deposited_price
+            SELECT deposited_amount INTO t_deposited_amount
             FROM selling.billings
             WHERE costomer_id = NEW.costomer_id
             AND closing_date = t_closing_date
             AND deposit_deadline = t_deposit_deadline
             FOR UPDATE;
 
-            IF t_deposited_price IS NOT NULL THEN
+            IF t_deposited_amount IS NOT NULL THEN
                 UPDATE selling.billings
-                SET deposited_price = t_deposited_price + t_deposit
+                SET deposited_amount = t_deposited_amount + t_deposit
                 WHERE costomer_id = NEW.costomer_id
                 AND closing_date = t_closing_date
                 AND deposit_deadline = t_deposit_deadline;
@@ -1745,7 +1610,7 @@ def create_selling_return_instructions_table() -> None:
         "selling_return_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="返品指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1861,7 +1726,7 @@ def create_selling_return_instructions_table() -> None:
             rec record;
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1909,13 +1774,13 @@ def create_selling_return_instructions_table() -> None:
         DECLARE
             t_closing_date date;
             t_deposit_deadline date;
-            t_billing_price numeric;
+            t_amount numeric;
             t_billing_no text;
 
             rec record;
         BEGIN
             -- 締日、入金期限の算出
-            rec:=mst.calc_deposit_deadline(New.instruction_date, New.costomer_id);
+            rec:=mst.calc_deposit_deadline(New.operation_date, New.costomer_id);
             t_closing_date:=rec.closing_date;
             t_deposit_deadline:=rec.deposit_deadline;
 
@@ -1923,7 +1788,7 @@ def create_selling_return_instructions_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.site_type,
                 NEW.product_id,
                 NEW.return_quantity,
@@ -1933,16 +1798,16 @@ def create_selling_return_instructions_table() -> None:
             );
 
             -- 請求の登録、更新
-            SELECT billing_price INTO t_billing_price
+            SELECT amount INTO t_amount
             FROM selling.billings
             WHERE costomer_id = NEW.costomer_id
             AND closing_date = t_closing_date
             AND deposit_deadline = t_deposit_deadline
             FOR UPDATE;
 
-            IF t_billing_price IS NOT NULL THEN
+            IF t_amount IS NOT NULL THEN
                 UPDATE selling.billings
-                SET billing_price = t_billing_price - NEW.return_quantity * NEW.selling_unit_price
+                SET amount = t_amount - NEW.return_quantity * NEW.selling_unit_price
                 WHERE costomer_id = NEW.costomer_id
                 AND closing_date = t_closing_date
                 AND deposit_deadline = t_deposit_deadline;
@@ -1968,7 +1833,7 @@ def create_selling_return_instructions_table() -> None:
             INSERT INTO selling.accounts_receivable_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.costomer_id,
                 - NEW.return_quantity * NEW.selling_unit_price,
                 'SALES_RETURN',
@@ -2001,7 +1866,7 @@ def create_other_selling_instructions_table() -> None:
         "other_selling_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="雑売上指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -2058,7 +1923,7 @@ def create_other_selling_instructions_table() -> None:
         CREATE FUNCTION selling.calc_other_selling_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -2084,27 +1949,27 @@ def create_other_selling_instructions_table() -> None:
         DECLARE
             t_closing_date date;
             t_deposit_deadline date;
-            t_billing_price numeric;
+            t_amount numeric;
             t_billing_no text;
 
             rec record;
         BEGIN
             -- 締日、入金期限の算出
-            rec:=mst.calc_deposit_deadline(New.instruction_date, New.costomer_id);
+            rec:=mst.calc_deposit_deadline(New.operation_date, New.costomer_id);
             t_closing_date:=rec.closing_date;
             t_deposit_deadline:=rec.deposit_deadline;
 
             -- 請求の登録、更新
-            SELECT billing_price INTO t_billing_price
+            SELECT amount INTO t_amount
             FROM selling.billings
             WHERE costomer_id = NEW.costomer_id
             AND closing_date = t_closing_date
             AND deposit_deadline = t_deposit_deadline
             FOR UPDATE;
 
-            IF t_billing_price IS NOT NULL THEN
+            IF t_amount IS NOT NULL THEN
                 UPDATE selling.billings
-                SET billing_price = t_billing_price + NEW.transition_amount
+                SET amount = t_amount + NEW.transition_amount
                 WHERE costomer_id = NEW.costomer_id
                 AND closing_date = t_closing_date
                 AND deposit_deadline = t_deposit_deadline;
@@ -2130,7 +1995,7 @@ def create_other_selling_instructions_table() -> None:
             INSERT INTO selling.accounts_receivable_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.costomer_id,
                 NEW.transition_amount,
                 'OTHER_TRANSITION',

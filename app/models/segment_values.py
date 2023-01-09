@@ -191,12 +191,46 @@ class ReceivableTransitionType(Base):
 
     def description() -> str:
         return """
-買掛変動区分:
+売掛変動区分:
   * `SELLING` - 販売売上
   * `SALES_RETURN` - 売上返品
   * `DEPOSIT` - 入金
   * `BALANCE_OUT` - 相殺
   * `OTHER_TRANSITION` - その他取引
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class PaymentStatus(Base):
+    before_payment = "BEFORE_PAYMENT"
+    invoice_confirmed = "INVOICE_CONFIRMED"
+    payment_processed = "PAYMENT_PROCESSED"
+
+    def description() -> str:
+        return """
+支払状況:
+  * `BEFORE_PAYMENT` -未払
+  * `INVOICE_CONFIRMED` - 請求書受領
+  * `PAYMENT_PROCESSED` - 支払完了
+    """
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+
+class DepositStatus(Base):
+    before_deposit = "BEFORE_DEPOSIT"
+    invoice_sended = "INVOICE_SENDED"
+    deposit_confirmed = "DEPOSIT_CONFIRMED"
+
+    def description() -> str:
+        return """
+支払状況:
+  * `BEFORE_DEPOSIT` -未入金
+  * `INVOICE_SENDED` -請求書送付
+  * `DEPOSIT_CONFIRMED` - 入金確認完了
     """
 
 

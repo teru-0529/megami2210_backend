@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.models.migrations.util import timestamps
-from app.models.segment_values import PayableTransitionType, SiteType
+from app.models.segment_values import PayableTransitionType, PaymentStatus, SiteType
 
 # revision identifiers, used by Alembic.
 revision = "76241be00f1b"
@@ -26,60 +26,12 @@ def create_accounts_payables_table() -> None:
         "accounts_payables",
         sa.Column("supplier_id", sa.String(4), primary_key=True, comment="仕入先ID"),
         sa.Column("year_month", sa.String(6), primary_key=True, comment="取引年月"),
-        sa.Column(
-            "init_balance",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="月初残高",
-        ),
-        sa.Column(
-            "purchase_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="購入額",
-        ),
-        sa.Column(
-            "payment_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="支払額",
-        ),
-        sa.Column(
-            "other_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="その他変動額",
-        ),
-        sa.Column(
-            "balance", sa.Numeric, nullable=False, server_default="0.0", comment="残高"
-        ),
-        *timestamps(),
+        sa.Column("init_balance", sa.Numeric, nullable=False, comment="月初残高"),
+        sa.Column("purchase_amount", sa.Numeric, nullable=False, comment="購入額"),
+        sa.Column("payment_amount", sa.Numeric, nullable=False, comment="支払額"),
+        sa.Column("other_amount", sa.Numeric, nullable=False, comment="その他変動額"),
+        sa.Column("balance", sa.Numeric, nullable=False, comment="残高"),
         schema="purchase",
-    )
-
-    op.create_foreign_key(
-        "fk_supplier_id",
-        "accounts_payables",
-        "suppliers",
-        ["supplier_id"],
-        ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="purchase",
-        referent_schema="mst",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER accounts_payables_modified
-            BEFORE UPDATE
-            ON purchase.accounts_payables
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 導出項目計算
@@ -87,7 +39,9 @@ def create_accounts_payables_table() -> None:
         """
         CREATE FUNCTION purchase.calc_accounts_payables() RETURNS TRIGGER AS $$
         BEGIN
+            --残高
             NEW.balance:=NEW.init_balance + NEW.purchase_amount - NEW.payment_amount + NEW.other_amount;
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -111,22 +65,10 @@ def create_accounts_payables_table() -> None:
 def create_accounts_payable_histories_table() -> None:
     op.create_table(
         "accounts_payable_histories",
-        sa.Column("no", sa.Integer, primary_key=True, comment="買掛履歴NO"),
-        sa.Column(
-            "transaction_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="取引日",
-        ),
+        sa.Column("no", sa.Integer, primary_key=True, comment="買掛変動NO"),
+        sa.Column("transaction_date", sa.Date, nullable=False, comment="取引日"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
-        sa.Column(
-            "transaction_amount",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="取引金額",
-        ),
+        sa.Column("amount", sa.Numeric, nullable=False, comment="取引額"),
         sa.Column(
             "transition_type",
             sa.Enum(
@@ -135,71 +77,42 @@ def create_accounts_payable_histories_table() -> None:
             nullable=False,
             comment="買掛変動区分",
         ),
-        sa.Column(
-            "transaction_no",
-            sa.Integer,
-            nullable=True,
-            comment="取引管理NO",
-        ),
-        sa.Column(
-            "payment_no",
-            sa.String(10),
-            nullable=False,
-            comment="支払NO",
-        ),
-        *timestamps(),
+        sa.Column("transaction_no", sa.Integer, nullable=False, comment="取引管理NO"),
+        sa.Column("payment_no", sa.String(10), nullable=False, comment="支払NO"),
         schema="purchase",
     )
 
-    op.create_foreign_key(
-        "fk_supplier_id",
-        "accounts_payable_histories",
-        "suppliers",
-        ["supplier_id"],
-        ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="purchase",
-        referent_schema="mst",
-    )
     op.create_index(
         "ix_accounts_payable_histories_supplier",
         "accounts_payable_histories",
-        ["supplier_id", "transaction_date"],
+        ["supplier_id", "no"],
         schema="purchase",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER accounts_payable_histories_modified
-            BEFORE UPDATE
-            ON purchase.accounts_payable_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
-    # 登録後、月次買掛金サマリーを自動作成TODO:
+    # 登録後処理：月次買掛金サマリーを自動作成TODO:
     op.execute(
         """
         CREATE FUNCTION purchase.set_summaries() RETURNS TRIGGER AS $$
         DECLARE
-            yyyymm character(6);
+            yyyymm text:=to_char(NEW.transaction_date, 'YYYYMM');
+
             t_init_balance numeric;
             t_purchase_amount numeric;
             t_payment_amount numeric;
             t_other_amount numeric;
 
-            recent_rec RECORD;
-            last_rec RECORD;
+            recent_rec record;
+            last_rec record;
         BEGIN
-            yyyymm:=to_char(NEW.transaction_date, 'YYYYMM');
-
+            --月次買掛金サマリー(当月)検索
             SELECT * INTO recent_rec
             FROM purchase.accounts_payables
             WHERE supplier_id = NEW.supplier_id AND year_month = yyyymm
             FOR UPDATE;
 
+            --月初残高,購入額,支払額,その他変動額判定
             IF recent_rec IS NULL THEN
+                --月次買掛金サマリー(過去)検索
                 SELECT * INTO last_rec
                 FROM purchase.accounts_payables
                 WHERE supplier_id = NEW.supplier_id
@@ -223,14 +136,16 @@ def create_accounts_payable_histories_table() -> None:
                 t_other_amount:=recent_rec.other_amount;
             END IF;
 
+            --取引額計上
             IF NEW.transition_type='PURCHASE' OR NEW.transition_type='ORDERING_RETURN' THEN
-                t_purchase_amount:=t_purchase_amount + NEW.transaction_amount;
+                t_purchase_amount:=t_purchase_amount + NEW.amount;
             ELSEIF NEW.transition_type='PAYMENT' THEN
-                t_payment_amount:=t_payment_amount - NEW.transaction_amount;
+                t_payment_amount:=t_payment_amount - NEW.amount;
             ELSEIF NEW.transition_type='BALANCE_OUT' OR NEW.transition_type='OTHER_TRANSITION' THEN
-                t_other_amount:=t_other_amount + NEW.transaction_amount;
+                t_other_amount:=t_other_amount + NEW.amount;
             END IF;
 
+            --登録
             IF recent_rec IS NULL THEN
                 INSERT INTO purchase.accounts_payables
                 VALUES (
@@ -276,80 +191,39 @@ def create_payments_table() -> None:
             "payment_no",
             sa.String(10),
             primary_key=True,
-            server_default="set_me",
+            server_default="auto",
             comment="支払NO",
         ),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
+        sa.Column("closing_date", sa.Date, nullable=False, comment="締日"),
+        sa.Column("payment_deadline", sa.Date, nullable=False, comment="支払期限日"),
+        sa.Column("amount", sa.Numeric, nullable=False, comment="支払額"),
         sa.Column(
-            "closing_date",
-            sa.Date,
-            server_default=sa.func.now(),
+            "status",
+            sa.Enum(*PaymentStatus.list(), name="payment_status", schema="purchase"),
             nullable=False,
-            comment="支払締日",
-        ),
-        sa.Column(
-            "payment_deadline",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="支払期限日",
-        ),
-        sa.Column(
-            "payment_price",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="支払金額",
+            server_default=PaymentStatus.before_payment,
+            comment="ステータス",
         ),
         sa.Column(
             "payment_check_date",
             sa.Date,
             nullable=True,
-            comment="請求書確認日",
+            comment="（消す）請求書確認日",
         ),
-        sa.Column("payment_check_pic", sa.String(5), nullable=True, comment="請求書確認者ID"),
+        sa.Column(
+            "payment_check_pic", sa.String(5), nullable=True, comment="（消す）請求書確認者ID"
+        ),
         sa.Column(
             "payment_date",
             sa.Date,
             nullable=True,
-            comment="支払実施日",
+            comment="（消す）支払実施日",
         ),
-        sa.Column("payment_pic", sa.String(5), nullable=True, comment="支払実施者ID"),
-        sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
+        sa.Column("payment_pic", sa.String(5), nullable=True, comment="（消す）支払実施者ID"),
         schema="purchase",
-    )
+    )  # FIXME:項目消す
 
-    op.create_foreign_key(
-        "fk_supplier_id",
-        "payments",
-        "suppliers",
-        ["supplier_id"],
-        ["company_id"],
-        ondelete="RESTRICT",
-        source_schema="purchase",
-        referent_schema="mst",
-    )
-    op.create_foreign_key(
-        "fk_payment_check_pic",
-        "payments",
-        "profiles",
-        ["payment_check_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="purchase",
-        referent_schema="account",
-    )
-    op.create_foreign_key(
-        "fk_payment_pic",
-        "payments",
-        "profiles",
-        ["payment_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="purchase",
-        referent_schema="account",
-    )
     op.create_unique_constraint(
         "uk_payment_deadline",
         "payments",
@@ -357,22 +231,14 @@ def create_payments_table() -> None:
         schema="purchase",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER payments_modified
-            BEFORE UPDATE
-            ON purchase.payments
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算
     op.execute(
         """
         CREATE FUNCTION purchase.calc_payments() RETURNS TRIGGER AS $$
         BEGIN
+            --支払NO
             NEW.payment_no:='PM-'||to_char(nextval('purchase.payment_no_seed'),'FM0000000');
+
             return NEW;
         END;
         $$ LANGUAGE plpgsql;
@@ -400,23 +266,26 @@ def create_orderings_table() -> None:
             "ordering_no",
             sa.String(10),
             primary_key=True,
-            server_default="set_me",
+            server_default="auto",
             comment="発注NO",
         ),
-        sa.Column(
-            "order_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="発注日",
-        ),
+        sa.Column("operation_date", sa.Date, nullable=False, comment="発注日"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="発注担当者ID"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
-        sa.Column("purchase_pic", sa.String(5), nullable=True, comment="発注担当者ID"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
         schema="purchase",
     )
 
+    op.create_foreign_key(
+        "fk_operator_id",
+        "orderings",
+        "profiles",
+        ["operator_id"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
     op.create_foreign_key(
         "fk_supplier_id",
         "orderings",
@@ -427,25 +296,11 @@ def create_orderings_table() -> None:
         source_schema="purchase",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_purchase_pic",
+    op.create_index(
+        "ix_orderings_supplier",
         "orderings",
-        "profiles",
-        ["purchase_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="purchase",
-        referent_schema="account",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER orderings_modified
-            BEFORE UPDATE
-            ON purchase.orderings
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
+        ["supplier_id", "ordering_no"],
+        schema="purchase",
     )
 
     # 導出項目計算
@@ -453,12 +308,11 @@ def create_orderings_table() -> None:
         """
         CREATE FUNCTION purchase.calc_orderings() RETURNS TRIGGER AS $$
         BEGIN
+            --発注NO
             NEW.ordering_no:='PO-'||to_char(nextval('purchase.ordering_no_seed'),'FM0000000');
 
-            -- 処理日付を取得
-            SELECT date INTO NEW.order_date
-            FROM business_date
-            WHERE date_type = 'BUSINESS_DATE';
+            -- 処理日付
+            NEW.operation_date:=get_operation_date();
 
             return NEW;
         END;
@@ -635,7 +489,7 @@ def create_ordering_details_table() -> None:
         CREATE FUNCTION purchase.calc_ordering_details() RETURNS TRIGGER AS $$
         DECLARE
             t_interval_days integer;
-            t_order_date date;
+            t_operation_date date;
             t_standard_arrival_date date;
 
             product_rec RECORD;
@@ -655,12 +509,12 @@ def create_ordering_details_table() -> None:
             END IF;
 
             -- 発注日取得
-            SELECT order_date INTO t_order_date
+            SELECT operation_date INTO t_operation_date
             FROM purchase.orderings
             WHERE ordering_no = NEW.ordering_no;
 
             -- 標準入荷日の計算
-            t_standard_arrival_date:= t_order_date + CAST(
+            t_standard_arrival_date:= t_operation_date + CAST(
                 CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
             );
             NEW.standard_arrival_date:=t_standard_arrival_date;
@@ -697,37 +551,28 @@ def create_wearhousings_table() -> None:
             "wearhousing_no",
             sa.String(10),
             primary_key=True,
-            server_default="set_me",
+            server_default="auto",
             comment="入荷NO",
         ),
-        sa.Column(
-            "wearhousing_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="入荷日",
-        ),
+        sa.Column("operation_date", sa.Date, nullable=False, comment="入荷日"),
+        sa.Column("operator_id", sa.String(5), nullable=True, comment="入荷担当者ID"),
         sa.Column("supplier_id", sa.String(4), nullable=False, comment="仕入先ID"),
-        sa.Column("wearhousing_pic", sa.String(5), nullable=True, comment="入荷担当者ID"),
-        sa.Column(
-            "closing_date",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="支払締日",
-        ),
-        sa.Column(
-            "payment_deadline",
-            sa.Date,
-            server_default=sa.func.now(),
-            nullable=False,
-            comment="支払期限日",
-        ),
+        sa.Column("closing_date", sa.Date, nullable=False, comment="締日"),
+        sa.Column("payment_deadline", sa.Date, nullable=False, comment="支払期限日"),
         sa.Column("note", sa.Text, nullable=True, comment="摘要"),
-        *timestamps(),
         schema="purchase",
     )
 
+    op.create_foreign_key(
+        "fk_operator_id",
+        "wearhousings",
+        "profiles",
+        ["operator_id"],
+        ["account_id"],
+        ondelete="SET NULL",
+        source_schema="purchase",
+        referent_schema="account",
+    )
     op.create_foreign_key(
         "fk_supplier_id",
         "wearhousings",
@@ -738,25 +583,11 @@ def create_wearhousings_table() -> None:
         source_schema="purchase",
         referent_schema="mst",
     )
-    op.create_foreign_key(
-        "fk_wearhousing_pic",
+    op.create_index(
+        "ix_wearhousings_supplier",
         "wearhousings",
-        "profiles",
-        ["wearhousing_pic"],
-        ["account_id"],
-        ondelete="SET NULL",
-        source_schema="purchase",
-        referent_schema="account",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER wearhousings_modified
-            BEFORE UPDATE
-            ON purchase.wearhousings
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
+        ["supplier_id", "wearhousing_no"],
+        schema="purchase",
     )
 
     # 導出項目計算
@@ -767,18 +598,21 @@ def create_wearhousings_table() -> None:
             rec record;
 
         BEGIN
+            --入荷NO
             NEW.wearhousing_no:='WH-'||to_char(nextval('purchase.warehousing_no_seed'),'FM0000000');
 
-            -- 処理日付を取得
-            SELECT date INTO NEW.wearhousing_date
-            FROM business_date
-            WHERE date_type = 'BUSINESS_DATE';
+            -- 処理日付
+            NEW.operation_date:=get_operation_date();
 
-            -- 締日・支払期限の計算
-            rec:=mst.calc_payment_deadline(New.wearhousing_date, New.supplier_id);
-            New.closing_date:=rec.closing_date;
-            New.payment_deadline:=rec.payment_deadline;
-            New.note:=rec.dummy;
+            -- 締日,支払期限
+            rec:=mst.calc_payment_deadline(NEW.operation_date, NEW.supplier_id);
+            NEW.closing_date:=rec.closing_date;
+            NEW.payment_deadline:=rec.payment_deadline;
+            IF NEW.note IS NULL THEN
+                NEW.note:=rec.note;
+            ELSE
+                NEW.note:=NEW.note||'、'||rec.note;
+            END IF;
 
             return NEW;
         END;
@@ -968,7 +802,7 @@ def create_wearhousing_details_table() -> None:
         CREATE FUNCTION purchase.set_inventories_and_payments() RETURNS TRIGGER AS $$
         DECLARE
             t_wearhousing_quantity integer;
-            t_payment_price numeric;
+            t_amount numeric;
             t_payment_no text;
 
             wearhousing_rec record;
@@ -991,7 +825,7 @@ def create_wearhousing_details_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                wearhousing_rec.wearhousing_date,
+                wearhousing_rec.operation_date,
                 NEW.site_type,
                 NEW.product_id,
                 NEW.wearhousing_quantity,
@@ -1001,16 +835,16 @@ def create_wearhousing_details_table() -> None:
             );
 
             -- 支払の登録、更新
-            SELECT payment_price INTO t_payment_price
+            SELECT amount INTO t_amount
             FROM purchase.payments
             WHERE supplier_id = wearhousing_rec.supplier_id
             AND closing_date = wearhousing_rec.closing_date
             AND payment_deadline = wearhousing_rec.payment_deadline
             FOR UPDATE;
 
-            IF t_payment_price IS NOT NULL THEN
+            IF t_amount IS NOT NULL THEN
                 UPDATE purchase.payments
-                SET payment_price = t_payment_price + NEW.wearhousing_quantity * NEW.wearhousing_unit_price
+                SET amount = t_amount + NEW.wearhousing_quantity * NEW.wearhousing_unit_price
                 WHERE supplier_id = wearhousing_rec.supplier_id
                 AND closing_date = wearhousing_rec.closing_date
                 AND payment_deadline = wearhousing_rec.payment_deadline;
@@ -1036,7 +870,7 @@ def create_wearhousing_details_table() -> None:
             INSERT INTO purchase.accounts_payable_histories
             VALUES (
                 default,
-                wearhousing_rec.wearhousing_date,
+                wearhousing_rec.operation_date,
                 wearhousing_rec.supplier_id,
                 NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
                 'PURCHASE',
@@ -1069,7 +903,7 @@ def create_payment_instructions_table() -> None:
         "payment_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="支払指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1131,7 +965,7 @@ def create_payment_instructions_table() -> None:
         CREATE FUNCTION purchase.calc_payment_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1160,7 +994,7 @@ def create_payment_instructions_table() -> None:
 
             -- 支払へ、入金日、入金担当者の登録
             UPDATE purchase.payments
-            SET payment_date = NEW.instruction_date, payment_pic = NEW.operator_id
+            SET payment_date = NEW.operation_date, payment_pic = NEW.operator_id
             WHERE payment_no = NEW.payment_no;
 
             -- 買掛変動履歴の登録
@@ -1171,9 +1005,9 @@ def create_payment_instructions_table() -> None:
             INSERT INTO purchase.accounts_payable_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 rec.supplier_id,
-                - rec.payment_price,
+                - rec.amount,
                 'PAYMENT',
                 NEW.no,
                 NEW.payment_no
@@ -1204,7 +1038,7 @@ def create_payment_check_instructions_table() -> None:
         "payment_check_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="支払確認NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1266,7 +1100,7 @@ def create_payment_check_instructions_table() -> None:
         CREATE FUNCTION purchase.calc_payment_check_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1295,7 +1129,7 @@ def create_payment_check_instructions_table() -> None:
 
             -- 支払へ、確認日、確認担当者の登録
             UPDATE purchase.payments
-            SET payment_check_date = NEW.instruction_date, payment_check_pic = NEW.operator_id
+            SET payment_check_date = NEW.operation_date, payment_check_pic = NEW.operator_id
             WHERE payment_no = NEW.payment_no;
 
             return NEW;
@@ -1323,7 +1157,7 @@ def create_order_cancel_instructions_table() -> None:
         "order_cancel_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="キャンセル指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1386,7 +1220,7 @@ def create_order_cancel_instructions_table() -> None:
         CREATE FUNCTION purchase.calc_order_cancel_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1447,7 +1281,7 @@ def create_arrival_date_instructions_table() -> None:
         "arrival_date_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="納期変更NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1504,7 +1338,7 @@ def create_arrival_date_instructions_table() -> None:
         CREATE FUNCTION purchase.calc_arrival_date_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1558,7 +1392,7 @@ def create_purchase_return_instructions_table() -> None:
         "purchase_return_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="返品指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1660,7 +1494,7 @@ def create_purchase_return_instructions_table() -> None:
             rec record;
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1707,13 +1541,13 @@ def create_purchase_return_instructions_table() -> None:
         DECLARE
             t_closing_date date;
             t_payment_deadline date;
-            t_payment_price numeric;
+            t_amount numeric;
             t_payment_no text;
 
             rec record;
         BEGIN
             -- 締日、支払期限の算出
-            rec:=mst.calc_payment_deadline(New.instruction_date, New.supplier_id);
+            rec:=mst.calc_payment_deadline(New.operation_date, New.supplier_id);
             t_closing_date:=rec.closing_date;
             t_payment_deadline:=rec.payment_deadline;
 
@@ -1721,7 +1555,7 @@ def create_purchase_return_instructions_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.site_type,
                 NEW.product_id,
                 - NEW.return_quantity,
@@ -1731,16 +1565,16 @@ def create_purchase_return_instructions_table() -> None:
             );
 
             -- 支払の登録、更新
-            SELECT payment_price INTO t_payment_price
+            SELECT amount INTO t_amount
             FROM purchase.payments
             WHERE supplier_id = NEW.supplier_id
             AND closing_date = t_closing_date
             AND payment_deadline = t_payment_deadline
             FOR UPDATE;
 
-            IF t_payment_price IS NOT NULL THEN
+            IF t_amount IS NOT NULL THEN
                 UPDATE purchase.payments
-                SET payment_price = t_payment_price - NEW.return_quantity * NEW.return_unit_price
+                SET amount = t_amount - NEW.return_quantity * NEW.return_unit_price
                 WHERE supplier_id = NEW.supplier_id
                 AND closing_date = t_closing_date
                 AND payment_deadline = t_payment_deadline;
@@ -1766,7 +1600,7 @@ def create_purchase_return_instructions_table() -> None:
             INSERT INTO purchase.accounts_payable_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.supplier_id,
                 - NEW.return_quantity * NEW.return_unit_price,
                 'ORDERING_RETURN',
@@ -1799,7 +1633,7 @@ def create_other_purchase_instructions_table() -> None:
         "other_purchase_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="雑仕入指示NO"),
         sa.Column(
-            "instruction_date",
+            "operation_date",
             sa.Date,
             server_default=sa.func.now(),
             nullable=False,
@@ -1856,7 +1690,7 @@ def create_other_purchase_instructions_table() -> None:
         CREATE FUNCTION purchase.calc_other_purchase_instructions() RETURNS TRIGGER AS $$
         BEGIN
             -- 処理日付を取得
-            SELECT date INTO NEW.instruction_date
+            SELECT date INTO NEW.operation_date
             FROM business_date
             WHERE date_type = 'BUSINESS_DATE';
 
@@ -1882,27 +1716,27 @@ def create_other_purchase_instructions_table() -> None:
         DECLARE
             t_closing_date date;
             t_payment_deadline date;
-            t_payment_price numeric;
+            t_amount numeric;
             t_payment_no text;
 
             rec record;
         BEGIN
             -- 締日、支払期限の算出
-            rec:=mst.calc_payment_deadline(New.instruction_date, New.supplier_id);
+            rec:=mst.calc_payment_deadline(New.operation_date, New.supplier_id);
             t_closing_date:=rec.closing_date;
             t_payment_deadline:=rec.payment_deadline;
 
             -- 支払の登録、更新
-            SELECT payment_price INTO t_payment_price
+            SELECT amount INTO t_amount
             FROM purchase.payments
             WHERE supplier_id = NEW.supplier_id
             AND closing_date = t_closing_date
             AND payment_deadline = t_payment_deadline
             FOR UPDATE;
 
-            IF t_payment_price IS NOT NULL THEN
+            IF t_amount IS NOT NULL THEN
                 UPDATE purchase.payments
-                SET payment_price = t_payment_price + NEW.transition_amount
+                SET amount = t_amount + NEW.transition_amount
                 WHERE supplier_id = NEW.supplier_id
                 AND closing_date = t_closing_date
                 AND payment_deadline = t_payment_deadline;
@@ -1928,7 +1762,7 @@ def create_other_purchase_instructions_table() -> None:
             INSERT INTO purchase.accounts_payable_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.supplier_id,
                 NEW.transition_amount,
                 'OTHER_TRANSITION',
@@ -1984,7 +1818,7 @@ def create_view() -> None:
                 PM.supplier_id,
                 PM.closing_date,
                 PM.payment_deadline,
-                PM.payment_price,
+                PM.amount,
                 CASE
                     WHEN PM.payment_date IS NOT NULL THEN 'PAYMENT_PROCESSED'
                     WHEN PM.closing_date >= (SELECT date FROM date_with) THEN 'BEFORE_CLOSING'

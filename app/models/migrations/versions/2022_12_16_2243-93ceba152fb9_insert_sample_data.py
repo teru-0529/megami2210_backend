@@ -68,8 +68,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "purchase_pic": "T-901",
             },
         ],
     )
@@ -108,8 +108,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-902",
                 "supplier_id": "S002",
-                "purchase_pic": "T-902",
             },
         ],
     )
@@ -136,8 +136,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-902",
                 "supplier_id": "S002",
-                "purchase_pic": "T-902",
             },
         ],
     )
@@ -221,8 +221,8 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "wearhousing_pic": "T-901",
             },
         ],
     )
@@ -271,12 +271,12 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "wearhousing_pic": "T-901",
             },
             {
+                "operator_id": "T-901",
                 "supplier_id": "S002",
-                "wearhousing_pic": "T-902",
             },
         ],
     )
@@ -311,8 +311,9 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S002",
-                "wearhousing_pic": "T-902",
+                "note": "代理入荷(T-902)",
             },
         ],
     )
@@ -411,8 +412,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "S001",
-                "receiving_pic": "T-901",
             },
         ],
     )
@@ -431,8 +432,8 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "S001",
-                "shipping_pic": "T-901",
             },
         ],
     )
@@ -451,8 +452,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
+                "operator_id": "T-902",
                 "costomer_id": "C001",
-                "receiving_pic": "T-902",
             },
         ],
     )
@@ -471,8 +472,8 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "C001",
-                "shipping_pic": "T-901",
             },
         ],
     )
@@ -574,7 +575,7 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 23-03-21 入金INFO:FIXME:
+    # 23-03-21 入金INFO:
     op.execute(
         """
         update business_date SET date = '2023-03-21';
@@ -609,7 +610,7 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 23-04-15 入金INFO:FIXME:
+    # 23-04-15 入金INFO:
     op.execute(
         """
         update business_date SET date = '2023-04-15';
@@ -627,7 +628,7 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 23-04-19 入金INFO:FIXME:
+    # 23-04-19 入金INFO:
     op.execute(
         """
         update business_date SET date = '2023-04-19';
@@ -672,8 +673,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "purchase_pic": "T-901",
             },
         ],
     )
@@ -700,8 +701,8 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "wearhousing_pic": "T-901",
             },
         ],
     )
@@ -746,8 +747,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "C001",
-                "receiving_pic": "T-901",
             },
         ],
     )
@@ -793,8 +794,9 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-902",
                 "supplier_id": "S001",
-                "purchase_pic": "T-901",
+                "note": "代理発注(T-901)",
             },
         ],
     )
@@ -846,8 +848,8 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "wearhousing_pic": "T-901",
             },
         ],
     )
@@ -896,8 +898,8 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "wearhousing_pic": "T-901",
             },
         ],
     )
@@ -998,8 +1000,8 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "C001",
-                "shipping_pic": "T-901",
             },
         ],
     )
@@ -1026,8 +1028,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "purchase_pic": "T-901",
             },
         ],
     )
@@ -1093,8 +1095,8 @@ def upgrade() -> None:
         pch_wearhousings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "wearhousing_pic": "T-901",
             },
         ],
     )
@@ -1143,8 +1145,9 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
+                "operator_id": "T-902",
                 "costomer_id": "C002",
-                "receiving_pic": "T-902",
+                "note": "初回取引",
             },
         ],
     )
@@ -1169,8 +1172,9 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
+                "operator_id": "T-902",
                 "costomer_id": "C002",
-                "shipping_pic": "T-902",
+                "note": "初回取引",
             },
         ],
     )
@@ -1240,8 +1244,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "purchase_pic": "T-901",
             },
         ],
     )
@@ -1287,8 +1291,8 @@ def upgrade() -> None:
         pch_orderings,
         [
             {
+                "operator_id": "T-901",
                 "supplier_id": "S001",
-                "purchase_pic": "T-901",
             },
         ],
     )
@@ -1305,7 +1309,7 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 24-02-15 入金INFO:FIXME:
+    # 24-02-15 入金INFO:
     op.execute(
         """
         update business_date SET date = '2024-02-15';
@@ -1333,8 +1337,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
+                "operator_id": "T-902",
                 "costomer_id": "C002",
-                "receiving_pic": "T-902",
             },
         ],
     )
@@ -1359,8 +1363,8 @@ def upgrade() -> None:
         sel_receivings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "C001",
-                "receiving_pic": "T-901",
                 "shipping_priority": 1,
             },
         ],
@@ -1406,8 +1410,8 @@ def upgrade() -> None:
         sel_shippings,
         [
             {
+                "operator_id": "T-901",
                 "costomer_id": "C001",
-                "shipping_pic": "T-901",
             },
         ],
     )
@@ -1424,7 +1428,7 @@ def upgrade() -> None:
     )
 
     # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-    # 24-03-01 入金INFO:FIXME:
+    # 24-03-01 入金INFO:
     op.execute(
         """
         update business_date SET date = '2024-03-01';

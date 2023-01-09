@@ -9,7 +9,6 @@ Create Date: 2022-12-12 18:32:51.092614
 import sqlalchemy as sa
 from alembic import op
 
-from app.models.migrations.util import timestamps
 from app.models.segment_values import StockTransitionType, SiteType
 
 # revision identifiers, used by Alembic.
@@ -37,7 +36,6 @@ def create_monthry_summaries_every_site_table() -> None:
         sa.Column("warehousing_quantity", sa.Integer, nullable=False, comment="入庫数"),
         sa.Column("shipping_quantity", sa.Integer, nullable=False, comment="出庫数"),
         sa.Column("quantity", sa.Integer, nullable=False, comment="在庫数"),
-        *timestamps(),
         schema="inventory",
     )
 
@@ -46,16 +44,6 @@ def create_monthry_summaries_every_site_table() -> None:
         "monthry_summaries_every_site",
         "quantity >= 0",
         schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER monthry_summaries_every_site_modified
-            BEFORE UPDATE
-            ON inventory.monthry_summaries_every_site
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 導出項目計算
@@ -100,7 +88,6 @@ def create_monthry_summaries_table() -> None:
         sa.Column("amount", sa.Numeric, nullable=False, comment="在庫額"),
         sa.Column("cost_price", sa.Numeric, nullable=False, comment="在庫原価"),
         sa.Column("profit_rate", sa.Numeric, nullable=False, comment="予想利益率"),
-        *timestamps(),
         schema="inventory",
     )
 
@@ -115,16 +102,6 @@ def create_monthry_summaries_table() -> None:
         "monthry_summaries",
         "amount >= 0.00",
         schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER monthry_summaries_modified
-            BEFORE UPDATE
-            ON inventory.monthry_summaries
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 導出項目計算
@@ -183,7 +160,6 @@ def create_current_summaries_every_site_table() -> None:
             comment="倉庫種別 ",
         ),
         sa.Column("quantity", sa.Integer, nullable=False, comment="在庫数"),
-        *timestamps(),
         schema="inventory",
     )
 
@@ -192,16 +168,6 @@ def create_current_summaries_every_site_table() -> None:
         "current_summaries_every_site",
         "quantity >= 0",
         schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER current_summaries_every_site_modified
-            BEFORE UPDATE
-            ON inventory.current_summaries_every_site
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
 
@@ -217,7 +183,6 @@ def create_current_summaries_table() -> None:
         sa.Column("amount", sa.Numeric, nullable=False, comment="在庫額"),
         sa.Column("cost_price", sa.Numeric, nullable=False, comment="在庫原価"),
         sa.Column("profit_rate", sa.Numeric, nullable=False, comment="予想利益率"),
-        *timestamps(),
         schema="inventory",
     )
 
@@ -232,16 +197,6 @@ def create_current_summaries_table() -> None:
         "current_summaries",
         "amount >= 0.00",
         schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER current_summaries_modified
-            BEFORE UPDATE
-            ON inventory.current_summaries
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 導出項目計算
@@ -307,41 +262,15 @@ def create_transition_histories_table() -> None:
             nullable=False,
             comment="在庫変動区分",
         ),
-        sa.Column(
-            "transaction_no",
-            sa.Integer,
-            nullable=False,
-            comment="取引管理NO",
-        ),
-        *timestamps(),
+        sa.Column("transaction_no", sa.Integer, nullable=False, comment="取引管理NO"),
         schema="inventory",
     )
 
-    op.create_foreign_key(
-        "fk_product_id",
-        "transition_histories",
-        "products",
-        ["product_id"],
-        ["product_id"],
-        ondelete="RESTRICT",
-        source_schema="inventory",
-        referent_schema="mst",
-    )
     op.create_index(
         "ix_transition_histories_product",
         "transition_histories",
         ["product_id", "no"],
         schema="inventory",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER transition_histories_modified
-            BEFORE UPDATE
-            ON inventory.transition_histories
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 登録後処理：月次在庫サマリーを自動作成
@@ -366,8 +295,8 @@ def create_transition_histories_table() -> None:
             last_rec record;
         BEGIN
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-            --1.月次サマリー(倉庫別)TODO:
-            --月次サマリー(当月,倉庫別)検索
+            --1.月次在庫サマリー(倉庫別)TODO:
+            --月次在庫サマリー(当月,倉庫別)検索
             SELECT * INTO recent_rec
             FROM inventory.monthry_summaries_every_site
             WHERE product_id = NEW.product_id AND year_month = yyyymm AND site_type = NEW.site_type
@@ -375,7 +304,7 @@ def create_transition_histories_table() -> None:
 
             --月初在庫数,入庫数,出庫数判定
             IF recent_rec IS NULL THEN
-                --月次サマリー(過去,倉庫別)検索
+                --月次在庫サマリー(過去,倉庫別)検索
                 SELECT * INTO last_rec
                 FROM inventory.monthry_summaries_every_site
                 WHERE product_id = NEW.product_id AND site_type = NEW.site_type
@@ -422,8 +351,8 @@ def create_transition_histories_table() -> None:
             END IF;
 
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-            --2.月次サマリーTODO:
-            --月次サマリー(当月)検索
+            --2.月次在庫サマリーTODO:
+            --月次在庫サマリー(当月)検索
             SELECT * INTO recent_rec
             FROM inventory.monthry_summaries
             WHERE product_id = NEW.product_id AND year_month = yyyymm
@@ -431,7 +360,7 @@ def create_transition_histories_table() -> None:
 
             --月初在庫数,入庫数,出庫数,月初在庫額,入庫額,出庫額,在庫原価判定
             IF recent_rec IS NULL THEN
-                --月次サマリー(過去)検索
+                --月次在庫サマリー(過去)検索
                 SELECT * INTO last_rec
                 FROM inventory.monthry_summaries
                 WHERE product_id = NEW.product_id
@@ -503,8 +432,8 @@ def create_transition_histories_table() -> None:
             END IF;
 
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-            --3.在庫サマリー(倉庫別)TODO:
-            --在庫サマリー(倉庫別)検索
+            --3.最新在庫サマリー(倉庫別)TODO:
+            --最新在庫サマリー(倉庫別)検索
             SELECT * INTO recent_rec
             FROM inventory.current_summaries_every_site
             WHERE product_id = NEW.product_id AND site_type = NEW.site_type
@@ -525,8 +454,8 @@ def create_transition_histories_table() -> None:
             END IF;
 
             ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
-            --4.在庫サマリーTODO:
-            --在庫サマリー検索
+            --4.最新在庫サマリーTODO:
+            --最新在庫サマリー検索
             SELECT * INTO recent_rec
             FROM inventory.current_summaries
             WHERE product_id = NEW.product_id
@@ -591,7 +520,7 @@ def create_moving_instructions_table() -> None:
     op.create_table(
         "moving_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="倉庫移動指示NO"),
-        sa.Column("instruction_date", sa.Date, nullable=False, comment="移動日"),
+        sa.Column("operation_date", sa.Date, nullable=False, comment="移動日"),
         sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("instruction_cause", sa.Text, nullable=False, comment="倉庫移動理由"),
         sa.Column(
@@ -610,7 +539,6 @@ def create_moving_instructions_table() -> None:
         sa.Column(
             "quantity", sa.Integer, nullable=False, server_default="0", comment="移動数"
         ),
-        *timestamps(),
         schema="inventory",
     )
 
@@ -653,16 +581,6 @@ def create_moving_instructions_table() -> None:
         schema="inventory",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER moving_instructions_modified
-            BEFORE UPDATE
-            ON inventory.moving_instructions
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算(処理日付)
     op.execute(
         """
@@ -670,7 +588,7 @@ def create_moving_instructions_table() -> None:
             BEFORE INSERT
             ON inventory.moving_instructions
             FOR EACH ROW
-        EXECUTE PROCEDURE set_instruction_date();
+        EXECUTE PROCEDURE set_operation_date();
         """
     )
 
@@ -682,7 +600,7 @@ def create_moving_instructions_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.site_type_from,
                 NEW.product_id,
                 - NEW.quantity ,
@@ -694,7 +612,7 @@ def create_moving_instructions_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.site_type_to,
                 NEW.product_id,
                 NEW.quantity ,
@@ -727,7 +645,7 @@ def create_other_inventory_instructions_table() -> None:
     op.create_table(
         "other_inventory_instructions",
         sa.Column("no", sa.Integer, primary_key=True, comment="雑入出庫指示NO"),
-        sa.Column("instruction_date", sa.Date, nullable=False, comment="指示日"),
+        sa.Column("operation_date", sa.Date, nullable=False, comment="指示日"),
         sa.Column("operator_id", sa.String(5), nullable=True, comment="指示者ID"),
         sa.Column("instruction_cause", sa.Text, nullable=False, comment="入出庫理由"),
         sa.Column(
@@ -743,7 +661,6 @@ def create_other_inventory_instructions_table() -> None:
         sa.Column(
             "amount", sa.Numeric, nullable=False, server_default="0.00", comment="入出庫額"
         ),
-        *timestamps(),
         schema="inventory",
     )
 
@@ -768,16 +685,6 @@ def create_other_inventory_instructions_table() -> None:
         referent_schema="mst",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER other_inventory_instructions_modified
-            BEFORE UPDATE
-            ON inventory.other_inventory_instructions
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算(処理日付)
     op.execute(
         """
@@ -785,7 +692,7 @@ def create_other_inventory_instructions_table() -> None:
             BEFORE INSERT
             ON inventory.other_inventory_instructions
             FOR EACH ROW
-        EXECUTE PROCEDURE set_instruction_date();
+        EXECUTE PROCEDURE set_operation_date();
         """
     )
 
@@ -797,7 +704,7 @@ def create_other_inventory_instructions_table() -> None:
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                NEW.instruction_date,
+                NEW.operation_date,
                 NEW.site_type,
                 NEW.product_id,
                 NEW.quantity ,

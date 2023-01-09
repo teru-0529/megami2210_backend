@@ -293,7 +293,7 @@ def create_costomers_table() -> None:
             costomer_id text,
             OUT closing_date date,
             OUT deposit_deadline date,
-            OUT dummy text
+            OUT note text
         ) AS $$
         DECLARE
             rec record;
@@ -316,13 +316,13 @@ def create_costomers_table() -> None:
 
             IF EXTRACT(day FROM cuurent_last_date) < rec.cutoff_day THEN
                 closing_date:=cuurent_last_date;
-                dummy:='※月末締';
+                note:='当月末締';
             ELSEIF rec.cutoff_day < EXTRACT(day FROM operation_date) THEN
                 closing_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' + cutoff_day_interval);
-                dummy:='翌月締';
+                note:='翌月締';
             ELSE
                 closing_date:=DATE(DATE_TRUNC('month', operation_date) + cutoff_day_interval);
-                dummy:='当月締';
+                note:='当月締';
             END IF;
 
             -- 支払期限日の計算
@@ -332,7 +332,6 @@ def create_costomers_table() -> None:
 
             IF EXTRACT(day FROM deposit_month_last_date) < rec.deposit_day THEN
                 deposit_deadline:=deposit_month_last_date;
-                dummy:=dummy || '、※入金期限は月末';
             ELSE
                 deposit_deadline:=deposit_month_first_date + deposit_day_interval;
             END IF;
@@ -503,7 +502,7 @@ def create_suppliers_table() -> None:
             supplier_id text,
             OUT closing_date date,
             OUT payment_deadline date,
-            OUT dummy text
+            OUT note text
         ) AS $$
         DECLARE
             rec record;
@@ -526,13 +525,13 @@ def create_suppliers_table() -> None:
 
             IF EXTRACT(day FROM cuurent_last_date) < rec.cutoff_day THEN
                 closing_date:=cuurent_last_date;
-                dummy:='※月末締';
+                note:='当月末締';
             ELSEIF rec.cutoff_day < EXTRACT(day FROM operation_date) THEN
                 closing_date:=DATE(DATE_TRUNC('month', operation_date) + '1 month' + cutoff_day_interval);
-                dummy:='翌月締';
+                note:='翌月締';
             ELSE
                 closing_date:=DATE(DATE_TRUNC('month', operation_date) + cutoff_day_interval);
-                dummy:='当月締';
+                note:='当月締';
             END IF;
 
             -- 支払期限日の計算
@@ -542,7 +541,6 @@ def create_suppliers_table() -> None:
 
             IF EXTRACT(day FROM payment_month_last_date) < rec.payment_day THEN
                 payment_deadline:=payment_month_last_date;
-                dummy:=dummy || '、※支払期限は月末';
             ELSE
                 payment_deadline:=payment_month_first_date + payment_day_interval;
             END IF;
