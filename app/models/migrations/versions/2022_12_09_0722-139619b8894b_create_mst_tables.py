@@ -19,6 +19,74 @@ depends_on = None
 
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+# INFO:
+def create_function() -> None:
+    # 処理日付の取得
+    op.execute(
+        """
+        CREATE FUNCTION get_operation_date(
+            OUT operation_date date
+        ) AS $$
+        BEGIN
+            -- 処理日付
+            SELECT date INTO operation_date
+            FROM business_date
+            WHERE date_type = 'BUSINESS_DATE';
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+
+    # 処理日付の設定
+    op.execute(
+        """
+        CREATE FUNCTION set_operation_date() RETURNS TRIGGER AS $$
+        BEGIN
+            -- 処理日付
+            NEW.operation_date:=get_operation_date();
+
+            return NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+
+    # 単価計算
+    op.execute(
+        """
+        CREATE FUNCTION calc_unit_price(
+            amount numeric,
+            quantity integer,
+            OUT unit_price numeric
+        ) AS $$
+        BEGIN
+            IF quantity = 0 THEN
+                unit_price:=0.00;
+            ELSE
+                unit_price:=ROUND(amount / quantity, 2);
+            END IF;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+
+    # 利益率計算
+    op.execute(
+        """
+        CREATE FUNCTION calc_profit_rate(
+            selling_price numeric,
+            cost_price numeric,
+            OUT profit_rate numeric
+        ) AS $$
+        BEGIN
+            profit_rate:=ROUND((selling_price - cost_price) / selling_price * 100, 1);
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+
+
+# ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
 
 # INFO:
@@ -800,7 +868,7 @@ def create_products_table() -> None:
         CREATE FUNCTION mst.calc_products() RETURNS TRIGGER AS $$
         BEGIN
             -- 標準利益率
-            NEW.profit_rate:=ROUND((NEW.selling_price - NEW.cost_price) / NEW.selling_price * 100, 1);
+            NEW.profit_rate:=calc_profit_rate(NEW.selling_price, NEW.cost_price);
 
             return NEW;
         END;
@@ -860,6 +928,50 @@ def create_products_table() -> None:
                 estimate_weahousing:=estimate_ordering + CAST(product_rec.days_to_arrive || ' Day' AS interval);
             END IF;
 
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    # 予想利益率の計算（原価指定）TODO:
+    op.execute(
+        """
+        CREATE FUNCTION mst.calc_profit_rate_for_cost(
+            i_product_id text,
+            cost_price numeric,
+            OUT profit_rate numeric
+        ) AS $$
+        DECLARE
+            t_selling_price numeric;
+        BEGIN
+            --商品マスタの検索
+            SELECT selling_price INTO t_selling_price
+            FROM mst.products
+            WHERE product_id = i_product_id;
+
+            --利益率計算
+            profit_rate:=calc_profit_rate(t_selling_price, cost_price);
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    # 予想利益率の計算（売価指定）TODO:
+    op.execute(
+        """
+        CREATE FUNCTION mst.calc_profit_rate_for_selling(
+            i_product_id text,
+            selling_price numeric,
+            OUT profit_rate numeric
+        ) AS $$
+        DECLARE
+            t_cost_price numeric;
+        BEGIN
+            --商品マスタの検索
+            SELECT cost_price INTO t_cost_price
+            FROM mst.products
+            WHERE product_id = i_product_id;
+
+            --利益率計算
+            profit_rate:=calc_profit_rate(selling_price, t_cost_price);
         END;
         $$ LANGUAGE plpgsql;
         """
@@ -970,7 +1082,6 @@ def create_products_table() -> None:
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
-
 # INFO:
 def create_view() -> None:
     op.execute(
@@ -1003,6 +1114,7 @@ def create_view() -> None:
 
 # INFO:
 def upgrade() -> None:
+    create_function()
     create_companies_table()
     create_costomers_table()
     create_suppliers_table()
@@ -1012,6 +1124,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP FUNCTION IF EXISTS get_operation_date CASCADE;")
+    op.execute("DROP FUNCTION IF EXISTS set_operation_date CASCADE;")
+    op.execute("DROP FUNCTION IF EXISTS calc_profit_rate CASCADE;")
+    op.execute("DROP FUNCTION IF EXISTS calc_unit_price CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.products CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.destination_address CASCADE;")
     op.execute("DROP TABLE IF EXISTS mst.suppliers CASCADE;")

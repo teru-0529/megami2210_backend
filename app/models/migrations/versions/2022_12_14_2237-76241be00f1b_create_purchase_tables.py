@@ -341,48 +341,33 @@ def create_ordering_details_table() -> None:
         sa.Column("ordering_no", sa.String(10), nullable=False, comment="発注NO"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
         sa.Column(
-            "purchase_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="発注数",
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="発注数"
         ),
         sa.Column(
             "wearhousing_quantity",
             sa.Integer,
             nullable=False,
             server_default="0",
-            comment="入荷済数",
+            comment="入荷数",
         ),
         sa.Column(
             "cancel_quantity",
             sa.Integer,
             nullable=False,
             server_default="0",
-            comment="キャンセル済数",
+            comment="キャンセル数",
         ),
+        sa.Column("remaining_quantity", sa.Integer, nullable=False, comment="発注残"),
         sa.Column(
-            "purchase_unit_price",
+            "cost_price",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
+            server_default="0.00",
             comment="発注単価",
         ),
-        sa.Column(
-            "standard_arrival_date",
-            sa.Date,
-            nullable=False,
-            server_default="2999-12-31",
-            comment="標準納期日",
-        ),
-        sa.Column(
-            "estimate_arrival_date",
-            sa.Date,
-            nullable=False,
-            server_default="2999-12-31",
-            comment="予定納期日",
-        ),
-        *timestamps(),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="想定利益率"),
+        sa.Column("standard_arrival_date", sa.Date, nullable=False, comment="標準納期日"),
+        sa.Column("estimate_arrival_date", sa.Date, nullable=False, comment="予定納期日"),
         schema="purchase",
     )
 
@@ -390,20 +375,22 @@ def create_ordering_details_table() -> None:
     op.execute(
         """
         CREATE FUNCTION purchase.ck_product_with_supplier(
-            t_ordering_no character(10),
-            t_product_id character(10)
+            i_ordering_no text,
+            i_product_id text
         ) RETURNS boolean AS $$
         DECLARE
-            supplier_id_from_ordering character(4);
-            supplier_id_from_product character(4);
+            supplier_id_from_ordering text;
+            supplier_id_from_product text;
         BEGIN
+            --発注仕入先の検索
             SELECT supplier_id INTO supplier_id_from_ordering
             FROM purchase.orderings
-            WHERE ordering_no = t_ordering_no;
+            WHERE ordering_no = i_ordering_no;
 
+            --商品仕入先の検索
             SELECT supplier_id INTO supplier_id_from_product
             FROM mst.products
-            WHERE product_id = t_product_id;
+            WHERE product_id = i_product_id;
 
         RETURN supplier_id_from_ordering = supplier_id_from_product;
         END;
@@ -417,9 +404,9 @@ def create_ordering_details_table() -> None:
         schema="purchase",
     )
     op.create_check_constraint(
-        "ck_purchase_quantity",
+        "ck_quantity",
         "ordering_details",
-        "purchase_quantity > 0",
+        "quantity > 0",
         schema="purchase",
     )
     op.create_check_constraint(
@@ -435,15 +422,15 @@ def create_ordering_details_table() -> None:
         schema="purchase",
     )
     op.create_check_constraint(
-        "ck_quantity",
+        "ck_remaining_quantity",
         "ordering_details",
-        "purchase_quantity >= wearhousing_quantity + cancel_quantity",
+        "remaining_quantity >= 0",
         schema="purchase",
     )
     op.create_check_constraint(
-        "ck_purchase_unit_price",
+        "ck_cost_price",
         "ordering_details",
-        "purchase_unit_price > 0",
+        "cost_price > 0.00",
         schema="purchase",
     )
     op.create_foreign_key(
@@ -473,16 +460,6 @@ def create_ordering_details_table() -> None:
         schema="purchase",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER ordering_details_modified
-            BEFORE UPDATE
-            ON purchase.ordering_details
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算
     op.execute(
         """
@@ -492,37 +469,42 @@ def create_ordering_details_table() -> None:
             t_operation_date date;
             t_standard_arrival_date date;
 
-            product_rec RECORD;
+            product_rec record;
         BEGIN
-            -- 商品単位の標準入荷日数取得
-            SELECT supplier_id, days_to_arrive INTO product_rec
-            FROM mst.products
-            WHERE product_id = NEW.product_id;
+            --新規登録の場合のみ実施
+            IF TG_OP = 'INSERT' THEN
 
-            -- 商品単位の設定がない場合、仕入先単位の標準入荷日数取得
-            IF product_rec.days_to_arrive IS NULL THEN
-                SELECT days_to_arrive INTO t_interval_days
-                FROM mst.suppliers
-                WHERE company_id = product_rec.supplier_id;
-            ELSE
-                t_interval_days:=product_rec.days_to_arrive;
+                --商品単位の標準入荷日数取得
+                SELECT * INTO product_rec
+                FROM mst.products
+                WHERE product_id = NEW.product_id;
+
+                --仕入先単位の標準入荷日数取得(商品単位の設定がない場合)
+                IF product_rec.days_to_arrive IS NULL THEN
+                    SELECT days_to_arrive INTO t_interval_days
+                    FROM mst.suppliers
+                    WHERE company_id = product_rec.supplier_id;
+                ELSE
+                    t_interval_days:=product_rec.days_to_arrive;
+                END IF;
+
+                --発注日取得
+                SELECT operation_date INTO t_operation_date
+                FROM purchase.orderings
+                WHERE ordering_no = NEW.ordering_no;
+
+                --標準納期日,予定納期日
+                t_standard_arrival_date:= t_operation_date + CAST(
+                    CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
+                );
+                NEW.standard_arrival_date:=t_standard_arrival_date;
+                NEW.estimate_arrival_date:=t_standard_arrival_date;
             END IF;
 
-            -- 発注日取得
-            SELECT operation_date INTO t_operation_date
-            FROM purchase.orderings
-            WHERE ordering_no = NEW.ordering_no;
-
-            -- 標準入荷日の計算
-            t_standard_arrival_date:= t_operation_date + CAST(
-                CAST(t_interval_days as character varying)|| 'days' AS INTERVAL
-            );
-            NEW.standard_arrival_date:=t_standard_arrival_date;
-            NEW.estimate_arrival_date:=t_standard_arrival_date;
-
-            -- 発注済数、キャンセル済数の設定
-            NEW.wearhousing_quantity:=0;
-            NEW.cancel_quantity:=0;
+            --発注残
+            NEW.remaining_quantity:=NEW.quantity - NEW.wearhousing_quantity - NEW.cancel_quantity;
+            --予定利益率
+            NEW.profit_rate:=mst.calc_profit_rate_for_cost(NEW.product_id, NEW.cost_price);
 
             return NEW;
         END;
@@ -531,8 +513,8 @@ def create_ordering_details_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_ordering_details
-            BEFORE INSERT
+        CREATE TRIGGER upsert_ordering_details
+            BEFORE INSERT OR UPDATE
             ON purchase.ordering_details
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.calc_ordering_details();
@@ -644,15 +626,11 @@ def create_wearhousing_details_table() -> None:
             "product_id",
             sa.String(10),
             nullable=False,
-            server_default="set_me",
+            server_default="auto",
             comment="当社商品ID",
         ),
         sa.Column(
-            "wearhousing_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="入荷数",
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="入荷数"
         ),
         sa.Column(
             "return_quantity",
@@ -662,12 +640,13 @@ def create_wearhousing_details_table() -> None:
             comment="返品数",
         ),
         sa.Column(
-            "wearhousing_unit_price",
+            "cost_price",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
-            comment="入荷原価",
+            server_default="0.00",
+            comment="入荷単価",
         ),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="想定利益率"),
         sa.Column(
             "site_type",
             sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
@@ -675,7 +654,6 @@ def create_wearhousing_details_table() -> None:
             server_default=SiteType.inspect_product,
             comment="入荷倉庫種別 ",
         ),
-        *timestamps(),
         schema="purchase",
     )
 
@@ -683,21 +661,23 @@ def create_wearhousing_details_table() -> None:
     op.execute(
         """
         CREATE FUNCTION purchase.ck_supplier_with_ordering(
-            t_wearhousing_no character(10),
-            t_order_detail_no integer
+            i_wearhousing_no text,
+            i_order_detail_no integer
         ) RETURNS boolean AS $$
         DECLARE
-            supplier_id_from_ordering character(4);
-            supplier_id_from_wearhousing character(4);
+            supplier_id_from_ordering text;
+            supplier_id_from_wearhousing text;
         BEGIN
+            --発注仕入先の検索
             SELECT O.supplier_id INTO supplier_id_from_ordering
             FROM purchase.ordering_details OD
             LEFT OUTER JOIN purchase.orderings O ON OD.ordering_no = O.ordering_no
-            WHERE OD.detail_no = t_order_detail_no;
+            WHERE OD.detail_no = i_order_detail_no;
 
+            --入荷仕入先の検索
             SELECT supplier_id INTO supplier_id_from_wearhousing
             FROM purchase.wearhousings
-            WHERE wearhousing_no = t_wearhousing_no;
+            WHERE wearhousing_no = i_wearhousing_no;
 
         RETURN supplier_id_from_ordering = supplier_id_from_wearhousing;
         END;
@@ -711,9 +691,9 @@ def create_wearhousing_details_table() -> None:
         schema="purchase",
     )
     op.create_check_constraint(
-        "ck_wearhousing_quantity",
+        "ck_quantity",
         "wearhousing_details",
-        "wearhousing_quantity > 0",
+        "quantity > 0 AND return_quantity <= quantity",
         schema="purchase",
     )
     op.create_check_constraint(
@@ -723,15 +703,9 @@ def create_wearhousing_details_table() -> None:
         schema="purchase",
     )
     op.create_check_constraint(
-        "ck_quantity",
+        "ck_cost_price",
         "wearhousing_details",
-        "return_quantity <= wearhousing_quantity",
-        schema="purchase",
-    )
-    op.create_check_constraint(
-        "ck_wearhousing_unit_price",
-        "wearhousing_details",
-        "wearhousing_unit_price > 0",
+        "cost_price > 0.00",
         schema="purchase",
     )
     op.create_foreign_key(
@@ -761,25 +735,25 @@ def create_wearhousing_details_table() -> None:
         schema="purchase",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER wearhousing_details_modified
-            BEFORE UPDATE
-            ON purchase.wearhousing_details
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算
     op.execute(
         """
         CREATE FUNCTION purchase.calc_wearhousing_details() RETURNS TRIGGER AS $$
+        DECLARE
+            t_selling_price numeric;
+
         BEGIN
-            -- 発注明細から商品番号を取得
-            SELECT product_id INTO NEW.product_id
-            FROM purchase.ordering_details
-            WHERE detail_no = NEW.order_detail_no;
+            --新規登録の場合のみ実施
+            IF TG_OP = 'INSERT' THEN
+
+                --当社商品ID
+                SELECT product_id INTO NEW.product_id
+                FROM purchase.ordering_details
+                WHERE detail_no = NEW.order_detail_no;
+            END IF;
+
+            --予定利益率
+            NEW.profit_rate:=mst.calc_profit_rate_for_cost(NEW.product_id, NEW.cost_price);
 
             return NEW;
         END;
@@ -788,91 +762,87 @@ def create_wearhousing_details_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_wearhousing_details
-            BEFORE INSERT
+        CREATE TRIGGER upsert_wearhousing_details
+            BEFORE INSERT OR UPDATE
             ON purchase.wearhousing_details
             FOR EACH ROW
         EXECUTE PROCEDURE purchase.calc_wearhousing_details();
         """
     )
 
-    # 在庫変動履歴/支払/買掛金変動履歴の登録TODO:
+    # 登録後処理：在庫変動履歴/支払/買掛金変動履歴の登録TODO:
     op.execute(
         """
         CREATE FUNCTION purchase.set_inventories_and_payments() RETURNS TRIGGER AS $$
         DECLARE
-            t_wearhousing_quantity integer;
-            t_amount numeric;
+            t_amount numeric:=NEW.quantity * NEW.cost_price;
             t_payment_no text;
 
-            wearhousing_rec record;
+            rec record;
+
+            ck_dummy numeric;
         BEGIN
             -- 発注残数の更新
-            SELECT wearhousing_quantity INTO t_wearhousing_quantity
-            FROM purchase.ordering_details
-            WHERE detail_no = NEW.order_detail_no
-            FOR UPDATE;
-
             UPDATE purchase.ordering_details
-            SET wearhousing_quantity = t_wearhousing_quantity + NEW.wearhousing_quantity
+            SET wearhousing_quantity = wearhousing_quantity + NEW.quantity
             WHERE detail_no = NEW.order_detail_no;
 
             -- 在庫変動履歴の登録
-            SELECT * INTO wearhousing_rec
+            SELECT * INTO rec
             FROM purchase.wearhousings
             WHERE wearhousing_no = NEW.wearhousing_no;
 
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                wearhousing_rec.operation_date,
+                rec.operation_date,
                 NEW.site_type,
                 NEW.product_id,
-                NEW.wearhousing_quantity,
-                NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
+                NEW.quantity,
+                t_amount,
                 'PURCHASE',
                 NEW.detail_no
             );
 
             -- 支払の登録、更新
-            SELECT amount INTO t_amount
+            SELECT amount INTO ck_dummy
             FROM purchase.payments
-            WHERE supplier_id = wearhousing_rec.supplier_id
-            AND closing_date = wearhousing_rec.closing_date
-            AND payment_deadline = wearhousing_rec.payment_deadline
+            WHERE supplier_id = rec.supplier_id
+            AND closing_date = rec.closing_date
+            AND payment_deadline = rec.payment_deadline
             FOR UPDATE;
 
-            IF t_amount IS NOT NULL THEN
+            IF ck_dummy IS NOT NULL THEN
                 UPDATE purchase.payments
-                SET amount = t_amount + NEW.wearhousing_quantity * NEW.wearhousing_unit_price
-                WHERE supplier_id = wearhousing_rec.supplier_id
-                AND closing_date = wearhousing_rec.closing_date
-                AND payment_deadline = wearhousing_rec.payment_deadline;
+                SET amount = amount + t_amount
+                WHERE supplier_id = rec.supplier_id
+                AND closing_date = rec.closing_date
+                AND payment_deadline = rec.payment_deadline;
 
             ELSE
                 INSERT INTO purchase.payments
                 VALUES (
                     default,
-                    wearhousing_rec.supplier_id,
-                    wearhousing_rec.closing_date,
-                    wearhousing_rec.payment_deadline,
-                    NEW.wearhousing_quantity * NEW.wearhousing_unit_price
+                    rec.supplier_id,
+                    rec.closing_date,
+                    rec.payment_deadline,
+                    t_amount
                 );
             END IF;
 
             -- 買掛変動履歴の登録
             SELECT payment_no INTO t_payment_no
             FROM purchase.payments
-            WHERE supplier_id = wearhousing_rec.supplier_id
-            AND closing_date = wearhousing_rec.closing_date
-            AND payment_deadline = wearhousing_rec.payment_deadline;
+            WHERE supplier_id = rec.supplier_id
+            AND closing_date = rec.closing_date
+            AND payment_deadline = rec.payment_deadline;
 
             INSERT INTO purchase.accounts_payable_histories
             VALUES (
                 default,
-                wearhousing_rec.operation_date,
-                wearhousing_rec.supplier_id,
-                NEW.wearhousing_quantity * NEW.wearhousing_unit_price,
+                rec.operation_date,
+                rec.supplier_id,
+                t_amount,
                 'PURCHASE',
                 NEW.detail_no,
                 t_payment_no
@@ -1515,7 +1485,7 @@ def create_purchase_return_instructions_table() -> None:
                 WHERE detail_no = NEW.wearhousing_detail_no;
 
                 NEW.product_id:= rec.product_id;
-                NEW.return_unit_price:= rec.wearhousing_unit_price;
+                NEW.return_unit_price:= rec.cost_price;
 
             END iF;
 
@@ -1797,11 +1767,11 @@ def create_view() -> None:
             SELECT
                 OD.detail_no,
                 OD.product_id,
-                OD.purchase_quantity,
-                (OD.purchase_quantity - OD.wearhousing_quantity - OD.cancel_quantity) AS remaining_quantity,
+                OD.quantity,
+                OD.remaining_quantity,
                 OD.estimate_arrival_date
             FROM purchase.ordering_details OD
-            WHERE (OD.purchase_quantity - OD.wearhousing_quantity - OD.cancel_quantity) > 0
+            WHERE OD.remaining_quantity > 0
             ORDER BY OD.product_id, OD.estimate_arrival_date, OD.detail_no;
         """
     )

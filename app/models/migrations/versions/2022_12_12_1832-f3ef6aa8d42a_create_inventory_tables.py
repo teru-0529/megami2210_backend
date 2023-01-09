@@ -87,7 +87,7 @@ def create_monthry_summaries_table() -> None:
         sa.Column("shipping_amount", sa.Numeric, nullable=False, comment="出庫額"),
         sa.Column("amount", sa.Numeric, nullable=False, comment="在庫額"),
         sa.Column("cost_price", sa.Numeric, nullable=False, comment="在庫原価"),
-        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="予想利益率"),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="想定利益率"),
         schema="inventory",
     )
 
@@ -108,14 +108,7 @@ def create_monthry_summaries_table() -> None:
     op.execute(
         """
         CREATE FUNCTION inventory.calc_monthry_summaries() RETURNS TRIGGER AS $$
-        DECLARE
-            t_selling_price numeric;
         BEGIN
-            --商品マスタの検索(標準売価の取得)
-            SELECT selling_price INTO t_selling_price
-            FROM mst.products
-            WHERE product_id = NEW.product_id;
-
             --在庫数,在庫額
             NEW.quantity:=NEW.init_quantity + NEW.warehousing_quantity - NEW.shipping_quantity;
             NEW.amount:=NEW.init_amount + NEW.warehousing_amount - NEW.shipping_amount;
@@ -125,8 +118,8 @@ def create_monthry_summaries_table() -> None:
                 NEW.cost_price:=0.00;
                 NEW.profit_rate:=0.0;
             ELSE
-                NEW.cost_price:=ROUND(NEW.amount / NEW.quantity, 2);
-                NEW.profit_rate:=ROUND((t_selling_price - NEW.cost_price) / t_selling_price * 100, 1);
+                NEW.cost_price:=calc_unit_price(NEW.amount, NEW.quantity);
+                NEW.profit_rate:=mst.calc_profit_rate_for_cost(NEW.product_id, NEW.cost_price);
             END IF;
 
             return NEW;
@@ -182,7 +175,7 @@ def create_current_summaries_table() -> None:
         sa.Column("quantity", sa.Integer, nullable=False, comment="在庫数"),
         sa.Column("amount", sa.Numeric, nullable=False, comment="在庫額"),
         sa.Column("cost_price", sa.Numeric, nullable=False, comment="在庫原価"),
-        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="予想利益率"),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="想定利益率"),
         schema="inventory",
     )
 
@@ -203,21 +196,14 @@ def create_current_summaries_table() -> None:
     op.execute(
         """
         CREATE FUNCTION inventory.calc_current_summaries() RETURNS TRIGGER AS $$
-        DECLARE
-            t_selling_price numeric;
         BEGIN
-            --商品マスタの検索(標準売価の取得)
-            SELECT selling_price INTO t_selling_price
-            FROM mst.products
-            WHERE product_id = NEW.product_id;
-
             --在庫原価,予想利益率
             IF NEW.quantity = 0 THEN
                 NEW.cost_price:=0.00;
                 NEW.profit_rate:=0.0;
             ELSE
-                NEW.cost_price:=ROUND(NEW.amount / NEW.quantity, 2);
-                NEW.profit_rate:=ROUND((t_selling_price - NEW.cost_price) / t_selling_price * 100, 1);
+                NEW.cost_price:=calc_unit_price(NEW.amount, NEW.quantity);
+                NEW.profit_rate:=mst.calc_profit_rate_for_cost(NEW.product_id, NEW.cost_price);
             END IF;
 
             return NEW;
@@ -232,6 +218,34 @@ def create_current_summaries_table() -> None:
             ON inventory.current_summaries
             FOR EACH ROW
         EXECUTE PROCEDURE inventory.calc_current_summaries();
+        """
+    )
+
+    # 原価取得(在庫なしの場合は商品マスタの標準原価を返す)TODO:
+    op.execute(
+        """
+        CREATE FUNCTION inventory.get_cost_price(
+            i_product_id text,
+            OUT o_cost_price numeric
+        ) AS $$
+        DECLARE
+            t_cost_price numeric;
+        BEGIN
+            -- 在庫サマリの検索
+            SELECT cost_price INTO o_cost_price
+            FROM inventory.current_summaries
+            WHERE product_id = i_product_id;
+
+            --利益率計算
+            IF t_cost_price IS NULL THEN
+                --商品マスタの検索
+                SELECT cost_price INTO o_cost_price
+                FROM mst.products
+                WHERE product_id = i_product_id;
+            END IF;
+
+        END;
+        $$ LANGUAGE plpgsql;
         """
     )
 

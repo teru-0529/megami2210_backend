@@ -35,36 +35,6 @@ def create_trigger() -> None:
         """
     )
 
-    # 処理日付の取得
-    op.execute(
-        """
-        CREATE FUNCTION get_operation_date(
-            OUT operation_date date
-        ) AS $$
-        BEGIN
-            -- 処理日付
-            SELECT date INTO operation_date
-            FROM business_date
-            WHERE date_type = 'BUSINESS_DATE';
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-
-    # 処理日付の設定
-    op.execute(
-        """
-        CREATE FUNCTION set_operation_date() RETURNS TRIGGER AS $$
-        BEGIN
-            -- 処理日付
-            NEW.operation_date:=get_operation_date();
-
-            return NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-    )
-
 
 # ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
 
@@ -109,8 +79,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS business_date CASCADE;")
     op.execute("DROP FUNCTION IF EXISTS set_modified_at CASCADE;")
-    op.execute("DROP FUNCTION IF EXISTS get_operation_date CASCADE;")
-    op.execute("DROP FUNCTION IF EXISTS set_operation_date CASCADE;")
     op.execute("DROP TYPE IF EXISTS date_type;")
     op.execute("DROP SCHEMA IF EXISTS todo CASCADE;")
     op.execute("DROP SCHEMA IF EXISTS account CASCADE;")

@@ -79,20 +79,20 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00002",
-                "purchase_quantity": 3,
-                "purchase_unit_price": 11000.0,
+                "quantity": 3,
+                "cost_price": 11000.0,
             },
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00003",
-                "purchase_quantity": 2,
-                "purchase_unit_price": 8000.0,
+                "quantity": 2,
+                "cost_price": 8000.0,
             },
             {
                 "ordering_no": "PO-0000001",
                 "product_id": "S001-00001",
-                "purchase_quantity": 4,
-                "purchase_unit_price": 10000.0,
+                "quantity": 4,
+                "cost_price": 10000.0,
             },
         ],
     )
@@ -119,8 +119,8 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000002",
                 "product_id": "S002-00001",
-                "purchase_quantity": 8,
-                "purchase_unit_price": 19000.0,
+                "quantity": 8,
+                "cost_price": 19000.0,
             },
         ],
     )
@@ -147,8 +147,8 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000003",
                 "product_id": "S002-00001",
-                "purchase_quantity": 2,
-                "purchase_unit_price": 22000.0,
+                "quantity": 2,
+                "cost_price": 22000.0,
             },
         ],
     )
@@ -232,8 +232,8 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000001",
                 "order_detail_no": 3,
-                "wearhousing_quantity": 3,
-                "wearhousing_unit_price": 10000.0,
+                "quantity": 3,
+                "cost_price": 10000.0,
                 "site_type": SiteType.inspect_product,
             },
         ],
@@ -286,15 +286,15 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000002",
                 "order_detail_no": 1,
-                "wearhousing_quantity": 3,
-                "wearhousing_unit_price": 10500.0,
+                "quantity": 3,
+                "cost_price": 10500.0,
                 "site_type": SiteType.main,
             },
             {
                 "wearhousing_no": "WH-0000003",
                 "order_detail_no": 4,
-                "wearhousing_quantity": 3,
-                "wearhousing_unit_price": 19000.0,
+                "quantity": 3,
+                "cost_price": 19000.0,
                 "site_type": SiteType.main,
             },
         ],
@@ -323,15 +323,15 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000004",
                 "order_detail_no": 4,
-                "wearhousing_quantity": 5,
-                "wearhousing_unit_price": 17000.0,
+                "quantity": 5,
+                "cost_price": 17000.0,
                 "site_type": SiteType.main,
             },
             {
                 "wearhousing_no": "WH-0000004",
                 "order_detail_no": 5,
-                "wearhousing_quantity": 1,
-                "wearhousing_unit_price": 22000.0,
+                "quantity": 1,
+                "cost_price": 22000.0,
                 "site_type": SiteType.main,
             },
         ],
@@ -423,8 +423,8 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000001",
                 "product_id": "S002-00001",
-                "receive_quantity": 1,
-                "selling_unit_price": 43000.0,
+                "quantity": 1,
+                "selling_price": 43000.0,
             },
         ],
     )
@@ -443,8 +443,8 @@ def upgrade() -> None:
             {
                 "shipping_no": "SP-0000001",
                 "receive_detail_no": 1,
-                "shipping_quantity": 1,
-                "selling_unit_price": 43000.0,
+                "quantity": 1,
+                "selling_price": 43000.0,
             },
         ],
     )
@@ -463,8 +463,8 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000002",
                 "product_id": "S002-00001",
-                "receive_quantity": 2,
-                "selling_unit_price": 45000.0,
+                "quantity": 2,
+                "selling_price": 45000.0,
             },
         ],
     )
@@ -483,8 +483,8 @@ def upgrade() -> None:
             {
                 "shipping_no": "SP-0000002",
                 "receive_detail_no": 2,
-                "shipping_quantity": 2,
-                "selling_unit_price": 44000.0,
+                "quantity": 2,
+                "selling_price": 44000.0,
             },
         ],
     )
@@ -684,8 +684,8 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000004",
                 "product_id": "S001-00002",
-                "purchase_quantity": 1,
-                "purchase_unit_price": 12000.0,
+                "quantity": 1,
+                "cost_price": 12000.0,
             },
         ],
     )
@@ -712,8 +712,8 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000005",
                 "order_detail_no": 6,
-                "wearhousing_quantity": 1,
-                "wearhousing_unit_price": 12000.0,
+                "quantity": 1,
+                "cost_price": 12000.0,
                 "site_type": SiteType.main,
             },
         ],
@@ -758,8 +758,8 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000003",
                 "product_id": "S001-00002",
-                "receive_quantity": 3,
-                "selling_unit_price": 30000.0,
+                "quantity": 3,
+                "selling_price": 30000.0,
             },
         ],
     )
@@ -806,14 +806,14 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000005",
                 "product_id": "S001-00001",
-                "purchase_quantity": 5,
-                "purchase_unit_price": 10000.0,
+                "quantity": 5,
+                "cost_price": 10000.0,
             },
             {
                 "ordering_no": "PO-0000005",
                 "product_id": "S001-00002",
-                "purchase_quantity": 2,
-                "purchase_unit_price": 11000.0,
+                "quantity": 2,
+                "cost_price": 11000.0,
             },
         ],
     )
@@ -859,8 +859,8 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000006",
                 "order_detail_no": 8,
-                "wearhousing_quantity": 2,
-                "wearhousing_unit_price": 10000.0,
+                "quantity": 2,
+                "cost_price": 10000.0,
             },
         ],
     )
@@ -909,8 +909,8 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000007",
                 "order_detail_no": 7,
-                "wearhousing_quantity": 5,
-                "wearhousing_unit_price": 11000.0,
+                "quantity": 5,
+                "cost_price": 11000.0,
             },
         ],
     )
@@ -1011,8 +1011,8 @@ def upgrade() -> None:
             {
                 "shipping_no": "SP-0000003",
                 "receive_detail_no": 3,
-                "shipping_quantity": 2,
-                "selling_unit_price": 30000.0,
+                "quantity": 2,
+                "selling_price": 30000.0,
             },
         ],
     )
@@ -1039,8 +1039,8 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000006",
                 "product_id": "S001-00002",
-                "purchase_quantity": 3,
-                "purchase_unit_price": 12000.0,
+                "quantity": 3,
+                "cost_price": 12000.0,
             },
         ],
     )
@@ -1061,7 +1061,7 @@ def upgrade() -> None:
                 "costomer_id": "C001",
                 "product_id": "S001-00002",
                 "return_quantity": 1,
-                "selling_unit_price": 27000.0,
+                "selling_price": 27000.0,
                 "cost_price": 10000.0,
             },
         ],
@@ -1106,8 +1106,8 @@ def upgrade() -> None:
             {
                 "wearhousing_no": "WH-0000008",
                 "order_detail_no": 9,
-                "wearhousing_quantity": 3,
-                "wearhousing_unit_price": 11500.0,
+                "quantity": 3,
+                "cost_price": 11500.0,
                 "site_type": SiteType.main,
             },
         ],
@@ -1157,14 +1157,14 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000004",
                 "product_id": "S001-00002",
-                "receive_quantity": 1,
-                "selling_unit_price": 32000.0,
+                "quantity": 1,
+                "selling_price": 32000.0,
             },
             {
                 "receiving_no": "RO-0000004",
                 "product_id": "S001-00001",
-                "receive_quantity": 3,
-                "selling_unit_price": 26000.0,
+                "quantity": 3,
+                "selling_price": 26000.0,
             },
         ],
     )
@@ -1184,14 +1184,14 @@ def upgrade() -> None:
             {
                 "shipping_no": "SP-0000004",
                 "receive_detail_no": 4,
-                "shipping_quantity": 1,
-                "selling_unit_price": 32000.0,
+                "quantity": 1,
+                "selling_price": 32000.0,
             },
             {
                 "shipping_no": "SP-0000004",
                 "receive_detail_no": 5,
-                "shipping_quantity": 3,
-                "selling_unit_price": 26000.0,
+                "quantity": 3,
+                "selling_price": 26000.0,
             },
         ],
     )
@@ -1255,8 +1255,8 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000007",
                 "product_id": "S001-00001",
-                "purchase_quantity": 1,
-                "purchase_unit_price": 11000.0,
+                "quantity": 1,
+                "cost_price": 11000.0,
             },
         ],
     )
@@ -1302,8 +1302,8 @@ def upgrade() -> None:
             {
                 "ordering_no": "PO-0000008",
                 "product_id": "S001-00001",
-                "purchase_quantity": 2,
-                "purchase_unit_price": 9500.0,
+                "quantity": 2,
+                "cost_price": 9500.0,
             },
         ],
     )
@@ -1348,14 +1348,14 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000005",
                 "product_id": "S001-00001",
-                "receive_quantity": 5,
-                "selling_unit_price": 25000.0,
+                "quantity": 5,
+                "selling_price": 25000.0,
             },
             {
                 "receiving_no": "RO-0000005",
                 "product_id": "S001-00002",
-                "receive_quantity": 3,
-                "selling_unit_price": 30000.0,
+                "quantity": 3,
+                "selling_price": 30000.0,
             },
         ],
     )
@@ -1375,26 +1375,26 @@ def upgrade() -> None:
             {
                 "receiving_no": "RO-0000006",
                 "product_id": "S001-00001",
-                "receive_quantity": 8,
-                "selling_unit_price": 28000.0,
+                "quantity": 8,
+                "selling_price": 28000.0,
             },
             {
                 "receiving_no": "RO-0000006",
                 "product_id": "S002-00001",
-                "receive_quantity": 6,
-                "selling_unit_price": 33000.0,
+                "quantity": 6,
+                "selling_price": 33000.0,
             },
             {
                 "receiving_no": "RO-0000006",
                 "product_id": "S001-00003",
-                "receive_quantity": 1,
-                "selling_unit_price": 33000.0,
+                "quantity": 1,
+                "selling_price": 33000.0,
             },
             {
                 "receiving_no": "RO-0000006",
                 "product_id": "S005-00001",
-                "receive_quantity": 3,
-                "selling_unit_price": 5000.0,
+                "quantity": 3,
+                "selling_price": 5000.0,
             },
         ],
     )
@@ -1421,8 +1421,8 @@ def upgrade() -> None:
             {
                 "shipping_no": "SP-0000005",
                 "receive_detail_no": 9,
-                "shipping_quantity": 2,
-                "selling_unit_price": 35000.0,
+                "quantity": 2,
+                "selling_price": 35000.0,
             },
         ],
     )

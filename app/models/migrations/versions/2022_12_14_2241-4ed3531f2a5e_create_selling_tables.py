@@ -257,6 +257,7 @@ def create_billings_table() -> None:
         """
         CREATE FUNCTION selling.calc_billings() RETURNS TRIGGER AS $$
         BEGIN
+            --新規登録の場合のみ実施
             IF TG_OP = 'INSERT' THEN
                 --請求NO
                 NEW.billing_no:='BL-'||to_char(nextval('selling.billing_no_seed'),'FM0000000');
@@ -380,48 +381,39 @@ def create_receiving_details_table() -> None:
         sa.Column("receiving_no", sa.String(10), nullable=False, comment="受注NO"),
         sa.Column("product_id", sa.String(10), nullable=False, comment="当社商品ID"),
         sa.Column(
-            "receive_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="受注数",
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="受注数"
         ),
         sa.Column(
             "shipping_quantity",
             sa.Integer,
             nullable=False,
             server_default="0",
-            comment="出荷済数",
+            comment="出荷数",
         ),
         sa.Column(
             "cancel_quantity",
             sa.Integer,
             nullable=False,
             server_default="0",
-            comment="キャンセル済数",
+            comment="キャンセル数",
         ),
+        sa.Column("remaining_quantity", sa.Integer, nullable=False, comment="受注残"),
         sa.Column(
-            "selling_unit_price",
+            "selling_price",
             sa.Numeric,
             nullable=False,
-            server_default="0.0",
+            server_default="0.00",
             comment="販売単価",
         ),
-        sa.Column(
-            "assumption_profit_rate",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="想定利益率",
-        ),
-        *timestamps(),
+        sa.Column("cost_price", sa.Numeric, nullable=False, comment="想定原価"),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="想定利益率"),
         schema="selling",
     )
 
     op.create_check_constraint(
-        "ck_receive_quantity",
+        "ck_quantity",
         "receiving_details",
-        "receive_quantity > 0",
+        "quantity > 0",
         schema="selling",
     )
     op.create_check_constraint(
@@ -437,15 +429,15 @@ def create_receiving_details_table() -> None:
         schema="selling",
     )
     op.create_check_constraint(
-        "ck_quantity",
+        "ck_remaining_quantity",
         "receiving_details",
-        "receive_quantity >= shipping_quantity + cancel_quantity",
+        "remaining_quantity >= 0",
         schema="selling",
     )
     op.create_check_constraint(
-        "ck_selling_unit_price",
+        "ck_selling_price",
         "receiving_details",
-        "selling_unit_price > 0",
+        "selling_price > 0.00",
         schema="selling",
     )
     op.create_foreign_key(
@@ -469,20 +461,10 @@ def create_receiving_details_table() -> None:
         referent_schema="mst",
     )
     op.create_index(
-        "ix_selling_details_receiving",
+        "ix_receiving_details_receiving",
         "receiving_details",
         ["receiving_no", "detail_no"],
         schema="selling",
-    )
-
-    op.execute(
-        """
-        CREATE TRIGGER receiving_details_modified
-            BEFORE UPDATE
-            ON selling.receiving_details
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
     )
 
     # 導出項目計算
@@ -492,16 +474,17 @@ def create_receiving_details_table() -> None:
         DECLARE
             t_cost_price numeric;
         BEGIN
-            -- 商品の標準原価取得
-            SELECT cost_price INTO t_cost_price
-            FROM mst.products
-            WHERE product_id = NEW.product_id;
+            --新規登録の場合のみ実施
+            IF TG_OP = 'INSERT' THEN
 
-            NEW.assumption_profit_rate:=ROUND((NEW.selling_unit_price - t_cost_price) / NEW.selling_unit_price, 2);
+                --想定原価
+                NEW.cost_price:=inventory.get_cost_price(NEW.product_id);
+            END IF;
 
-            -- 発注済数、キャンセル済数の設定
-            NEW.shipping_quantity:=0;
-            NEW.cancel_quantity:=0;
+            --受注残
+            NEW.remaining_quantity:=NEW.quantity - NEW.shipping_quantity - NEW.cancel_quantity;
+            --予定利益率
+            NEW.profit_rate:=calc_profit_rate(NEW.selling_price, NEW.cost_price);
 
             return NEW;
         END;
@@ -510,8 +493,8 @@ def create_receiving_details_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_receiving_details
-            BEFORE INSERT
+        CREATE TRIGGER upsert_receiving_details
+            BEFORE INSERT OR UPDATE
             ON selling.receiving_details
             FOR EACH ROW
         EXECUTE PROCEDURE selling.calc_receiving_details();
@@ -623,15 +606,11 @@ def create_shipping_details_table() -> None:
             "product_id",
             sa.String(10),
             nullable=False,
-            server_default="set_me",
+            server_default="auto",
             comment="当社商品ID",
         ),
         sa.Column(
-            "shipping_quantity",
-            sa.Integer,
-            nullable=False,
-            server_default="0",
-            comment="出荷数",
+            "quantity", sa.Integer, nullable=False, server_default="0", comment="出荷数"
         ),
         sa.Column(
             "return_quantity",
@@ -641,26 +620,14 @@ def create_shipping_details_table() -> None:
             comment="返品数",
         ),
         sa.Column(
-            "selling_unit_price",
+            "selling_price",
             sa.Numeric,
             nullable=False,
             server_default="0.0",
             comment="販売単価",
         ),
-        sa.Column(
-            "cost_price",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="原価",
-        ),
-        sa.Column(
-            "real_profit_rate",
-            sa.Numeric,
-            nullable=False,
-            server_default="0.0",
-            comment="実利益率",
-        ),
+        sa.Column("cost_price", sa.Numeric, nullable=False, comment="原価"),
+        sa.Column("profit_rate", sa.Numeric, nullable=False, comment="利益率"),
         sa.Column(
             "site_type",
             sa.Enum(*SiteType.list(), name="site_type", schema="mst"),
@@ -668,7 +635,6 @@ def create_shipping_details_table() -> None:
             server_default=SiteType.main,
             comment="出荷倉庫種別 ",
         ),
-        *timestamps(),
         schema="selling",
     )
 
@@ -676,21 +642,23 @@ def create_shipping_details_table() -> None:
     op.execute(
         """
         CREATE FUNCTION selling.ck_coustomer_with_receiving(
-            t_shipping_no character(10),
-            t_receive_detail_no integer
+            i_shipping_no text,
+            i_receive_detail_no integer
         ) RETURNS boolean AS $$
         DECLARE
-            costomer_id_from_receiving character(4);
-            costomer_id_from_shipping character(4);
+            costomer_id_from_receiving text;
+            costomer_id_from_shipping text;
         BEGIN
+            --受注得意先の検索
             SELECT R.costomer_id INTO costomer_id_from_receiving
             FROM selling.receiving_details RD
             LEFT OUTER JOIN selling.receivings R ON RD.receiving_no = R.receiving_no
-            WHERE RD.detail_no = t_receive_detail_no;
+            WHERE RD.detail_no = i_receive_detail_no;
 
+            --出荷得意先の検索
             SELECT costomer_id INTO costomer_id_from_shipping
             FROM selling.shippings
-            WHERE shipping_no = t_shipping_no;
+            WHERE shipping_no = i_shipping_no;
 
         RETURN costomer_id_from_receiving = costomer_id_from_shipping;
         END;
@@ -704,9 +672,9 @@ def create_shipping_details_table() -> None:
         schema="selling",
     )
     op.create_check_constraint(
-        "ck_shipping_quantity",
+        "ck_quantity",
         "shipping_details",
-        "shipping_quantity > 0",
+        "quantity > 0 AND return_quantity <= quantity",
         schema="selling",
     )
     op.create_check_constraint(
@@ -716,21 +684,9 @@ def create_shipping_details_table() -> None:
         schema="selling",
     )
     op.create_check_constraint(
-        "ck_quantity",
+        "ck_selling_price",
         "shipping_details",
-        "return_quantity <= shipping_quantity",
-        schema="selling",
-    )
-    op.create_check_constraint(
-        "ck_selling_unit_price",
-        "shipping_details",
-        "selling_unit_price > 0",
-        schema="selling",
-    )
-    op.create_check_constraint(
-        "ck_cost_price",
-        "shipping_details",
-        "cost_price > 0",
+        "selling_price > 0.00",
         schema="selling",
     )
     op.create_foreign_key(
@@ -760,34 +716,25 @@ def create_shipping_details_table() -> None:
         schema="selling",
     )
 
-    op.execute(
-        """
-        CREATE TRIGGER shipping_details_modified
-            BEFORE UPDATE
-            ON selling.shipping_details
-            FOR EACH ROW
-        EXECUTE PROCEDURE set_modified_at();
-        """
-    )
-
     # 導出項目計算
     op.execute(
         """
         CREATE FUNCTION selling.calc_shipping_details() RETURNS TRIGGER AS $$
         BEGIN
-            -- 受注明細から商品番号を取得
-            SELECT product_id INTO NEW.product_id
-            FROM selling.receiving_details
-            WHERE detail_no = NEW.receive_detail_no;
+            --新規登録の場合のみ実施
+            IF TG_OP = 'INSERT' THEN
 
-            -- 在庫サマリから原価を取得
-            SELECT cost_price INTO NEW.cost_price
-            FROM inventory.current_summaries
-            WHERE product_id = NEW.product_id;
+                --当社商品ID
+                SELECT product_id INTO NEW.product_id
+                FROM selling.receiving_details
+                WHERE detail_no = NEW.receive_detail_no;
 
-            -- 実利益率を計算
-            NEW.real_profit_rate:=ROUND((NEW.selling_unit_price - NEW.cost_price) / NEW.selling_unit_price, 2);
-            NEW.return_quantity:=0;
+                --原価
+                NEW.cost_price:=inventory.get_cost_price(NEW.product_id);
+            END IF;
+
+            --利益率
+            NEW.profit_rate:=calc_profit_rate(NEW.selling_price, NEW.cost_price);
 
             return NEW;
         END;
@@ -796,91 +743,87 @@ def create_shipping_details_table() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER insert_shipping_details
-            BEFORE INSERT
+        CREATE TRIGGER upsert_shipping_details
+            BEFORE INSERT OR UPDATE
             ON selling.shipping_details
             FOR EACH ROW
         EXECUTE PROCEDURE selling.calc_shipping_details();
         """
     )
 
-    # 在庫変動履歴/入金/売掛金変動履歴の登録TODO:
+    # 登録後処理：在庫変動履歴/入金/売掛金変動履歴の登録TODO:
     op.execute(
         """
         CREATE FUNCTION selling.set_inventories_and_deposits() RETURNS TRIGGER AS $$
         DECLARE
-            t_shipping_quantity integer;
-            t_amount numeric;
+            t_amount numeric:=NEW.quantity * NEW.cost_price;
             t_billing_no text;
 
-            shipping_rec record;
+            rec record;
+
+            ck_dummy numeric;
         BEGIN
             -- 受注残数の更新
-            SELECT shipping_quantity INTO t_shipping_quantity
-            FROM selling.receiving_details
-            WHERE detail_no = NEW.receive_detail_no
-            FOR UPDATE;
-
             UPDATE selling.receiving_details
-            SET shipping_quantity = t_shipping_quantity + NEW.shipping_quantity
+            SET shipping_quantity = shipping_quantity + NEW.quantity
             WHERE detail_no = NEW.receive_detail_no;
 
             -- 在庫変動履歴の登録
-            SELECT * INTO shipping_rec
+            SELECT * INTO rec
             FROM selling.shippings
             WHERE shipping_no = NEW.shipping_no;
 
             INSERT INTO inventory.transition_histories
             VALUES (
                 default,
-                shipping_rec.operation_date,
+                rec.operation_date,
                 NEW.site_type,
                 NEW.product_id,
-                - NEW.shipping_quantity,
-                - NEW.shipping_quantity * NEW.cost_price,
+                - NEW.quantity,
+                - t_amount,
                 'SELLING',
                 NEW.detail_no
             );
 
             -- 請求の登録、更新
-            SELECT amount INTO t_amount
+            SELECT amount INTO ck_dummy
             FROM selling.billings
-            WHERE costomer_id = shipping_rec.costomer_id
-            AND closing_date = shipping_rec.closing_date
-            AND deposit_deadline = shipping_rec.deposit_deadline
+            WHERE costomer_id = rec.costomer_id
+            AND closing_date = rec.closing_date
+            AND deposit_deadline = rec.deposit_deadline
             FOR UPDATE;
 
-            IF t_amount IS NOT NULL THEN
+            IF ck_dummy IS NOT NULL THEN
                 UPDATE selling.billings
-                SET amount = t_amount + NEW.shipping_quantity * NEW.selling_unit_price
-                WHERE costomer_id = shipping_rec.costomer_id
-                AND closing_date = shipping_rec.closing_date
-                AND deposit_deadline = shipping_rec.deposit_deadline;
+                SET amount = amount + t_amount
+                WHERE costomer_id = rec.costomer_id
+                AND closing_date = rec.closing_date
+                AND deposit_deadline = rec.deposit_deadline;
 
             ELSE
                 INSERT INTO selling.billings
                 VALUES (
                     default,
-                    shipping_rec.costomer_id,
-                    shipping_rec.closing_date,
-                    shipping_rec.deposit_deadline,
-                    NEW.shipping_quantity * NEW.selling_unit_price
+                    rec.costomer_id,
+                    rec.closing_date,
+                    rec.deposit_deadline,
+                    t_amount
                 );
             END IF;
 
             -- 売掛変動履歴の登録
             SELECT billing_no INTO t_billing_no
             FROM selling.billings
-            WHERE costomer_id = shipping_rec.costomer_id
-            AND closing_date = shipping_rec.closing_date
-            AND deposit_deadline = shipping_rec.deposit_deadline;
+            WHERE costomer_id = rec.costomer_id
+            AND closing_date = rec.closing_date
+            AND deposit_deadline = rec.deposit_deadline;
 
             INSERT INTO selling.accounts_receivable_histories
             VALUES (
                 default,
-                shipping_rec.operation_date,
-                shipping_rec.costomer_id,
-                NEW.shipping_quantity * NEW.selling_unit_price,
+                rec.operation_date,
+                rec.costomer_id,
+                t_amount,
                 'SELLING',
                 NEW.detail_no,
                 t_billing_no
@@ -996,7 +939,7 @@ def create_shipping_plan_products_table() -> None:
             WHERE product_id = i_product_id;
 
             -- 受注残数の計算
-            SELECT SUM(receive_quantity - shipping_quantity - cancel_quantity) INTO t_plan_quantity
+            SELECT SUM(quantity - shipping_quantity - cancel_quantity) INTO t_plan_quantity
             FROM selling.receiving_details
             WHERE product_id = i_product_id;
 
@@ -1066,11 +1009,11 @@ def create_shipping_plan_products_table() -> None:
             OPEN ordered_cursor FOR
             SELECT
                 detail_no,
-                (purchase_quantity - wearhousing_quantity - cancel_quantity) AS remaining_quantity,
+                remaining_quantity,
                 estimate_arrival_date
             FROM purchase.ordering_details
             WHERE product_id = i_product_id
-            AND   (purchase_quantity - wearhousing_quantity - cancel_quantity) > 0
+            AND   remaining_quantity > 0
             ORDER BY estimate_arrival_date ASC;
 
             LOOP
@@ -1635,7 +1578,7 @@ def create_selling_return_instructions_table() -> None:
             comment="返品数",
         ),
         sa.Column(
-            "selling_unit_price",
+            "selling_price",
             sa.Numeric,
             nullable=False,
             server_default="0.0",
@@ -1666,9 +1609,9 @@ def create_selling_return_instructions_table() -> None:
         schema="selling",
     )
     op.create_check_constraint(
-        "ck_selling_unit_price",
+        "ck_selling_price",
         "selling_return_instructions",
-        "selling_unit_price > 0",
+        "selling_price > 0",
         schema="selling",
     )
     op.create_check_constraint(
@@ -1747,7 +1690,7 @@ def create_selling_return_instructions_table() -> None:
                 WHERE detail_no = NEW.shipping_detail_no;
 
                 NEW.product_id:= rec.product_id;
-                NEW.selling_unit_price:= rec.selling_unit_price;
+                NEW.selling_price:= rec.selling_price;
                 NEW.cost_price:= rec.cost_price;
 
             END iF;
@@ -1807,7 +1750,7 @@ def create_selling_return_instructions_table() -> None:
 
             IF t_amount IS NOT NULL THEN
                 UPDATE selling.billings
-                SET amount = t_amount - NEW.return_quantity * NEW.selling_unit_price
+                SET amount = t_amount - NEW.return_quantity * NEW.selling_price
                 WHERE costomer_id = NEW.costomer_id
                 AND closing_date = t_closing_date
                 AND deposit_deadline = t_deposit_deadline;
@@ -1819,7 +1762,7 @@ def create_selling_return_instructions_table() -> None:
                     NEW.costomer_id,
                     t_closing_date,
                     t_deposit_deadline,
-                    - NEW.return_quantity * NEW.selling_unit_price
+                    - NEW.return_quantity * NEW.selling_price
                 );
             END IF;
 
@@ -1835,7 +1778,7 @@ def create_selling_return_instructions_table() -> None:
                 default,
                 NEW.operation_date,
                 NEW.costomer_id,
-                - NEW.return_quantity * NEW.selling_unit_price,
+                - NEW.return_quantity * NEW.selling_price,
                 'SALES_RETURN',
                 NEW.no,
                 t_billing_no
@@ -2030,13 +1973,13 @@ def create_view() -> None:
             SELECT
                 RD.detail_no,
                 RD.product_id,
-                RD.receive_quantity,
-                (RD.receive_quantity - RD.shipping_quantity - RD.cancel_quantity) AS remaining_quantity,
+                RD.quantity,
+                (RD.quantity - RD.shipping_quantity - RD.cancel_quantity) AS remaining_quantity,
                 R.costomer_id,
                 R.shipping_priority
             FROM selling.receiving_details RD
             LEFT OUTER JOIN selling.receivings R ON RD.receiving_no = R.receiving_no
-            WHERE (RD.receive_quantity - RD.shipping_quantity - RD.cancel_quantity) > 0
+            WHERE (RD.quantity - RD.shipping_quantity - RD.cancel_quantity) > 0
             ORDER BY RD.product_id, R.shipping_priority ASC, RD.detail_no;
         """
     )
@@ -2045,9 +1988,9 @@ def create_view() -> None:
         CREATE VIEW selling.view_remaining_receive_products AS
             SELECT
                 RD.product_id,
-                SUM(RD.receive_quantity - RD.shipping_quantity - RD.cancel_quantity) AS remaining_quantity
+                SUM(RD.quantity - RD.shipping_quantity - RD.cancel_quantity) AS remaining_quantity
             FROM selling.receiving_details RD
-            WHERE (RD.receive_quantity - RD.shipping_quantity - RD.cancel_quantity) > 0
+            WHERE (RD.quantity - RD.shipping_quantity - RD.cancel_quantity) > 0
             GROUP BY RD.product_id
             ORDER BY RD.product_id;
         """
